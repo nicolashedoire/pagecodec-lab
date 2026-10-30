@@ -3,6 +3,10 @@
 extern crate alloc;
 use alloc::format;
 use alloc::collections::BTreeSet;
+use alloc::vec::Vec;
+use actor_core_sketch::{ActorId, ActorKind, Registry, SpaceId};
+use system_core_sketch::{Document, Origin};
+use workspace_bridge_sketch::Bridge;
 use dual_input_lab::{Actor, Event, Grant, Outcome, Point, Router, WorkspaceId};
 use serde_json::{json, Value};
 use core::alloc::{GlobalAlloc, Layout};
@@ -235,6 +239,42 @@ fn tool_error(id: Value, msg: &str) {
 }
 fn valid_id(id: &Value) -> bool { id.is_string() || id.is_i64() || id.is_u64() }
 
+// A synthetic in-memory document; labels are forgeable and confer no authority.
+struct DocumentDemo {
+    bridge: Bridge, human: ActorId, assistant: ActorId,
+    human_space: SpaceId, assistant_space: SpaceId,
+}
+impl DocumentDemo {
+    fn new() -> Self {
+        let human=ActorId::new("human").unwrap();
+        let assistant=ActorId::new("assistant").unwrap();
+        let human_space=SpaceId::new("human-space").unwrap();
+        let assistant_space=SpaceId::new("assistant-space").unwrap();
+        let mut registry=Registry::new();
+        registry.create_space(human_space.clone()).unwrap();
+        registry.create_space(assistant_space.clone()).unwrap();
+        registry.create_actor(human.clone(),ActorKind::Human).unwrap();
+        registry.create_actor(assistant.clone(),ActorKind::Assistant).unwrap();
+        registry.assign(&human,&human_space).unwrap();
+        registry.assign(&assistant,&assistant_space).unwrap();
+        let mut base=Document::new();
+        base.insert("title".into(),"base".into());
+        let bridge=Bridge::new(registry,human.clone(),human_space.clone(),assistant.clone(),assistant_space.clone(),base).unwrap();
+        Self { bridge,human,assistant,human_space,assistant_space }
+    }
+    fn labels(&self, actor: &str, space: &str) -> Option<(&ActorId,&SpaceId)> {
+        let a=match actor { "human"=>&self.human, "assistant"=>&self.assistant, _=>return None };
+        let s=match space { "human-space"=>&self.human_space, "assistant-space"=>&self.assistant_space, _=>return None };
+        Some((a,s))
+    }
+}
+fn tool_json(id: Value, data: Value) {
+    send(&json!({"jsonrpc":"2.0","id":id,"result":{"content":[{"type":"text","text":format!("{}",data)}],"isError":false}}));
+}
+fn origin_name(origin: Origin) -> &'static str {
+    match origin { Origin::Base=>"base", Origin::Human=>"human", Origin::Assistant=>"assistant", Origin::Both=>"both" }
+}
+
 // Caller-constructed demonstration grants are not authentication.
 fn move_pointer(router: &mut Router, actor: Actor, grant: &Grant, x: u32, y: u32) -> bool {
     let workspace = actor.workspace();
@@ -277,6 +317,7 @@ pub extern "C" fn rust_main() -> ! {
     let ai_grant = movement_grant(Actor::Assistant);
     if !move_pointer(&mut router, Actor::Human, &human_grant, 120, 180)
         || !move_pointer(&mut router, Actor::Assistant, &ai_grant, 560, 330) { halt() }
+    let mut document = DocumentDemo::new();
     let mut hclick = false;
     let mut pending_move: Option<(Value,u32,u32)> = None;
     // SAFETY: GPU owns this pinned buffer for its lifetime; one CPU and a draw
@@ -349,7 +390,10 @@ pub extern "C" fn rust_main() -> ! {
                                     Some("ping") => send(&json!({"jsonrpc":"2.0","id":id,"result":{}})),
                                     Some("tools/list") => send(&json!({"jsonrpc":"2.0","id":id,"result":{"tools":[
                                         {"name":"move_ai","description":"Move AI pointer within its right-hand QEMU workspace.","inputSchema":{"type":"object","properties":{"x":{"type":"integer","minimum":400,"maximum":773},"y":{"type":"integer","minimum":0,"maximum":573}},"required":["x","y"],"additionalProperties":false}},
-                                        {"name":"pointer_state","description":"Read the two pointer coordinates in this guest only.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}
+                                        {"name":"pointer_state","description":"Read the two pointer coordinates in this guest only.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"document_edit","description":"Edit one synthetic document copy; actor labels are unauthenticated.","inputSchema":{"type":"object","properties":{"actor":{"type":"string","enum":["human","assistant"]},"space":{"type":"string","enum":["human-space","assistant-space"]},"key":{"type":"string","description":"Non-empty; at most 32 UTF-8 bytes."},"value":{"type":["string","null"],"description":"At most 64 UTF-8 bytes; null deletes the field."}},"required":["actor","space","key","value"],"additionalProperties":false}},
+                                        {"name":"document_view","description":"Read a field from a synthetic document copy.","inputSchema":{"type":"object","properties":{"actor":{"type":"string","enum":["human","assistant"]},"space":{"type":"string","enum":["human-space","assistant-space"]},"key":{"type":"string","description":"Non-empty; at most 32 UTF-8 bytes."}},"required":["actor","space","key"],"additionalProperties":false}},
+                                        {"name":"document_merge","description":"Merge synthetic copies and return fields, origins and conflicts.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}
                                     ]}})),
                                     Some("tools/call") => {
                                         let params = msg.get("params");
@@ -378,6 +422,47 @@ pub extern "C" fn rust_main() -> ! {
                                                     let ai = cursor(&router, WorkspaceId::Assistant);
                                                     let v = format!("human={},{}; ai={},{}",human.0,human.1,ai.0,ai.1);
                                                     send(&json!({"jsonrpc":"2.0","id":id,"result":{"content":[{"type":"text","text":v}],"isError":false}}));
+                                                }
+                                            }
+                                            Some("document_edit") | Some("document_view") => {
+                                                let edit = name == Some("document_edit");
+                                                let args=params.and_then(|p| p.get("arguments"));
+                                                let Some(obj)=args.and_then(Value::as_object) else { tool_error(id,"invalid arguments"); used=0; overflow=false; break };
+                                                let actor=obj.get("actor").and_then(Value::as_str);
+                                                let space=obj.get("space").and_then(Value::as_str);
+                                                let key=obj.get("key").and_then(Value::as_str);
+                                                let value=obj.get("value");
+                                                if obj.len() != if edit { 4 } else { 3 } || actor.is_none() || space.is_none()
+                                                    || !key.is_some_and(|k| !k.is_empty() && k.len() <= 32)
+                                                    || (edit && !value.is_some_and(|v| v.is_null() || v.as_str().is_some_and(|v| v.len()<=64))) {
+                                                    tool_error(id,"invalid arguments");
+                                                } else {
+                                                    let actor=actor.unwrap(); let space=space.unwrap(); let key=key.unwrap();
+                                                    // Clone IDs before mutating the bridge; values are labels only.
+                                                    let labels=document.labels(actor,space).map(|(a,s)| (a.clone(),s.clone()));
+                                                    if let Some((a,sp))=labels {
+                                                        if edit {
+                                                            match document.bridge.edit(&a,&sp,key,value.unwrap().as_str()) {
+                                                                Ok(()) => tool_json(id,json!({"actor":actor,"space":space,"key":key,"value":value.unwrap()})),
+                                                                Err(_) => tool_error(id,"actor or space rejected"),
+                                                            }
+                                                        } else {
+                                                            match document.bridge.view(&a,&sp) {
+                                                                Ok(copy) => tool_json(id,json!({"actor":actor,"space":space,"key":key,"value":copy.get(key)})),
+                                                                Err(_) => tool_error(id,"actor or space rejected"),
+                                                            }
+                                                        }
+                                                    } else { tool_error(id,"unknown actor or space"); }
+                                                }
+                                            }
+                                            Some("document_merge") => {
+                                                let args=params.and_then(|p| p.get("arguments"));
+                                                if !args.and_then(Value::as_object).is_some_and(|o| o.is_empty()) { tool_error(id,"merge requires empty arguments"); }
+                                                else {
+                                                    let merged=document.bridge.merge();
+                                                    let fields:Vec<Value>=merged.fields.iter().map(|(key,field)|json!({"key":key,"value":field.value,"origin":origin_name(field.origin)})).collect();
+                                                    let conflicts:Vec<Value>=merged.conflicts.iter().map(|c|json!({"key":c.key,"base":c.base,"human":c.human,"assistant":c.assistant})).collect();
+                                                    tool_json(id,json!({"fields":fields,"conflicts":conflicts,"materializable":merged.conflicts.is_empty()}));
                                                 }
                                             }
                                             _ => rpc_error(id,-32602,"unknown tool"),

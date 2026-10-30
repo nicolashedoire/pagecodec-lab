@@ -108,6 +108,34 @@ jobs:
           name: memory-core-vm-evidence
           path: ${{ runner.temp }}/memory-core-evidence/
           if-no-files-found: ignore
+      - name: Build and check guest frame arena in QEMU
+        working-directory: experiments/memory_arena
+        run: |
+          cargo build --release --locked --offline
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/memory-arena-demo \
+            --output-dir "$RUNNER_TEMP/memory-arena-evidence"
+      - name: Preserve arena VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: memory-arena-vm-evidence
+          path: ${{ runner.temp }}/memory-arena-evidence/
+          if-no-files-found: ignore
+      - name: Build and check VirtIO feature negotiation in QEMU
+        working-directory: experiments/virtio_negotiation
+        run: |
+          cargo build --release --locked
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/virtio-negotiation-lab \
+            --output-dir "$RUNNER_TEMP/virtio-negotiation-evidence"
+      - name: Preserve negotiation VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: virtio-negotiation-vm-evidence
+          path: ${{ runner.temp }}/virtio-negotiation-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM

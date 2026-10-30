@@ -6,6 +6,9 @@ publish = false
 
 [dependencies]
 dual-input-lab = { path = "../dual_input" }
+actor-core-sketch = { path = "../actor_core" }
+system-core-sketch = { path = "../system_core" }
+workspace-bridge-sketch = { path = "../workspace_bridge" }
 virtio-drivers = { version = "=0.13.0", default-features = false, features = ["alloc"] }
 serde_json = { version = "=1.0.154", default-features = false, features = ["alloc"] }
 

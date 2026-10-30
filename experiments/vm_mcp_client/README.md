@@ -45,7 +45,7 @@ first verified that an out-of-bounds MCP move to `(399, 260)` was rejected
 with `isError: true` and that the guest reported unchanged positions. It then
 injected a synthetic tablet x=32767 event and observed the guest report
 human x=390, then injected the standard synthetic human VirtIO tablet event
-and captured the QMP responses. The client negotiated MCP, discovered the two tools and moved the
+and captured the QMP responses. The client negotiated MCP, found the two pointer tools and moved the
 assistant cursor. The guest reported human pointer `(223, 390)` and
 assistant pointer `(560, 330)` before the MCP call; afterward it reported
 `(223, 390)` and `(650, 260)` respectively. The client checked the move reply
@@ -59,9 +59,14 @@ before/after framebuffer hashes. Different hashes establish a framebuffer
 change, not the geometry or cause of that change; the generated raw
 framebuffers themselves are not stored in this repository.
 
-The JSON also preserves the previous automated run under
-`previous_automated_evidence`; older evidence, including the pre-router run,
-is retained in its nested records.
+The runner then opens a second MCP session and exercises the guest document
+bridge: independent synthetic copies, field origins, an immediately checked
+rejected cross-space edit, and retained conflicting versions. All documented
+edits use synthetic MCP inputs; the bridge actor registry is separate from
+the pointer router state. Those requests and responses are in
+`document_mcp_trace`; this Rust client itself remains pointer-only. The JSON
+also preserves previous automated runs in nested `previous_automated_evidence`
+records.
 An earlier [synthetic exchange](evidence/mcp-smoke.json) used an earlier image.
 The [manual exchange on the polished image](evidence/mcp-polished-smoke.json)
 includes an operator-reported QMP acknowledgement and a hash taken after

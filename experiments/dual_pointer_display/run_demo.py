@@ -64,7 +64,7 @@ def wait_for_guest_frame(stream, filename, process):
         except (OSError, RuntimeError):
             # The display may not be initialized yet. Retry until the deadline.
             pass
-        time.sleep(0.2)
+        time.sleep(0.3)
     raise TimeoutError("guest did not display an initialized 800x600 framebuffer")
 
 
@@ -154,12 +154,12 @@ def main():
                                 ]}}
                                 edge_result = qmp_command(qmp_stream, edge_event)
                                 edge_poll = []
-                                for request_id in range(4, 24):
+                                for request_id in range(4, 16):
                                     req, res, current = state(serial_stream, request_id)
                                     edge_poll.append({"request": req, "response": res})
                                     if current == "human=390,180; ai=560,330":
                                         break
-                                    time.sleep(0.2)
+                                    time.sleep(0.3)
                                 else:
                                     raise TimeoutError("guest did not clamp the human pointer at x=390")
                                 event = {"execute": "input-send-event", "arguments": {"events": [
@@ -168,12 +168,12 @@ def main():
                                 ]}}
                                 event_result = qmp_command(qmp_stream, event)
                                 poll_trace = []
-                                for request_id in range(24, 44):
+                                for request_id in range(16, 28):
                                     req, res, current = state(serial_stream, request_id)
                                     poll_trace.append({"request": req, "response": res})
                                     if "human=223,390" in current:
                                         break
-                                    time.sleep(0.2)
+                                    time.sleep(0.3)
                                 else:
                                     raise TimeoutError("guest did not consume the synthetic tablet event")
                         before_image = destination / "framebuffer-before.ppm"
@@ -189,6 +189,68 @@ def main():
                         before, after = result.get("before", ""), result.get("after", "")
                         if "human=223,390" not in before or "human=223,390" not in after or "ai=650,260" not in after:
                             raise RuntimeError("unexpected guest pointer state: " + str((before, after)))
+                        # A new MCP session drives the actual bridge in this same guest.
+                        doc_trace = []
+                        with connect(serial, process) as doc_socket:
+                            with doc_socket.makefile("rwb", buffering=0) as doc_stream:
+                                init = {"jsonrpc":"2.0","id":100,"method":"initialize","params":
+                                        {"protocolVersion":"2025-11-25","capabilities":{},
+                                         "clientInfo":{"name":"vm-document-probe","version":"0.1"}}}
+                                init_reply = rpc_call(doc_stream, init)
+                                if init_reply.get("result", {}).get("protocolVersion") != "2025-11-25":
+                                    raise RuntimeError("document probe could not initialize MCP")
+                                doc_trace.append({"request":init,"response":init_reply})
+                                doc_stream.write(b'{"jsonrpc":"2.0","method":"notifications/initialized"}\n')
+                                doc_trace.append({"notification":{"jsonrpc":"2.0","method":"notifications/initialized"}})
+                                list_request={"jsonrpc":"2.0","id":113,"method":"tools/list","params":{}}
+                                list_response=rpc_call(doc_stream,list_request)
+                                doc_trace.append({"request":list_request,"response":list_response})
+                                tools={item["name"]:item for item in list_response.get("result",{}).get("tools",[])}
+                                for name in ("document_edit","document_view"):
+                                    properties=tools[name]["inputSchema"]["properties"]
+                                    if properties["actor"].get("enum") != ["human","assistant"] or properties["space"].get("enum") != ["human-space","assistant-space"] or "32 UTF-8 bytes" not in properties["key"].get("description",""):
+                                        raise RuntimeError("invalid document tool schema")
+                                if "64 UTF-8 bytes" not in tools["document_edit"]["inputSchema"]["properties"]["value"].get("description",""):
+                                    raise RuntimeError("invalid document value schema")
+                                def doc_call(request_id, tool, arguments, rejected=False):
+                                    request={"jsonrpc":"2.0","id":request_id,"method":"tools/call",
+                                             "params":{"name":tool,"arguments":arguments}}
+                                    response=rpc_call(doc_stream,request)
+                                    doc_trace.append({"request":request,"response":response})
+                                    result=response.get("result",{})
+                                    if result.get("isError") is not rejected:
+                                        raise RuntimeError("unexpected document tool outcome: "+str(response))
+                                    if rejected:
+                                        return None
+                                    content=result.get("content",[])
+                                    if len(content)!=1 or content[0].get("type")!="text":
+                                        raise RuntimeError("invalid document response: "+str(response))
+                                    return json.loads(content[0]["text"])
+                                h={"actor":"human","space":"human-space"}
+                                a={"actor":"assistant","space":"assistant-space"}
+                                doc_call(101,"document_edit",{**h,"key":"title","value":"human-version"})
+                                doc_call(102,"document_edit",{**a,"key":"status","value":"assistant-ready"})
+                                hv=doc_call(103,"document_view",{**h,"key":"status"})
+                                av=doc_call(104,"document_view",{**a,"key":"title"})
+                                if hv.get("value") is not None or av.get("value") != "base":
+                                    raise RuntimeError("document copies not independent")
+                                compatible=doc_call(105,"document_merge",{})
+                                fields={field["key"]:field for field in compatible["fields"]}
+                                if compatible["conflicts"] or compatible["materializable"] is not True or fields.get("title") != {"key":"title","value":"human-version","origin":"human"} or fields.get("status") != {"key":"status","value":"assistant-ready","origin":"assistant"}:
+                                    raise RuntimeError("compatible merge or origins incorrect")
+                                doc_call(106,"document_edit",{"actor":"assistant","space":"human-space","key":"title","value":"intrusion"},rejected=True)
+                                human_after_reject=doc_call(111,"document_view",{**h,"key":"title"})
+                                assistant_after_reject=doc_call(112,"document_view",{**a,"key":"title"})
+                                if human_after_reject.get("value") != "human-version" or assistant_after_reject.get("value") != "base":
+                                    raise RuntimeError("cross-space rejection changed a document copy")
+                                doc_call(107,"document_edit",{**a,"key":"title","value":"assistant-version"})
+                                conflict=doc_call(108,"document_merge",{})
+                                if conflict["materializable"] is not False or conflict["conflicts"] != [{"key":"title","base":"base","human":"human-version","assistant":"assistant-version"}]:
+                                    raise RuntimeError("conflict versions were not retained")
+                                doc_call(109,"document_edit",{**h,"key":"é"*17,"value":"too-long-key"},rejected=True)
+                                after_rejected=doc_call(110,"document_view",{**h,"key":"title"})
+                                if after_rejected.get("value") != "human-version":
+                                    raise RuntimeError("rejected edit changed the human copy")
                         screenshot = destination / "framebuffer.ppm"
                         qmp_command(qmp_stream, {"execute": "screendump", "arguments": {"filename": str(screenshot)}})
                         before_hash, after_hash = sha256(before_image), sha256(screenshot)
@@ -205,6 +267,7 @@ def main():
                                                              "input_poll": edge_poll},
                                               "input_poll": poll_trace},
                                     "mcp_client": trace,
+                                    "document_mcp_trace": doc_trace,
                                     "framebuffer_before": {"file": before_image.name, "sha256": before_hash},
                                     "framebuffer_after": {"file": screenshot.name, "sha256": after_hash},
                                     "framebuffer_claim": "hashes demonstrate a change, not pointer geometry",

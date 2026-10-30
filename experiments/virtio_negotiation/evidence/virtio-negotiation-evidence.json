@@ -1,0 +1,23 @@
+{
+  "guest_sha256": "1260ebf50af6e004e46f7963cdc66e80b4ea5c7ff382536a704fbd367aa9dcaf",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "trials": [
+    {
+      "scenario": "modern",
+      "serial": "MOCK upstream_begin_init=returned_features device_features_ok=absent page_size_called=yes\nMOCK checked_begin=rejected failed=yes queue_setup=no driver_ok=no\nQEMU modern_rng features_ok=accepted driver_ok=no queue_setup=no\nPASS virtio feature negotiation scenario\n",
+      "expected_observed": true
+    },
+    {
+      "scenario": "absent",
+      "serial": "MOCK upstream_begin_init=returned_features device_features_ok=absent page_size_called=yes\nMOCK checked_begin=rejected failed=yes queue_setup=no driver_ok=no\nFAIL no modern QEMU virtio rng\n",
+      "expected_observed": true
+    },
+    {
+      "scenario": "legacy",
+      "serial": "MOCK upstream_begin_init=returned_features device_features_ok=absent page_size_called=yes\nMOCK checked_begin=rejected failed=yes queue_setup=no driver_ok=no\nQEMU legacy checked_begin=unsupported\nFAIL QEMU device legacy\n",
+      "expected_observed": true
+    }
+  ],
+  "rejection_source": "simulated in-guest transport; QEMU device accepts features",
+  "limitations": "prototype only; not a patched dependency or complete VirtIO driver"
+}
