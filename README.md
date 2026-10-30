@@ -34,6 +34,8 @@ The [dynamic multi-actor pointer router](experiments/dynamic_input/README.md) dr
 
 The [interactive graphics prototype](experiments/graph_interaction/README.md) adds synthetic clickable controls and independent logical focus. The [EL0 guest experiment](experiments/user_mode/README.md) tests a controlled user-mode call and a denied kernel-page access; a separate [bounded IPC dispatcher](experiments/ipc_service/README.md) exercises messages between two user spaces. Neither establishes complete process isolation or general IPC. See the [user-mode research](docs/USER_MODE_RESEARCH.md).
 
+The [workspace IPC guest](experiments/workspace_ipc_vm/README.md) tests two fixed task-attributed document requests and a read-only MCP view. It is not a general document protocol or authentication system.
+
 The [interleaved system VM](experiments/concurrent_isolation/README.md) runs two EL0 loops in separate page tables between graphical service operations and tests synthetic two-slot snapshots in one QEMU image. A separate [process-isolation experiment](experiments/process_isolation/README.md) tests controlled forbidden reads. These scenarios do not yet establish complete process isolation or native hardware support. See the [kernel integration research](docs/KERNEL_INTEGRATION_RESEARCH.md).
 
 A [tiny synthetic neural inference experiment](experiments/local_inference/README.md) runs in QEMU and is exposed for diagnostic scoring in a [journal-enabled MCP guest](experiments/journal_vm/README.md). Its fixed, hand-written weights are neither Jev nor Laya and do not control the system. The journal records only specified synthetic inference outcomes, not all system I/O or real user data.

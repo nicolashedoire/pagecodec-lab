@@ -1,0 +1,533 @@
+{
+  "guest_sha256": "976ff95abff913abbe79f7bb902205bbd1fe8dc9437fa5b671de7d055bf3a668",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "transport": "legacy",
+  "snapshot": {
+    "assistant": {
+      "common": "seed",
+      "slot-b2b2": "el0-b2b2",
+      "title": "base"
+    },
+    "base": {
+      "common": "seed",
+      "title": "base"
+    },
+    "human": {
+      "common": "seed",
+      "slot-a1a1": "el0-a1a1",
+      "title": "base"
+    }
+  },
+  "mailboxes": {
+    "capacity": 2,
+    "oversize_values": [
+      1342177280,
+      1342177280
+    ],
+    "payloads": [
+      41377,
+      45746
+    ],
+    "protocol": "fixed-svc-opcodes",
+    "responses": [
+      [
+        4,
+        2,
+        3,
+        3
+      ],
+      [
+        2,
+        4,
+        3,
+        3
+      ]
+    ],
+    "slots": [
+      31,
+      31
+    ]
+  },
+  "sessions": [
+    [
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {
+              "name": "graph-snapshot-test",
+              "version": "0.1"
+            }
+          }
+        },
+        "response": {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "result": {
+            "capabilities": {
+              "tools": {}
+            },
+            "protocolVersion": "2025-11-25",
+            "serverInfo": {
+              "name": "dual-pointer-vm",
+              "version": "0.1.0"
+            }
+          }
+        }
+      },
+      {
+        "notification": {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/list",
+          "params": {}
+        },
+        "response": {
+          "id": 2,
+          "jsonrpc": "2.0",
+          "result": {
+            "tools": [
+              {
+                "description": "Move AI pointer within its right-hand QEMU workspace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 773,
+                      "minimum": 400,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 573,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_ai"
+              },
+              {
+                "description": "Read the two pointer coordinates in this guest only.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "pointer_state"
+              },
+              {
+                "description": "Activate the synthetic button under the AI pointer; no host click or authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "click_ai"
+              },
+              {
+                "description": "Read logical button focus and click counts in this guest.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "interaction_state"
+              },
+              {
+                "description": "Read the guest's verified identity-map status.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "mmu_status"
+              },
+              {
+                "description": "Read verified pre-graphical EL0 timer trace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "el0_status"
+              },
+              {
+                "description": "Move the visible pointer for a synthetic logical actor; no window or authenticated identity.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 799,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 599,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_remote"
+              },
+              {
+                "description": "Read the third synthetic actor's logical position.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "remote_state"
+              },
+              {
+                "description": "Run 1101 synthetic human moves in this VM; overwrites older bounded trace entries.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "exercise_human_moves"
+              },
+              {
+                "description": "Read fixed EL0 mailbox states.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "ipc_status"
+              },
+              {
+                "description": "Read a field from a synthetic document copy.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "actor": {
+                      "enum": [
+                        "human",
+                        "assistant"
+                      ],
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Non-empty; at most 32 UTF-8 bytes.",
+                      "type": "string"
+                    },
+                    "space": {
+                      "enum": [
+                        "human-space",
+                        "assistant-space"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "actor",
+                    "space",
+                    "key"
+                  ],
+                  "type": "object"
+                },
+                "name": "document_view"
+              },
+              {
+                "description": "Merge synthetic copies and return fields, origins and conflicts.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_merge"
+              },
+              {
+                "description": "Read the synthetic base and both full copies.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_snapshot"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "method": "tools/call",
+          "params": {
+            "name": "mmu_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 3,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"address_spaces\":2,\"asids\":[1,2],\"caches\":false,\"enabled\":true,\"gic\":\"device-xn\",\"image\":\"normal-nc\",\"kernel_el0\":\"samples-denied\",\"mapping\":\"identity\",\"range_checks\":\"full\",\"user_code\":\"ro\",\"user_stack\":\"private-alias-rw\",\"virtio\":\"device-xn\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 4,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":4436,\"next\":1,\"task\":0},{\"count\":5070,\"next\":0,\"task\":1},{\"count\":10499,\"next\":1,\"task\":0},{\"count\":11169,\"next\":0,\"task\":1},{\"count\":16398,\"next\":1,\"task\":0},{\"count\":15746,\"next\":0,\"task\":1},{\"count\":21141,\"next\":1,\"task\":0},{\"count\":21675,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[32916,35694],\"slice_ticks\":10,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "method": "tools/call",
+          "params": {
+            "name": "ipc_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 5,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"capacity\":2,\"oversize_values\":[1342177280,1342177280],\"payloads\":[41377,45746],\"protocol\":\"fixed-svc-opcodes\",\"responses\":[[4,2,3,3],[2,4,3,3]],\"slots\":[31,31]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 6,
+          "method": "tools/call",
+          "params": {
+            "name": "document_snapshot",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 6,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"assistant\":{\"common\":\"seed\",\"slot-b2b2\":\"el0-b2b2\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"slot-a1a1\":\"el0-a1a1\",\"title\":\"base\"}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 7,
+          "method": "tools/call",
+          "params": {
+            "name": "document_merge",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 7,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"conflicts\":[],\"fields\":[{\"key\":\"common\",\"origin\":\"base\",\"value\":\"seed\"},{\"key\":\"slot-a1a1\",\"origin\":\"human\",\"value\":\"el0-a1a1\"},{\"key\":\"slot-b2b2\",\"origin\":\"assistant\",\"value\":\"el0-b2b2\"},{\"key\":\"title\",\"origin\":\"base\",\"value\":\"base\"}],\"materializable\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 8,
+          "method": "tools/call",
+          "params": {
+            "name": "document_edit",
+            "arguments": {
+              "actor": "human",
+              "space": "human-space",
+              "key": "from-b",
+              "value": "forged"
+            }
+          }
+        },
+        "response": {
+          "error": {
+            "code": -32602,
+            "message": "unknown tool"
+          },
+          "id": 8,
+          "jsonrpc": "2.0"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 9,
+          "method": "tools/call",
+          "params": {
+            "name": "document_load",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "error": {
+            "code": -32602,
+            "message": "unknown tool"
+          },
+          "id": 9,
+          "jsonrpc": "2.0"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 10,
+          "method": "tools/call",
+          "params": {
+            "name": "document_save",
+            "arguments": {
+              "mode": "commit"
+            }
+          }
+        },
+        "response": {
+          "error": {
+            "code": -32602,
+            "message": "unknown tool"
+          },
+          "id": 10,
+          "jsonrpc": "2.0"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 11,
+          "method": "tools/call",
+          "params": {
+            "name": "document_snapshot",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 11,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"assistant\":{\"common\":\"seed\",\"slot-b2b2\":\"el0-b2b2\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"slot-a1a1\":\"el0-a1a1\",\"title\":\"base\"}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 12,
+          "method": "tools/call",
+          "params": {
+            "name": "ipc_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 12,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"capacity\":2,\"oversize_values\":[1342177280,1342177280],\"payloads\":[41377,45746],\"protocol\":\"fixed-svc-opcodes\",\"responses\":[[4,2,3,3],[2,4,3,3]],\"slots\":[31,31]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 13,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 13,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":4436,\"next\":1,\"task\":0},{\"count\":5070,\"next\":0,\"task\":1},{\"count\":10499,\"next\":1,\"task\":0},{\"count\":11169,\"next\":0,\"task\":1},{\"count\":16398,\"next\":1,\"task\":0},{\"count\":15746,\"next\":0,\"task\":1},{\"count\":21141,\"next\":1,\"task\":0},{\"count\":21675,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[56610,57985],\"slice_ticks\":28,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      }
+    ]
+  ]
+}
