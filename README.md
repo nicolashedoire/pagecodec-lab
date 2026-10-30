@@ -14,6 +14,8 @@ For a mechanism-by-mechanism foundation, see the [deep macOS architecture and al
 For proposed AI control interfaces and decision models, see the [MCP and neural decision control plane](docs/AI_CONTROL_PLANE.md).
 The proposed user interface includes a [floating voice assistant](docs/VOICE_ASSISTANT.md) and [separate human and AI workspaces](docs/DUAL_WORKSPACES.md). A [local decision-model demo](experiments/local_decision/README.md) is available; it runs Laya, not Jev.
 
+Development of the proposed system now uses [Rust and a VM-first test plan](docs/RUST_SYSTEM.md). The first [workspace core](experiments/system_core/README.md) is user-space code; it is not a bootable operating system.
+
 ## New: adaptive compaction follow-up
 
 An adaptive rule selects segments with trailing holes first, but falls back to

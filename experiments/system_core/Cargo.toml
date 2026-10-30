@@ -1,0 +1,8 @@
+[package]
+name = "system-core-sketch"
+version = "0.1.0"
+edition = "2021"
+description = "User-space sketch of independent human and assistant workspaces"
+license = "MIT"
+
+[dependencies]

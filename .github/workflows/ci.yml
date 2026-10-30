@@ -9,6 +9,33 @@ permissions:
   contents: read
 
 jobs:
+  rust-arm-boot:
+    name: Rust ARM boot / QEMU VM
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install ARM target and virtual machine
+        run: |
+          rustup target add aarch64-unknown-none-softfloat
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends qemu-system-arm
+      - name: Build and boot Rust kernel in QEMU
+        working-directory: experiments/arm_boot
+        run: |
+          cargo build --release --locked --offline
+          python3 run_vm.py
+
+  rust-workspaces:
+    name: Rust workspace core / Ubuntu VM
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Test two-workspace merge
+        working-directory: experiments/system_core
+        run: cargo test --locked --offline
+
   portable-codec:
     name: Portable codec / Ubuntu
     runs-on: ubuntu-latest
