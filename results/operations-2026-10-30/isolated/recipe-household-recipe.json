@@ -1,0 +1,200 @@
+{
+  "schema_version": 1,
+  "experiment": "recipe",
+  "checksums_verified": true,
+  "inputs": {
+    "x_name": "household-x.i32",
+    "y_name": "household-y.i32",
+    "rows": 1660208,
+    "source_logical_bytes": 13281664,
+    "x_fnv1a64_le": "5ece8c31930931be",
+    "y_fnv1a64_le": "78dff086a9bdce06",
+    "x_missing": 22049,
+    "y_missing": 22049
+  },
+  "configuration": {
+    "repetitions": 1,
+    "warmups": 0,
+    "seed": 20261030,
+    "tile_rows": 256,
+    "tile_derived_bytes": 16384,
+    "cache_tiles": 64,
+    "sparse_queries": 4096,
+    "only_method": "recipe",
+    "cache_policy": "direct-mapped tile_index modulo cache_tiles; reset before each workload"
+  },
+  "semantics": {
+    "source_type": "little-endian int32",
+    "derived_type": "int64",
+    "missing_input": -2147483648,
+    "missing_output": "-9223372036854775808",
+    "missing_policy": "Either missing source makes all eight features missing",
+    "derived_storage": "native-endian int64 within this process; codec is lossless on those bytes",
+    "features": [
+      {
+        "name": "sum",
+        "formula": "x+y"
+      },
+      {
+        "name": "difference",
+        "formula": "x-y"
+      },
+      {
+        "name": "product",
+        "formula": "x*y"
+      },
+      {
+        "name": "x_squared",
+        "formula": "x*x"
+      },
+      {
+        "name": "y_squared",
+        "formula": "y*y"
+      },
+      {
+        "name": "minimum",
+        "formula": "min(x,y)"
+      },
+      {
+        "name": "maximum",
+        "formula": "max(x,y)"
+      },
+      {
+        "name": "absolute_difference",
+        "formula": "abs(x-y)"
+      }
+    ]
+  },
+  "protocol": {
+    "construction_includes": "allocation, feature computation or recipe setup; compressed blocks also encode",
+    "queries_include": "tile lookup or direct scalar calculation, computation/decompression, checksum consumption",
+    "excluded": "input I/O, schedule generation, streamed oracle, per-value codec validation, JSON output; no source edits",
+    "memory_accounting": "actual vector capacities plus C++ objects and schedule; excludes allocator bookkeeping, executable, libraries and report bookkeeping",
+    "all_methods_retain_sources": true,
+    "one_method_state_at_a_time": true,
+    "construction_peak_note": "accounted retained bytes plus maximum extra encoded scratch; not measured RSS",
+    "rss_note": "process lifetime high-water; use --only-method in fresh processes for method attribution",
+    "checksum_note": "unsigned 64-bit modular sum of mixed value/row/feature terms; compressed payloads also checked per-value"
+  },
+  "process_peak_rss_bytes": 14942208,
+  "workloads": [
+    {
+      "name": "sequential_all",
+      "queries": 1,
+      "row_visits": 1660208,
+      "value_visits": 13281664,
+      "expected_checksum": "395eb0150531ef66"
+    },
+    {
+      "name": "repeated_hot_windows",
+      "queries": 256,
+      "row_visits": 65536,
+      "value_visits": 524288,
+      "expected_checksum": "f18ffcc440a29680"
+    },
+    {
+      "name": "sparse_points",
+      "queries": 4096,
+      "row_visits": 4096,
+      "value_visits": 4096,
+      "expected_checksum": "17be06a4e2061c88"
+    },
+    {
+      "name": "changing_hotset",
+      "queries": 1024,
+      "row_visits": 262144,
+      "value_visits": 2097152,
+      "expected_checksum": "1058eaf303b0cad8"
+    }
+  ],
+  "methods": [
+    {
+      "name": "recipe",
+      "memory": {
+        "source_logical_bytes": 13281664,
+        "source_capacity_bytes": 13281664,
+        "derived_stored_bytes": 0,
+        "derived_capacity_bytes": 0,
+        "index_capacity_bytes": 0,
+        "cache_capacity_bytes": 0,
+        "scratch_capacity_bytes": 16384,
+        "recipe_descriptor_bytes": 8,
+        "other_object_metadata_bytes": 240,
+        "common_query_schedule_bytes": 129208,
+        "retained_accounted_bytes": 13427504,
+        "construction_extra_scratch_bytes": 0,
+        "construction_accounted_peak_bytes": 13427504
+      },
+      "construction_median_wall_ms": 0.00375,
+      "construction_median_cpu_ms": 0.006,
+      "workloads": [
+        {
+          "name": "sequential_all",
+          "median_wall_ms": 25.453708,
+          "median_cpu_ms": 25.253,
+          "checksum": "395eb0150531ef66",
+          "samples": [
+            {
+              "wall_ms": 25.453708,
+              "cpu_ms": 25.253,
+              "tile_hits": 0,
+              "tile_misses": 6486
+            }
+          ]
+        },
+        {
+          "name": "repeated_hot_windows",
+          "median_wall_ms": 2.069959,
+          "median_cpu_ms": 2.018,
+          "checksum": "f18ffcc440a29680",
+          "samples": [
+            {
+              "wall_ms": 2.069959,
+              "cpu_ms": 2.018,
+              "tile_hits": 0,
+              "tile_misses": 256
+            }
+          ]
+        },
+        {
+          "name": "sparse_points",
+          "median_wall_ms": 9.856125,
+          "median_cpu_ms": 9.352,
+          "checksum": "17be06a4e2061c88",
+          "samples": [
+            {
+              "wall_ms": 9.856125,
+              "cpu_ms": 9.352,
+              "tile_hits": 1,
+              "tile_misses": 4095
+            }
+          ]
+        },
+        {
+          "name": "changing_hotset",
+          "median_wall_ms": 4.901625,
+          "median_cpu_ms": 4.358,
+          "checksum": "1058eaf303b0cad8",
+          "samples": [
+            {
+              "wall_ms": 4.901625,
+              "cpu_ms": 4.358,
+              "tile_hits": 0,
+              "tile_misses": 1024
+            }
+          ]
+        }
+      ],
+      "construction_samples": [
+        {
+          "repetition": 0,
+          "order_position": 0,
+          "wall_ms": 0.00375,
+          "cpu_ms": 0.006
+        }
+      ]
+    }
+  ],
+  "amortization_vs_materialized": [],
+  "amortization_note": "Illustrative construction + executions * median workload time; one execution means the entire named workload, not one scalar query; no confidence claim"
+}

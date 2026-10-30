@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "sources": {
+    "covertype.zip": {
+      "url": "https://archive.ics.uci.edu/static/public/31/covertype.zip",
+      "sha256": "89a975c2457cd48e824238ae43c5a3cb762e42c4b4078d9b44a4514055105f6d"
+    },
+    "bike-sharing.zip": {
+      "url": "https://archive.ics.uci.edu/static/public/275/bike%2Bsharing%2Bdataset.zip",
+      "sha256": "b70182d0d0508e9abbb79306ce5c0cec34869000f8220175ac83d11dbe845401"
+    },
+    "cmudict.dict": {
+      "url": "https://raw.githubusercontent.com/cmusphinx/cmudict/74790861f652b15e4ac49015a90074ad62a27690/cmudict.dict",
+      "sha256": "81917843c7f44ce2b094ac63873c2c7a4cf802040792c455ba3ca406891c3d22"
+    },
+    "cmudict.LICENSE": {
+      "url": "https://raw.githubusercontent.com/cmusphinx/cmudict/74790861f652b15e4ac49015a90074ad62a27690/LICENSE",
+      "sha256": "bd4ce8e44170a5f9f481310ca85c51de3c4f851a65e679b40e603b143bd3542a"
+    }
+  },
+  "household_source_sha256": "910ab4ec9d1fe12a892bf841c7e95586f02adc5e158934b2d721d8cdb919249d",
+  "numeric": [
+    {
+      "name": "household",
+      "source_rows": 2075259,
+      "calibration_rows": 415051,
+      "rows": 1660208,
+      "fields": [
+        "Global_active_power x1000",
+        "Global_reactive_power x1000"
+      ],
+      "thresholds": [
+        196,
+        462,
+        2654
+      ],
+      "threshold_rule": "10th/50th/90th order-statistic quantiles of valid x in first 20%; floor index",
+      "evaluation_split": "Remaining 80% in source order, no repetition or shuffling",
+      "citation": "Hebrail & Berard (2006), UCI, https://doi.org/10.24432/C58K54, CC-BY-4.0",
+      "x": {
+        "path": "data/operations/household-x.i32",
+        "bytes": 6640832,
+        "sha256": "282c9a02dd114d0ccac2cca4f198667d2ed7e07afce06b339a9b67c8ae9297ef"
+      },
+      "y": {
+        "path": "data/operations/household-y.i32",
+        "bytes": 6640832,
+        "sha256": "4c96e696c02f393ad633070993012de8675c1a99638ef74f5943f849d4326bc0"
+      }
+    },
+    {
+      "name": "covertype",
+      "source_rows": 581012,
+      "calibration_rows": 116202,
+      "rows": 464810,
+      "fields": [
+        "Elevation (m)",
+        "Horizontal_Distance_To_Roadways (m)"
+      ],
+      "thresholds": [
+        2598,
+        2903,
+        3123
+      ],
+      "threshold_rule": "10th/50th/90th order-statistic quantiles of valid x in first 20%; floor index",
+      "evaluation_split": "Remaining 80% in source order, no repetition or shuffling",
+      "citation": "Blackard (1998), UCI, https://doi.org/10.24432/C50K5N, CC-BY-4.0",
+      "x": {
+        "path": "data/operations/covertype-x.i32",
+        "bytes": 1859240,
+        "sha256": "c562dcd33b5bc260654e07721e76008bfb57a8d9db8f59be96842546d0e26eaa"
+      },
+      "y": {
+        "path": "data/operations/covertype-y.i32",
+        "bytes": 1859240,
+        "sha256": "3bf26a14e1ecb13ea808d7991f30798bf00069caa9d10571aceeb584ccfa8d29"
+      }
+    },
+    {
+      "name": "bike",
+      "source_rows": 17379,
+      "calibration_rows": 3475,
+      "rows": 13904,
+      "fields": [
+        "cnt (rentals)",
+        "registered (rentals)"
+      ],
+      "thresholds": [
+        5,
+        73,
+        256
+      ],
+      "threshold_rule": "10th/50th/90th order-statistic quantiles of valid x in first 20%; floor index",
+      "evaluation_split": "Remaining 80% in source order, no repetition or shuffling",
+      "citation": "Fanaee-T (2013), UCI, https://doi.org/10.24432/C5W894, CC-BY-4.0",
+      "x": {
+        "path": "data/operations/bike-x.i32",
+        "bytes": 55616,
+        "sha256": "01b133050d5248cf0ee879afa0b2e95cb12876348d45a42304a03fcaa9968ee4"
+      },
+      "y": {
+        "path": "data/operations/bike-y.i32",
+        "bytes": 55616,
+        "sha256": "1a6b9e4f858d847730f8d8037553ef95f1547959699ce32a7963fd4efa79bbf0"
+      }
+    }
+  ],
+  "strings": [
+    {
+      "name": "cmu-headwords",
+      "objects": 135166,
+      "source_corpus": "cmudict",
+      "extraction": "First space separates headword from remaining pronunciation field; no normalization",
+      "path": "data/operations/cmu-headwords.txt",
+      "bytes": 1180082,
+      "sha256": "420e4e26810ebdcd431aa25ecb65080262e065b9ecfc7af6a41968ea55203af0"
+    },
+    {
+      "name": "cmu-pronunciations",
+      "objects": 135166,
+      "source_corpus": "cmudict",
+      "extraction": "First space separates headword from remaining pronunciation field; no normalization",
+      "path": "data/operations/cmu-pronunciations.txt",
+      "bytes": 2438406,
+      "sha256": "c3ee4e9f3b956e7fe701901e01f313f4380873fbff3f7aa0e79f7a1b24c399a5"
+    }
+  ],
+  "limitations": [
+    "Thresholds use calibration rows; evaluation arrays exclude those rows.",
+    "Query schedules are synthetic operations on real, unrepeated data.",
+    "CMU headwords/pronunciations are two views of one source corpus.",
+    "Bike official site count differs; pinned hour.csv verifies 17,379 records.",
+    "Numeric projections retain only named fields, not the complete source datasets."
+  ],
+  "protocol": {
+    "repetitions": 9,
+    "seed": 20261030,
+    "query_block_rows": 1024,
+    "recipe_tile_rows": 256,
+    "recipe_cache_tiles": 64,
+    "string_block_bytes": 4096,
+    "string_queries": 20000,
+    "string_candidate_cap": 64,
+    "string_max_overlap_bytes": 256
+  }
+}

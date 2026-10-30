@@ -1,0 +1,741 @@
+{
+  "schema_version": 1,
+  "experiment": "immutable_strings",
+  "input_name": "cmu-pronunciations.txt",
+  "input_bytes": 2438406,
+  "input_fnv1a64": "3795a30e52a1fc5e",
+  "object_count": 135166,
+  "total_object_bytes": 2303240,
+  "max_object_bytes": 80,
+  "trials": 9,
+  "queries_per_workload": 20000,
+  "seed": 20261030,
+  "block_bytes": 4096,
+  "candidate_cap": 64,
+  "max_overlap_bytes": 256,
+  "minimum_overlap_bytes": 8,
+  "hot_set_objects": 1351,
+  "hot_probability": 0.9,
+  "zlib_version": "1.2.12",
+  "zlib_level": 1,
+  "benchmark_trace_capacity_bytes": 524288,
+  "source_oracle_retained_during_lookup": false,
+  "timing_scope": "Batched object lookup plus full returned-byte FNV consumption; copy also copies every byte. Caller workspace allocation and verification excluded; zlib internal allocation/deallocation remains timed. Construction includes final compaction.",
+  "storage_scope": "Dynamic vector buffer capacities only, plus caller lookup scratch where labeled. Container/control objects, allocator headers and transient internal zlib allocations are excluded; these counters are not process RSS.",
+  "view_contract": "Borrowed view valid until next lookup on that workspace; zlib decodes each compressed-block access with no persistent decoded cache.",
+  "construction_estimate_note": "Estimated capacity accounting, not RSS or an upper bound; includes input strings and approximate hash-table nodes, omits allocator headers and zlib internals.",
+  "trial_order": [
+    [
+      "zlib_blocks",
+      "intern",
+      "concat",
+      "bounded_overlap"
+    ],
+    [
+      "zlib_blocks",
+      "intern",
+      "bounded_overlap",
+      "concat"
+    ],
+    [
+      "concat",
+      "bounded_overlap",
+      "zlib_blocks",
+      "intern"
+    ],
+    [
+      "intern",
+      "bounded_overlap",
+      "concat",
+      "zlib_blocks"
+    ],
+    [
+      "bounded_overlap",
+      "concat",
+      "zlib_blocks",
+      "intern"
+    ],
+    [
+      "zlib_blocks",
+      "intern",
+      "concat",
+      "bounded_overlap"
+    ],
+    [
+      "intern",
+      "bounded_overlap",
+      "concat",
+      "zlib_blocks"
+    ],
+    [
+      "intern",
+      "bounded_overlap",
+      "zlib_blocks",
+      "concat"
+    ],
+    [
+      "bounded_overlap",
+      "concat",
+      "zlib_blocks",
+      "intern"
+    ]
+  ],
+  "workload_order": [
+    [
+      "0:zlib_blocks",
+      "hot.copy",
+      "hot.view",
+      "uniform.copy",
+      "uniform.view"
+    ],
+    [
+      "0:intern",
+      "uniform.view",
+      "hot.copy",
+      "uniform.copy",
+      "hot.view"
+    ],
+    [
+      "0:concat",
+      "uniform.view",
+      "hot.copy",
+      "uniform.copy",
+      "hot.view"
+    ],
+    [
+      "0:bounded_overlap",
+      "hot.view",
+      "uniform.view",
+      "uniform.copy",
+      "hot.copy"
+    ],
+    [
+      "1:zlib_blocks",
+      "uniform.copy",
+      "hot.copy",
+      "hot.view",
+      "uniform.view"
+    ],
+    [
+      "1:intern",
+      "uniform.copy",
+      "hot.view",
+      "hot.copy",
+      "uniform.view"
+    ],
+    [
+      "1:bounded_overlap",
+      "uniform.view",
+      "hot.copy",
+      "hot.view",
+      "uniform.copy"
+    ],
+    [
+      "1:concat",
+      "hot.copy",
+      "uniform.copy",
+      "hot.view",
+      "uniform.view"
+    ],
+    [
+      "2:concat",
+      "uniform.copy",
+      "hot.copy",
+      "hot.view",
+      "uniform.view"
+    ],
+    [
+      "2:bounded_overlap",
+      "hot.copy",
+      "uniform.copy",
+      "hot.view",
+      "uniform.view"
+    ],
+    [
+      "2:zlib_blocks",
+      "hot.view",
+      "uniform.copy",
+      "uniform.view",
+      "hot.copy"
+    ],
+    [
+      "2:intern",
+      "hot.view",
+      "uniform.copy",
+      "hot.copy",
+      "uniform.view"
+    ],
+    [
+      "3:intern",
+      "hot.copy",
+      "uniform.copy",
+      "uniform.view",
+      "hot.view"
+    ],
+    [
+      "3:bounded_overlap",
+      "uniform.copy",
+      "hot.view",
+      "hot.copy",
+      "uniform.view"
+    ],
+    [
+      "3:concat",
+      "hot.view",
+      "uniform.view",
+      "hot.copy",
+      "uniform.copy"
+    ],
+    [
+      "3:zlib_blocks",
+      "hot.view",
+      "uniform.view",
+      "uniform.copy",
+      "hot.copy"
+    ],
+    [
+      "4:bounded_overlap",
+      "hot.view",
+      "hot.copy",
+      "uniform.copy",
+      "uniform.view"
+    ],
+    [
+      "4:concat",
+      "hot.copy",
+      "uniform.view",
+      "hot.view",
+      "uniform.copy"
+    ],
+    [
+      "4:zlib_blocks",
+      "hot.view",
+      "hot.copy",
+      "uniform.view",
+      "uniform.copy"
+    ],
+    [
+      "4:intern",
+      "hot.view",
+      "uniform.copy",
+      "uniform.view",
+      "hot.copy"
+    ],
+    [
+      "5:zlib_blocks",
+      "uniform.view",
+      "hot.view",
+      "hot.copy",
+      "uniform.copy"
+    ],
+    [
+      "5:intern",
+      "uniform.copy",
+      "hot.view",
+      "hot.copy",
+      "uniform.view"
+    ],
+    [
+      "5:concat",
+      "uniform.copy",
+      "uniform.view",
+      "hot.copy",
+      "hot.view"
+    ],
+    [
+      "5:bounded_overlap",
+      "uniform.copy",
+      "uniform.view",
+      "hot.copy",
+      "hot.view"
+    ],
+    [
+      "6:intern",
+      "hot.copy",
+      "uniform.view",
+      "hot.view",
+      "uniform.copy"
+    ],
+    [
+      "6:bounded_overlap",
+      "hot.copy",
+      "uniform.view",
+      "uniform.copy",
+      "hot.view"
+    ],
+    [
+      "6:concat",
+      "uniform.copy",
+      "hot.copy",
+      "uniform.view",
+      "hot.view"
+    ],
+    [
+      "6:zlib_blocks",
+      "hot.copy",
+      "uniform.copy",
+      "hot.view",
+      "uniform.view"
+    ],
+    [
+      "7:intern",
+      "uniform.copy",
+      "hot.view",
+      "hot.copy",
+      "uniform.view"
+    ],
+    [
+      "7:bounded_overlap",
+      "uniform.view",
+      "hot.view",
+      "uniform.copy",
+      "hot.copy"
+    ],
+    [
+      "7:zlib_blocks",
+      "uniform.view",
+      "hot.copy",
+      "uniform.copy",
+      "hot.view"
+    ],
+    [
+      "7:concat",
+      "uniform.view",
+      "hot.view",
+      "hot.copy",
+      "uniform.copy"
+    ],
+    [
+      "8:bounded_overlap",
+      "hot.view",
+      "uniform.view",
+      "hot.copy",
+      "uniform.copy"
+    ],
+    [
+      "8:concat",
+      "hot.copy",
+      "uniform.copy",
+      "uniform.view",
+      "hot.view"
+    ],
+    [
+      "8:zlib_blocks",
+      "hot.copy",
+      "hot.view",
+      "uniform.view",
+      "uniform.copy"
+    ],
+    [
+      "8:intern",
+      "hot.view",
+      "uniform.view",
+      "uniform.copy",
+      "hot.copy"
+    ]
+  ],
+  "observable_checksum": "0000000000000000",
+  "methods": [
+    {
+      "method": "concat",
+      "verified_all_objects": true,
+      "payload_bytes": 2303240,
+      "index_bytes": 2162656,
+      "block_metadata_bytes": 0,
+      "logical_storage_bytes": 4465896,
+      "capacity_storage_bytes": 4465896,
+      "lookup_workspace_view_bytes": 0,
+      "lookup_workspace_copy_bytes": 80,
+      "resident_view_capacity_bytes": 4465896,
+      "resident_copy_capacity_bytes": 4465976,
+      "construction_estimated_peak_bytes": 15363832,
+      "block_count": 0,
+      "raw_fallback_blocks": 0,
+      "unique_objects": null,
+      "overlap_saved_bytes": 0,
+      "overlap_candidate_checks": 0,
+      "construction_samples_ms": [
+        1.682583,
+        1.734208,
+        1.932292,
+        2.654208,
+        1.730125,
+        1.706167,
+        1.604334,
+        1.62875,
+        1.784292
+      ],
+      "workloads": {
+        "uniform": {
+          "view": {
+            "checksum_fnv1a64": "886ac85436b003f7",
+            "ns_per_query_samples": [
+              22.7896,
+              24.37915,
+              30.1396,
+              33.1292,
+              20.675,
+              19.45,
+              19.2021,
+              30.675,
+              19.54585
+            ]
+          },
+          "copy": {
+            "checksum_fnv1a64": "886ac85436b003f7",
+            "ns_per_query_samples": [
+              23.4854,
+              42.31045,
+              35.2896,
+              25.0833,
+              30.925,
+              25.45835,
+              26.3292,
+              23.63125,
+              38.75625
+            ]
+          }
+        },
+        "hot": {
+          "view": {
+            "checksum_fnv1a64": "f3c517971cc1862d",
+            "ns_per_query_samples": [
+              18.65,
+              23.08545,
+              19.78335,
+              33.4479,
+              18.3167,
+              18.6167,
+              18.33125,
+              19.025,
+              18.93125
+            ]
+          },
+          "copy": {
+            "checksum_fnv1a64": "f3c517971cc1862d",
+            "ns_per_query_samples": [
+              21.28335,
+              27.7333,
+              32.0854,
+              22.475,
+              21.41875,
+              21.1354,
+              20.3646,
+              20.375,
+              29.0417
+            ]
+          }
+        }
+      }
+    },
+    {
+      "method": "intern",
+      "verified_all_objects": true,
+      "payload_bytes": 2056244,
+      "index_bytes": 2162656,
+      "block_metadata_bytes": 0,
+      "logical_storage_bytes": 4218900,
+      "capacity_storage_bytes": 4218900,
+      "lookup_workspace_view_bytes": 0,
+      "lookup_workspace_copy_bytes": 80,
+      "resident_view_capacity_bytes": 4218900,
+      "resident_copy_capacity_bytes": 4218980,
+      "construction_estimated_peak_bytes": 25301220,
+      "block_count": 0,
+      "raw_fallback_blocks": 0,
+      "unique_objects": 116116,
+      "overlap_saved_bytes": 0,
+      "overlap_candidate_checks": 0,
+      "construction_samples_ms": [
+        18.795208,
+        22.595875,
+        18.481916,
+        15.315042,
+        19.385333,
+        13.473834,
+        12.01525,
+        19.837959,
+        20.295708
+      ],
+      "workloads": {
+        "uniform": {
+          "view": {
+            "checksum_fnv1a64": "886ac85436b003f7",
+            "ns_per_query_samples": [
+              22.59375,
+              19.4208,
+              20.9271,
+              35.6979,
+              19.72915,
+              27.3667,
+              28.35205,
+              21.1604,
+              26.32085
+            ]
+          },
+          "copy": {
+            "checksum_fnv1a64": "886ac85436b003f7",
+            "ns_per_query_samples": [
+              23.12085,
+              29.05625,
+              26.16875,
+              98.44795,
+              27.6229,
+              29.7354,
+              22.69375,
+              31.15,
+              25.64375
+            ]
+          }
+        },
+        "hot": {
+          "view": {
+            "checksum_fnv1a64": "f3c517971cc1862d",
+            "ns_per_query_samples": [
+              18.6667,
+              18.7333,
+              20.68335,
+              19.6479,
+              23.3771,
+              19.35,
+              18.325,
+              20.3708,
+              22.8458
+            ]
+          },
+          "copy": {
+            "checksum_fnv1a64": "f3c517971cc1862d",
+            "ns_per_query_samples": [
+              20.725,
+              20.9875,
+              22.28125,
+              30.91665,
+              21.46875,
+              21.12085,
+              23.39375,
+              22.2229,
+              21.1
+            ]
+          }
+        }
+      }
+    },
+    {
+      "method": "bounded_overlap",
+      "verified_all_objects": true,
+      "payload_bytes": 2024126,
+      "index_bytes": 2162656,
+      "block_metadata_bytes": 0,
+      "logical_storage_bytes": 4186782,
+      "capacity_storage_bytes": 4186782,
+      "lookup_workspace_view_bytes": 0,
+      "lookup_workspace_copy_bytes": 80,
+      "resident_view_capacity_bytes": 4186782,
+      "resident_copy_capacity_bytes": 4186862,
+      "construction_estimated_peak_bytes": 28183794,
+      "block_count": 0,
+      "raw_fallback_blocks": 0,
+      "unique_objects": 116116,
+      "overlap_saved_bytes": 32118,
+      "overlap_candidate_checks": 7045440,
+      "construction_samples_ms": [
+        91.337917,
+        96.182083,
+        53.68,
+        79.637917,
+        52.849375,
+        52.736084,
+        53.326833,
+        91.0285,
+        52.816708
+      ],
+      "workloads": {
+        "uniform": {
+          "view": {
+            "checksum_fnv1a64": "886ac85436b003f7",
+            "ns_per_query_samples": [
+              28.92295,
+              28.18125,
+              19.41045,
+              20.23125,
+              19.85,
+              19.3146,
+              22.08125,
+              130.2917,
+              22.3646
+            ]
+          },
+          "copy": {
+            "checksum_fnv1a64": "886ac85436b003f7",
+            "ns_per_query_samples": [
+              39.91045,
+              28.45205,
+              25.1229,
+              40.6792,
+              24.8021,
+              25.6542,
+              23.0521,
+              87.7458,
+              31.89585
+            ]
+          }
+        },
+        "hot": {
+          "view": {
+            "checksum_fnv1a64": "f3c517971cc1862d",
+            "ns_per_query_samples": [
+              27.7729,
+              19.45415,
+              18.61875,
+              20.5396,
+              20.13955,
+              18.6125,
+              23.31455,
+              43.7125,
+              18.98125
+            ]
+          },
+          "copy": {
+            "checksum_fnv1a64": "f3c517971cc1862d",
+            "ns_per_query_samples": [
+              60.7042,
+              22.1979,
+              22.46455,
+              22.1833,
+              20.775,
+              20.87085,
+              22.0771,
+              46.4021,
+              28.09585
+            ]
+          }
+        }
+      }
+    },
+    {
+      "method": "zlib_blocks",
+      "verified_all_objects": true,
+      "payload_bytes": 665517,
+      "index_bytes": 2162656,
+      "block_metadata_bytes": 18048,
+      "logical_storage_bytes": 2846221,
+      "capacity_storage_bytes": 2846221,
+      "lookup_workspace_view_bytes": 4096,
+      "lookup_workspace_copy_bytes": 4176,
+      "resident_view_capacity_bytes": 2850317,
+      "resident_copy_capacity_bytes": 2850397,
+      "construction_estimated_peak_bytes": 12795051,
+      "block_count": 564,
+      "raw_fallback_blocks": 0,
+      "unique_objects": null,
+      "overlap_saved_bytes": 0,
+      "overlap_candidate_checks": 0,
+      "construction_samples_ms": [
+        24.28825,
+        31.172583,
+        20.359042,
+        30.725542,
+        23.114125,
+        31.694792,
+        32.239208,
+        53.094917,
+        20.709375
+      ],
+      "workloads": {
+        "uniform": {
+          "view": {
+            "checksum_fnv1a64": "886ac85436b003f7",
+            "ns_per_query_samples": [
+              6046.97295,
+              8193.25625,
+              7580.8729,
+              7496.3083,
+              8062.74165,
+              8260.1396,
+              8175.8979,
+              7798.99375,
+              7649.27705
+            ]
+          },
+          "copy": {
+            "checksum_fnv1a64": "886ac85436b003f7",
+            "ns_per_query_samples": [
+              5789.5729,
+              7501.08335,
+              5726.24165,
+              7078.9042,
+              8133.6625,
+              7006.59585,
+              7498.0646,
+              6736.64165,
+              8815.99375
+            ]
+          }
+        },
+        "hot": {
+          "view": {
+            "checksum_fnv1a64": "f3c517971cc1862d",
+            "ns_per_query_samples": [
+              5720.975,
+              7573.69165,
+              5607.24165,
+              8536.57915,
+              5539.0958,
+              6908.6375,
+              8155.25415,
+              5534.48125,
+              8088.7229
+            ]
+          },
+          "copy": {
+            "checksum_fnv1a64": "f3c517971cc1862d",
+            "ns_per_query_samples": [
+              7578.7979,
+              7658.88955,
+              7714.5625,
+              6471.17705,
+              5553.6125,
+              7493.22085,
+              5576.3104,
+              7204.0333,
+              8425.2396
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "case": {
+    "name": "cmu-pronunciations",
+    "objects": 135166,
+    "source_corpus": "cmudict",
+    "extraction": "First space separates headword from remaining pronunciation field; no normalization",
+    "path": "data/operations/cmu-pronunciations.txt",
+    "bytes": 2438406,
+    "sha256": "c3ee4e9f3b956e7fe701901e01f313f4380873fbff3f7aa0e79f7a1b24c399a5"
+  },
+  "family": "strings",
+  "runner_elapsed_seconds": 7.009675707988208,
+  "isolated_peak_rss": [
+    {
+      "method": "concat",
+      "bytes": 28213248,
+      "scope": "Separate process high-water RSS including construction, input loading, validation and workload; not steady-state store size"
+    },
+    {
+      "method": "intern",
+      "bytes": 39288832,
+      "scope": "Separate process high-water RSS including construction, input loading, validation and workload; not steady-state store size"
+    },
+    {
+      "method": "bounded_overlap",
+      "bytes": 36765696,
+      "scope": "Separate process high-water RSS including construction, input loading, validation and workload; not steady-state store size"
+    },
+    {
+      "method": "zlib_blocks",
+      "bytes": 26296320,
+      "scope": "Separate process high-water RSS including construction, input loading, validation and workload; not steady-state store size"
+    }
+  ]
+}

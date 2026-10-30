@@ -1,5 +1,38 @@
 # Corpus specification
 
+## Operation-level evaluation corpora
+
+The [operations manifest](../manifests/operations-v1.json) pins additional sources
+and exact projections. Rebuild them with `python3 scripts/prepare_operations.py`.
+The script prepares the original household corpus first if needed.
+
+| Source | Original rows | Calibration rows | Evaluation rows | Selected int32 fields |
+|---|---:|---:|---:|---|
+| UCI Household | 2,075,259 | 415,051 | 1,660,208 | Active and reactive power ×1000 |
+| UCI Covertype | 581,012 | 116,202 | 464,810 | Elevation, horizontal distance to roadways |
+| UCI Bike Sharing, hourly | 17,379 | 3,475 | 13,904 | Total and registered rental counts |
+
+The first `floor(N/5)` rows supply the 10th, 50th and 90th order-statistic
+thresholds of valid `x`. The remaining rows, in original source order, are used
+for both numeric experiments. There is no duplication, rounding or padding.
+Only the two named columns are retained; these are projections, not lossless
+encodings of the entire original datasets. The three evaluation pairs contain
+**2,138,922 rows** in total. Query access patterns are generated schedules on
+those real values. Covertype is observational forest data, not a time series.
+The pinned Bike `hour.csv` has 17,379 records despite different web metadata.
+
+The string experiment uses the CMU Pronouncing Dictionary at commit
+`74790861f652b15e4ac49015a90074ad62a27690`. Each source record is split at its
+first space into a headword and a pronunciation. This yields **135,166 objects
+in each view of one dictionary**, retaining variant suffixes and all internal
+phoneme spaces. Line separators delimit objects; they are not object payload.
+The benchmark preserves the original object sequence and verifies every byte.
+No synthetic duplicates are inserted. See [attribution and licenses](../DATA_LICENSES.md).
+
+The original whole-page experiment below uses all household rows and eight
+columns, so its byte counts and measurements are not directly comparable with
+the two-column, held-out operation experiments.
+
 ## Full UCI household electricity corpus
 
 Source: Georges Hebrail and Alice Berard, *Individual Household Electric Power Consumption* (2006), UCI Machine Learning Repository, [DOI 10.24432/C58K54](https://doi.org/10.24432/C58K54), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

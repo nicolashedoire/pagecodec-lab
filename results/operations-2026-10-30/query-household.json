@@ -1,0 +1,2155 @@
+{
+  "schema_version": 1,
+  "experiment": "exact_masked_queries",
+  "rows": 1660208,
+  "block_rows": 1024,
+  "x_name": "household-x.i32",
+  "y_name": "household-y.i32",
+  "x_fnv1a64": "6831551829315760574",
+  "y_fnv1a64": "8709944665521901062",
+  "missing_sentinel": -2147483648,
+  "seed": 20261030,
+  "repetitions": 9,
+  "warmup_rounds_per_workload_method": 1,
+  "validate_only": false,
+  "validation_cases": 978,
+  "verified": true,
+  "representation_roundtrips_verified": true,
+  "input_arrays_released_before_timing": false,
+  "input_arrays_retained_capacity_bytes": 13281664,
+  "threshold_source": "explicit CLI thresholds",
+  "semantics": "count valid x >= threshold in [begin,end); sum corresponding nonmissing y; empty sum=0; exact int64 accumulation",
+  "timing_scope": "single-thread warm repeated query schedules; no full output materialization; allocation, construction, IO and oracle validation excluded; answer digest included; per-schedule times divide batched duration by inner_iterations",
+  "memory_scope": "conceptual per-method owned representation capacities plus explicit reusable scratch, not RSS; vector capacity and object headers counted, allocator metadata/compiler stack excluded; all-method run retains raw oracle and multiple stores; eager/progressive/adaptive share one physical bitplane store",
+  "raw_kernel": "ARM NEON 4 int32 lanes with int64 widening accumulation",
+  "methods": [
+    {
+      "method": "raw",
+      "construction_ms": 1.373292,
+      "payload_bytes": 13281664,
+      "metadata_bytes": 12976,
+      "representation_bytes": 13294640,
+      "allocated_capacity_bytes": 13294712,
+      "explicit_scratch_bytes": 0,
+      "owned_working_bytes": 13294712,
+      "model_metadata_bytes": 0
+    },
+    {
+      "method": "for",
+      "construction_ms": 11.723042,
+      "payload_bytes": 4990880,
+      "metadata_bytes": 64880,
+      "representation_bytes": 5055760,
+      "allocated_capacity_bytes": 6356464,
+      "explicit_scratch_bytes": 0,
+      "owned_working_bytes": 6356464,
+      "model_metadata_bytes": 0
+    },
+    {
+      "method": "bitplane_eager",
+      "construction_ms": 21.882708,
+      "payload_bytes": 4992768,
+      "metadata_bytes": 64880,
+      "representation_bytes": 5057648,
+      "allocated_capacity_bytes": 6356464,
+      "explicit_scratch_bytes": 128,
+      "owned_working_bytes": 6356592,
+      "model_metadata_bytes": 0
+    },
+    {
+      "method": "bitplane_progressive",
+      "construction_ms": 21.882708,
+      "payload_bytes": 4992768,
+      "metadata_bytes": 64880,
+      "representation_bytes": 5057648,
+      "allocated_capacity_bytes": 6356464,
+      "explicit_scratch_bytes": 128,
+      "owned_working_bytes": 6356592,
+      "model_metadata_bytes": 0
+    },
+    {
+      "method": "bitplane_adaptive",
+      "construction_ms": 24.671583,
+      "payload_bytes": 4992768,
+      "metadata_bytes": 116784,
+      "representation_bytes": 5109552,
+      "allocated_capacity_bytes": 6408392,
+      "explicit_scratch_bytes": 128,
+      "owned_working_bytes": 6408520,
+      "model_metadata_bytes": 51904
+    },
+    {
+      "method": "rle",
+      "construction_ms": 8.68675,
+      "payload_bytes": 11222920,
+      "metadata_bytes": 11222920,
+      "representation_bytes": 22445840,
+      "allocated_capacity_bytes": 33554456,
+      "explicit_scratch_bytes": 0,
+      "owned_working_bytes": 33554456,
+      "model_metadata_bytes": 0
+    }
+  ],
+  "workloads": [
+    {
+      "kind": "full",
+      "threshold": 196,
+      "logical_rows_per_schedule": 1660208,
+      "inner_iterations": 1,
+      "queries": [
+        {
+          "begin": 0,
+          "end": 1660208,
+          "count": 1561874,
+          "sum": 200491126
+        }
+      ],
+      "trial_order": [
+        [
+          "rle",
+          "bitplane_adaptive",
+          "for",
+          "bitplane_progressive",
+          "raw",
+          "bitplane_eager"
+        ],
+        [
+          "bitplane_eager",
+          "for",
+          "bitplane_progressive",
+          "raw",
+          "bitplane_adaptive",
+          "rle"
+        ],
+        [
+          "bitplane_progressive",
+          "raw",
+          "for",
+          "bitplane_eager",
+          "rle",
+          "bitplane_adaptive"
+        ],
+        [
+          "raw",
+          "rle",
+          "bitplane_progressive",
+          "bitplane_eager",
+          "for",
+          "bitplane_adaptive"
+        ],
+        [
+          "rle",
+          "bitplane_eager",
+          "for",
+          "raw",
+          "bitplane_progressive",
+          "bitplane_adaptive"
+        ],
+        [
+          "raw",
+          "bitplane_eager",
+          "for",
+          "rle",
+          "bitplane_progressive",
+          "bitplane_adaptive"
+        ],
+        [
+          "raw",
+          "for",
+          "rle",
+          "bitplane_eager",
+          "bitplane_adaptive",
+          "bitplane_progressive"
+        ],
+        [
+          "bitplane_adaptive",
+          "bitplane_progressive",
+          "for",
+          "bitplane_eager",
+          "rle",
+          "raw"
+        ],
+        [
+          "rle",
+          "bitplane_progressive",
+          "for",
+          "bitplane_adaptive",
+          "raw",
+          "bitplane_eager"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "verified": true,
+          "median_ms": 0.321,
+          "samples_ms": [
+            0.582292,
+            0.319708,
+            0.351584,
+            0.376625,
+            0.300125,
+            0.306708,
+            0.352375,
+            0.321,
+            0.309708
+          ]
+        },
+        {
+          "method": "for",
+          "verified": true,
+          "median_ms": 2.672167,
+          "samples_ms": [
+            4.303834,
+            2.62975,
+            2.84875,
+            2.625042,
+            5.178083,
+            2.672167,
+            4.358083,
+            2.571792,
+            2.640375
+          ]
+        },
+        {
+          "method": "bitplane_eager",
+          "verified": true,
+          "median_ms": 0.140333,
+          "samples_ms": [
+            0.140333,
+            0.13725,
+            0.167125,
+            0.133042,
+            0.601417,
+            0.142542,
+            0.142458,
+            0.138416,
+            0.139042
+          ]
+        },
+        {
+          "method": "bitplane_progressive",
+          "verified": true,
+          "median_ms": 0.188958,
+          "samples_ms": [
+            0.492084,
+            0.188958,
+            0.183166,
+            0.298791,
+            0.180542,
+            0.213666,
+            0.182917,
+            0.158875,
+            0.45625
+          ]
+        },
+        {
+          "method": "bitplane_adaptive",
+          "verified": true,
+          "median_ms": 0.141292,
+          "samples_ms": [
+            0.298625,
+            0.149042,
+            0.168708,
+            0.141292,
+            0.135167,
+            0.163375,
+            0.138958,
+            0.138,
+            0.139042
+          ]
+        },
+        {
+          "method": "rle",
+          "verified": true,
+          "median_ms": 1.49275,
+          "samples_ms": [
+            1.296583,
+            1.342417,
+            1.494833,
+            1.968125,
+            1.49275,
+            1.543291,
+            1.249416,
+            1.230333,
+            2.776625
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "medium_64k",
+      "threshold": 196,
+      "logical_rows_per_schedule": 262144,
+      "inner_iterations": 1,
+      "queries": [
+        {
+          "begin": 819461,
+          "end": 884997,
+          "count": 64794,
+          "sum": 8031736
+        },
+        {
+          "begin": 1142802,
+          "end": 1208338,
+          "count": 62398,
+          "sum": 8117658
+        },
+        {
+          "begin": 233297,
+          "end": 298833,
+          "count": 65535,
+          "sum": 7537298
+        },
+        {
+          "begin": 868511,
+          "end": 934047,
+          "count": 58214,
+          "sum": 8975870
+        }
+      ],
+      "trial_order": [
+        [
+          "for",
+          "bitplane_adaptive",
+          "bitplane_progressive",
+          "raw",
+          "bitplane_eager",
+          "rle"
+        ],
+        [
+          "bitplane_progressive",
+          "bitplane_adaptive",
+          "bitplane_eager",
+          "raw",
+          "for",
+          "rle"
+        ],
+        [
+          "bitplane_progressive",
+          "bitplane_adaptive",
+          "bitplane_eager",
+          "for",
+          "raw",
+          "rle"
+        ],
+        [
+          "for",
+          "bitplane_eager",
+          "bitplane_progressive",
+          "raw",
+          "rle",
+          "bitplane_adaptive"
+        ],
+        [
+          "raw",
+          "rle",
+          "bitplane_eager",
+          "for",
+          "bitplane_adaptive",
+          "bitplane_progressive"
+        ],
+        [
+          "rle",
+          "raw",
+          "bitplane_eager",
+          "bitplane_adaptive",
+          "bitplane_progressive",
+          "for"
+        ],
+        [
+          "bitplane_progressive",
+          "rle",
+          "for",
+          "bitplane_adaptive",
+          "raw",
+          "bitplane_eager"
+        ],
+        [
+          "bitplane_adaptive",
+          "raw",
+          "rle",
+          "bitplane_progressive",
+          "for",
+          "bitplane_eager"
+        ],
+        [
+          "bitplane_adaptive",
+          "raw",
+          "bitplane_progressive",
+          "for",
+          "bitplane_eager",
+          "rle"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "verified": true,
+          "median_ms": 0.093042,
+          "samples_ms": [
+            0.050125,
+            0.108875,
+            0.148167,
+            0.103583,
+            0.093042,
+            0.102167,
+            0.047083,
+            0.046375,
+            0.05225
+          ]
+        },
+        {
+          "method": "for",
+          "verified": true,
+          "median_ms": 1.002084,
+          "samples_ms": [
+            0.368458,
+            1.095125,
+            1.014042,
+            1.055875,
+            1.01175,
+            1.002084,
+            0.647917,
+            0.365167,
+            0.461292
+          ]
+        },
+        {
+          "method": "bitplane_eager",
+          "verified": true,
+          "median_ms": 0.053125,
+          "samples_ms": [
+            0.019417,
+            0.053167,
+            0.053125,
+            0.069042,
+            0.057125,
+            0.055917,
+            0.019333,
+            0.021125,
+            0.022
+          ]
+        },
+        {
+          "method": "bitplane_progressive",
+          "verified": true,
+          "median_ms": 0.053667,
+          "samples_ms": [
+            0.018334,
+            0.071334,
+            0.063666,
+            0.058041,
+            0.056334,
+            0.053667,
+            0.052584,
+            0.023333,
+            0.021209
+          ]
+        },
+        {
+          "method": "bitplane_adaptive",
+          "verified": true,
+          "median_ms": 0.021167,
+          "samples_ms": [
+            0.020542,
+            0.060125,
+            0.053791,
+            0.020291,
+            0.053542,
+            0.053333,
+            0.020292,
+            0.018833,
+            0.021167
+          ]
+        },
+        {
+          "method": "rle",
+          "verified": true,
+          "median_ms": 0.475083,
+          "samples_ms": [
+            0.317042,
+            0.516917,
+            0.551125,
+            0.601125,
+            0.475083,
+            0.559625,
+            0.46625,
+            0.181875,
+            0.214458
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "small_1k",
+      "threshold": 196,
+      "logical_rows_per_schedule": 16384,
+      "inner_iterations": 8,
+      "queries": [
+        {
+          "begin": 1314952,
+          "end": 1315976,
+          "count": 1024,
+          "sum": 108570
+        },
+        {
+          "begin": 275856,
+          "end": 276880,
+          "count": 1024,
+          "sum": 96078
+        },
+        {
+          "begin": 932704,
+          "end": 933728,
+          "count": 912,
+          "sum": 143174
+        },
+        {
+          "begin": 152048,
+          "end": 153072,
+          "count": 1024,
+          "sum": 90850
+        },
+        {
+          "begin": 329595,
+          "end": 330619,
+          "count": 926,
+          "sum": 196810
+        },
+        {
+          "begin": 1639162,
+          "end": 1640186,
+          "count": 1024,
+          "sum": 116456
+        },
+        {
+          "begin": 834882,
+          "end": 835906,
+          "count": 1024,
+          "sum": 109356
+        },
+        {
+          "begin": 1457574,
+          "end": 1458598,
+          "count": 1021,
+          "sum": 239690
+        },
+        {
+          "begin": 601191,
+          "end": 602215,
+          "count": 1024,
+          "sum": 104636
+        },
+        {
+          "begin": 1248727,
+          "end": 1249751,
+          "count": 1024,
+          "sum": 86682
+        },
+        {
+          "begin": 1543721,
+          "end": 1544745,
+          "count": 911,
+          "sum": 111972
+        },
+        {
+          "begin": 267691,
+          "end": 268715,
+          "count": 1024,
+          "sum": 90244
+        },
+        {
+          "begin": 104646,
+          "end": 105670,
+          "count": 1024,
+          "sum": 91684
+        },
+        {
+          "begin": 1308726,
+          "end": 1309750,
+          "count": 1024,
+          "sum": 116412
+        },
+        {
+          "begin": 1310514,
+          "end": 1311538,
+          "count": 1024,
+          "sum": 132610
+        },
+        {
+          "begin": 724152,
+          "end": 725176,
+          "count": 1024,
+          "sum": 79762
+        }
+      ],
+      "trial_order": [
+        [
+          "rle",
+          "bitplane_adaptive",
+          "bitplane_progressive",
+          "bitplane_eager",
+          "raw",
+          "for"
+        ],
+        [
+          "rle",
+          "bitplane_adaptive",
+          "raw",
+          "bitplane_eager",
+          "for",
+          "bitplane_progressive"
+        ],
+        [
+          "raw",
+          "rle",
+          "bitplane_eager",
+          "bitplane_progressive",
+          "for",
+          "bitplane_adaptive"
+        ],
+        [
+          "raw",
+          "bitplane_adaptive",
+          "rle",
+          "for",
+          "bitplane_progressive",
+          "bitplane_eager"
+        ],
+        [
+          "bitplane_adaptive",
+          "bitplane_eager",
+          "for",
+          "bitplane_progressive",
+          "rle",
+          "raw"
+        ],
+        [
+          "bitplane_progressive",
+          "bitplane_adaptive",
+          "for",
+          "rle",
+          "bitplane_eager",
+          "raw"
+        ],
+        [
+          "raw",
+          "bitplane_eager",
+          "bitplane_progressive",
+          "for",
+          "bitplane_adaptive",
+          "rle"
+        ],
+        [
+          "bitplane_eager",
+          "bitplane_adaptive",
+          "for",
+          "rle",
+          "bitplane_progressive",
+          "raw"
+        ],
+        [
+          "bitplane_adaptive",
+          "raw",
+          "bitplane_progressive",
+          "rle",
+          "for",
+          "bitplane_eager"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "verified": true,
+          "median_ms": 0.006854125,
+          "samples_ms": [
+            0.00329175,
+            0.003291625,
+            0.0033125,
+            0.00331775,
+            0.008651,
+            0.00719275,
+            0.006854125,
+            0.007729125,
+            0.006901125
+          ]
+        },
+        {
+          "method": "for",
+          "verified": true,
+          "median_ms": 0.02634375,
+          "samples_ms": [
+            0.024578125,
+            0.0245885,
+            0.02634375,
+            0.02440625,
+            0.027203125,
+            0.064328125,
+            0.026229125,
+            0.061041625,
+            0.030828125
+          ]
+        },
+        {
+          "method": "bitplane_eager",
+          "verified": true,
+          "median_ms": 0.002052125,
+          "samples_ms": [
+            0.0019635,
+            0.002,
+            0.002005125,
+            0.00319275,
+            0.002,
+            0.005427,
+            0.00574475,
+            0.002052125,
+            0.002625
+          ]
+        },
+        {
+          "method": "bitplane_progressive",
+          "verified": true,
+          "median_ms": 0.001869875,
+          "samples_ms": [
+            0.00186975,
+            0.001828125,
+            0.00180725,
+            0.001890625,
+            0.001869875,
+            0.017734375,
+            0.001849,
+            0.00546875,
+            0.005109375
+          ]
+        },
+        {
+          "method": "bitplane_adaptive",
+          "verified": true,
+          "median_ms": 0.002052125,
+          "samples_ms": [
+            0.002052125,
+            0.002036375,
+            0.00271875,
+            0.002,
+            0.002010375,
+            0.005614625,
+            0.002114625,
+            0.00200525,
+            0.00790625
+          ]
+        },
+        {
+          "method": "rle",
+          "verified": true,
+          "median_ms": 0.015526125,
+          "samples_ms": [
+            0.014,
+            0.013828125,
+            0.01474475,
+            0.014119875,
+            0.029130125,
+            0.03344275,
+            0.015526125,
+            0.033536375,
+            0.025447875
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "full",
+      "threshold": 462,
+      "logical_rows_per_schedule": 1660208,
+      "inner_iterations": 1,
+      "queries": [
+        {
+          "begin": 0,
+          "end": 1660208,
+          "count": 927945,
+          "sum": 134340158
+        }
+      ],
+      "trial_order": [
+        [
+          "raw",
+          "for",
+          "bitplane_adaptive",
+          "bitplane_eager",
+          "rle",
+          "bitplane_progressive"
+        ],
+        [
+          "raw",
+          "bitplane_eager",
+          "bitplane_adaptive",
+          "bitplane_progressive",
+          "for",
+          "rle"
+        ],
+        [
+          "bitplane_adaptive",
+          "rle",
+          "for",
+          "raw",
+          "bitplane_progressive",
+          "bitplane_eager"
+        ],
+        [
+          "rle",
+          "bitplane_progressive",
+          "bitplane_adaptive",
+          "raw",
+          "bitplane_eager",
+          "for"
+        ],
+        [
+          "bitplane_eager",
+          "bitplane_progressive",
+          "raw",
+          "rle",
+          "bitplane_adaptive",
+          "for"
+        ],
+        [
+          "raw",
+          "bitplane_eager",
+          "rle",
+          "bitplane_adaptive",
+          "bitplane_progressive",
+          "for"
+        ],
+        [
+          "bitplane_progressive",
+          "bitplane_adaptive",
+          "bitplane_eager",
+          "for",
+          "raw",
+          "rle"
+        ],
+        [
+          "for",
+          "rle",
+          "raw",
+          "bitplane_eager",
+          "bitplane_adaptive",
+          "bitplane_progressive"
+        ],
+        [
+          "bitplane_adaptive",
+          "rle",
+          "for",
+          "bitplane_progressive",
+          "raw",
+          "bitplane_eager"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "verified": true,
+          "median_ms": 0.358042,
+          "samples_ms": [
+            0.308209,
+            0.711083,
+            0.373541,
+            0.332125,
+            0.646208,
+            0.33525,
+            0.308333,
+            0.358042,
+            0.648125
+          ]
+        },
+        {
+          "method": "for",
+          "verified": true,
+          "median_ms": 4.385125,
+          "samples_ms": [
+            2.702042,
+            4.385125,
+            3.278375,
+            6.317208,
+            2.955,
+            3.671334,
+            4.899834,
+            6.377042,
+            7.904291
+          ]
+        },
+        {
+          "method": "bitplane_eager",
+          "verified": true,
+          "median_ms": 0.554542,
+          "samples_ms": [
+            0.554542,
+            0.923834,
+            0.313208,
+            0.278,
+            0.977708,
+            0.278125,
+            0.267166,
+            0.923375,
+            0.938167
+          ]
+        },
+        {
+          "method": "bitplane_progressive",
+          "verified": true,
+          "median_ms": 0.837291,
+          "samples_ms": [
+            0.928291,
+            0.880917,
+            0.444375,
+            0.392292,
+            0.844625,
+            0.837291,
+            0.376791,
+            0.407375,
+            0.912708
+          ]
+        },
+        {
+          "method": "bitplane_adaptive",
+          "verified": true,
+          "median_ms": 0.283166,
+          "samples_ms": [
+            0.281333,
+            0.83225,
+            0.27575,
+            0.293083,
+            0.270791,
+            0.851458,
+            0.279625,
+            0.298833,
+            0.283166
+          ]
+        },
+        {
+          "method": "rle",
+          "verified": true,
+          "median_ms": 1.690958,
+          "samples_ms": [
+            3.564166,
+            1.690958,
+            1.4485,
+            1.495208,
+            2.9935,
+            3.452208,
+            1.37125,
+            2.510792,
+            1.420917
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "medium_64k",
+      "threshold": 462,
+      "logical_rows_per_schedule": 262144,
+      "inner_iterations": 1,
+      "queries": [
+        {
+          "begin": 1110507,
+          "end": 1176043,
+          "count": 43180,
+          "sum": 6323702
+        },
+        {
+          "begin": 1180565,
+          "end": 1246101,
+          "count": 43620,
+          "sum": 6102854
+        },
+        {
+          "begin": 1541640,
+          "end": 1607176,
+          "count": 35313,
+          "sum": 5684238
+        },
+        {
+          "begin": 1076463,
+          "end": 1141999,
+          "count": 40990,
+          "sum": 6238640
+        }
+      ],
+      "trial_order": [
+        [
+          "bitplane_eager",
+          "bitplane_progressive",
+          "bitplane_adaptive",
+          "for",
+          "rle",
+          "raw"
+        ],
+        [
+          "raw",
+          "for",
+          "bitplane_progressive",
+          "rle",
+          "bitplane_adaptive",
+          "bitplane_eager"
+        ],
+        [
+          "for",
+          "bitplane_progressive",
+          "bitplane_eager",
+          "rle",
+          "bitplane_adaptive",
+          "raw"
+        ],
+        [
+          "bitplane_adaptive",
+          "rle",
+          "bitplane_progressive",
+          "for",
+          "raw",
+          "bitplane_eager"
+        ],
+        [
+          "for",
+          "rle",
+          "raw",
+          "bitplane_adaptive",
+          "bitplane_eager",
+          "bitplane_progressive"
+        ],
+        [
+          "for",
+          "raw",
+          "rle",
+          "bitplane_progressive",
+          "bitplane_adaptive",
+          "bitplane_eager"
+        ],
+        [
+          "bitplane_eager",
+          "bitplane_adaptive",
+          "rle",
+          "raw",
+          "for",
+          "bitplane_progressive"
+        ],
+        [
+          "raw",
+          "bitplane_eager",
+          "for",
+          "bitplane_adaptive",
+          "bitplane_progressive",
+          "rle"
+        ],
+        [
+          "raw",
+          "bitplane_eager",
+          "bitplane_progressive",
+          "rle",
+          "bitplane_adaptive",
+          "for"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "verified": true,
+          "median_ms": 0.049791,
+          "samples_ms": [
+            0.101584,
+            0.100291,
+            0.100917,
+            0.110583,
+            0.048458,
+            0.047583,
+            0.047958,
+            0.049375,
+            0.049791
+          ]
+        },
+        {
+          "method": "for",
+          "verified": true,
+          "median_ms": 0.79425,
+          "samples_ms": [
+            1.138709,
+            1.136625,
+            1.16275,
+            1.14825,
+            0.79425,
+            0.400083,
+            0.384875,
+            0.3845,
+            0.381833
+          ]
+        },
+        {
+          "method": "bitplane_eager",
+          "verified": true,
+          "median_ms": 0.041917,
+          "samples_ms": [
+            0.119666,
+            0.114208,
+            0.114041,
+            0.122,
+            0.040541,
+            0.040417,
+            0.04025,
+            0.041917,
+            0.041875
+          ]
+        },
+        {
+          "method": "bitplane_progressive",
+          "verified": true,
+          "median_ms": 0.055167,
+          "samples_ms": [
+            0.231459,
+            0.134791,
+            0.136667,
+            0.118916,
+            0.055167,
+            0.039042,
+            0.0335,
+            0.0315,
+            0.030875
+          ]
+        },
+        {
+          "method": "bitplane_adaptive",
+          "verified": true,
+          "median_ms": 0.042958,
+          "samples_ms": [
+            0.044541,
+            0.121625,
+            0.119375,
+            0.113833,
+            0.042958,
+            0.04025,
+            0.0395,
+            0.04125,
+            0.041042
+          ]
+        },
+        {
+          "method": "rle",
+          "verified": true,
+          "median_ms": 0.215625,
+          "samples_ms": [
+            0.483125,
+            0.508709,
+            0.483083,
+            0.481833,
+            0.2115,
+            0.20925,
+            0.208083,
+            0.215625,
+            0.215084
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "small_1k",
+      "threshold": 462,
+      "logical_rows_per_schedule": 16384,
+      "inner_iterations": 8,
+      "queries": [
+        {
+          "begin": 1522752,
+          "end": 1523776,
+          "count": 212,
+          "sum": 58546
+        },
+        {
+          "begin": 1099886,
+          "end": 1100910,
+          "count": 571,
+          "sum": 94306
+        },
+        {
+          "begin": 1139946,
+          "end": 1140970,
+          "count": 626,
+          "sum": 81490
+        },
+        {
+          "begin": 1511747,
+          "end": 1512771,
+          "count": 514,
+          "sum": 61710
+        },
+        {
+          "begin": 1552112,
+          "end": 1553136,
+          "count": 460,
+          "sum": 66842
+        },
+        {
+          "begin": 146367,
+          "end": 147391,
+          "count": 539,
+          "sum": 64322
+        },
+        {
+          "begin": 39266,
+          "end": 40290,
+          "count": 85,
+          "sum": 4302
+        },
+        {
+          "begin": 821142,
+          "end": 822166,
+          "count": 452,
+          "sum": 79932
+        },
+        {
+          "begin": 1401466,
+          "end": 1402490,
+          "count": 698,
+          "sum": 80144
+        },
+        {
+          "begin": 925027,
+          "end": 926051,
+          "count": 775,
+          "sum": 241886
+        },
+        {
+          "begin": 182249,
+          "end": 183273,
+          "count": 402,
+          "sum": 34266
+        },
+        {
+          "begin": 1317591,
+          "end": 1318615,
+          "count": 612,
+          "sum": 120578
+        },
+        {
+          "begin": 938748,
+          "end": 939772,
+          "count": 245,
+          "sum": 62268
+        },
+        {
+          "begin": 1540507,
+          "end": 1541531,
+          "count": 581,
+          "sum": 84834
+        },
+        {
+          "begin": 1116763,
+          "end": 1117787,
+          "count": 908,
+          "sum": 183538
+        },
+        {
+          "begin": 690375,
+          "end": 691399,
+          "count": 452,
+          "sum": 41426
+        }
+      ],
+      "trial_order": [
+        [
+          "bitplane_eager",
+          "bitplane_adaptive",
+          "for",
+          "rle",
+          "bitplane_progressive",
+          "raw"
+        ],
+        [
+          "bitplane_eager",
+          "bitplane_progressive",
+          "for",
+          "raw",
+          "bitplane_adaptive",
+          "rle"
+        ],
+        [
+          "for",
+          "bitplane_progressive",
+          "bitplane_eager",
+          "raw",
+          "bitplane_adaptive",
+          "rle"
+        ],
+        [
+          "bitplane_eager",
+          "for",
+          "bitplane_progressive",
+          "bitplane_adaptive",
+          "rle",
+          "raw"
+        ],
+        [
+          "bitplane_eager",
+          "for",
+          "rle",
+          "bitplane_adaptive",
+          "bitplane_progressive",
+          "raw"
+        ],
+        [
+          "bitplane_eager",
+          "raw",
+          "bitplane_progressive",
+          "for",
+          "rle",
+          "bitplane_adaptive"
+        ],
+        [
+          "bitplane_eager",
+          "bitplane_progressive",
+          "raw",
+          "for",
+          "rle",
+          "bitplane_adaptive"
+        ],
+        [
+          "rle",
+          "bitplane_eager",
+          "bitplane_progressive",
+          "bitplane_adaptive",
+          "for",
+          "raw"
+        ],
+        [
+          "bitplane_progressive",
+          "for",
+          "bitplane_adaptive",
+          "raw",
+          "bitplane_eager",
+          "rle"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "verified": true,
+          "median_ms": 0.003291625,
+          "samples_ms": [
+            0.003317625,
+            0.003286375,
+            0.003302125,
+            0.0033125,
+            0.0032865,
+            0.003291625,
+            0.0032865,
+            0.00329175,
+            0.00314575
+          ]
+        },
+        {
+          "method": "for",
+          "verified": true,
+          "median_ms": 0.02250525,
+          "samples_ms": [
+            0.02274475,
+            0.022572875,
+            0.022526125,
+            0.02249475,
+            0.022515625,
+            0.022453125,
+            0.02247925,
+            0.02250525,
+            0.0218645
+          ]
+        },
+        {
+          "method": "bitplane_eager",
+          "verified": true,
+          "median_ms": 0.003546875,
+          "samples_ms": [
+            0.003599,
+            0.003557375,
+            0.003526125,
+            0.00355725,
+            0.00356775,
+            0.003536375,
+            0.003505125,
+            0.003546875,
+            0.003432375
+          ]
+        },
+        {
+          "method": "bitplane_progressive",
+          "verified": true,
+          "median_ms": 0.00275525,
+          "samples_ms": [
+            0.00299475,
+            0.002760375,
+            0.002791625,
+            0.00275525,
+            0.00274475,
+            0.00275525,
+            0.002729125,
+            0.00272925,
+            0.0027865
+          ]
+        },
+        {
+          "method": "bitplane_adaptive",
+          "verified": true,
+          "median_ms": 0.003401,
+          "samples_ms": [
+            0.0034115,
+            0.003385375,
+            0.003401,
+            0.00336975,
+            0.00340625,
+            0.003421875,
+            0.00340625,
+            0.00334375,
+            0.0032395
+          ]
+        },
+        {
+          "method": "rle",
+          "verified": true,
+          "median_ms": 0.015265625,
+          "samples_ms": [
+            0.015354125,
+            0.015265625,
+            0.015322875,
+            0.014958375,
+            0.015234375,
+            0.015395875,
+            0.015099,
+            0.0154115,
+            0.014760375
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "full",
+      "threshold": 2654,
+      "logical_rows_per_schedule": 1660208,
+      "inner_iterations": 1,
+      "queries": [
+        {
+          "begin": 0,
+          "end": 1660208,
+          "count": 130606,
+          "sum": 24959644
+        }
+      ],
+      "trial_order": [
+        [
+          "bitplane_eager",
+          "rle",
+          "bitplane_progressive",
+          "raw",
+          "for",
+          "bitplane_adaptive"
+        ],
+        [
+          "raw",
+          "rle",
+          "bitplane_progressive",
+          "bitplane_eager",
+          "for",
+          "bitplane_adaptive"
+        ],
+        [
+          "for",
+          "rle",
+          "bitplane_progressive",
+          "raw",
+          "bitplane_eager",
+          "bitplane_adaptive"
+        ],
+        [
+          "rle",
+          "raw",
+          "bitplane_adaptive",
+          "bitplane_eager",
+          "for",
+          "bitplane_progressive"
+        ],
+        [
+          "bitplane_adaptive",
+          "bitplane_progressive",
+          "bitplane_eager",
+          "rle",
+          "raw",
+          "for"
+        ],
+        [
+          "for",
+          "bitplane_eager",
+          "rle",
+          "raw",
+          "bitplane_adaptive",
+          "bitplane_progressive"
+        ],
+        [
+          "bitplane_adaptive",
+          "bitplane_progressive",
+          "bitplane_eager",
+          "for",
+          "raw",
+          "rle"
+        ],
+        [
+          "bitplane_eager",
+          "bitplane_progressive",
+          "bitplane_adaptive",
+          "for",
+          "rle",
+          "raw"
+        ],
+        [
+          "bitplane_adaptive",
+          "rle",
+          "bitplane_progressive",
+          "for",
+          "bitplane_eager",
+          "raw"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "verified": true,
+          "median_ms": 0.416458,
+          "samples_ms": [
+            0.280584,
+            0.28825,
+            0.292209,
+            1.176834,
+            0.711417,
+            0.416458,
+            0.606209,
+            0.537375,
+            0.284834
+          ]
+        },
+        {
+          "method": "for",
+          "verified": true,
+          "median_ms": 3.548334,
+          "samples_ms": [
+            1.873833,
+            1.947959,
+            1.848917,
+            5.080125,
+            4.795417,
+            4.751708,
+            3.548334,
+            4.747833,
+            1.85275
+          ]
+        },
+        {
+          "method": "bitplane_eager",
+          "verified": true,
+          "median_ms": 0.251334,
+          "samples_ms": [
+            0.236792,
+            0.245958,
+            0.24575,
+            0.790166,
+            0.786458,
+            0.243334,
+            0.251334,
+            0.838084,
+            0.256792
+          ]
+        },
+        {
+          "method": "bitplane_progressive",
+          "verified": true,
+          "median_ms": 0.252958,
+          "samples_ms": [
+            0.244625,
+            0.268458,
+            0.239875,
+            0.780666,
+            0.633209,
+            0.252958,
+            0.219666,
+            0.633958,
+            0.249875
+          ]
+        },
+        {
+          "method": "bitplane_adaptive",
+          "verified": true,
+          "median_ms": 0.27,
+          "samples_ms": [
+            0.245833,
+            0.253167,
+            0.235208,
+            0.808834,
+            0.413375,
+            0.316167,
+            0.237167,
+            0.636958,
+            0.27
+          ]
+        },
+        {
+          "method": "rle",
+          "verified": true,
+          "median_ms": 1.504041,
+          "samples_ms": [
+            1.311875,
+            1.376125,
+            1.504041,
+            2.62375,
+            1.927667,
+            1.353042,
+            3.385208,
+            2.600542,
+            1.365417
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "medium_64k",
+      "threshold": 2654,
+      "logical_rows_per_schedule": 262144,
+      "inner_iterations": 1,
+      "queries": [
+        {
+          "begin": 48047,
+          "end": 113583,
+          "count": 10074,
+          "sum": 1725856
+        },
+        {
+          "begin": 24542,
+          "end": 90078,
+          "count": 7907,
+          "sum": 1336512
+        },
+        {
+          "begin": 1520542,
+          "end": 1586078,
+          "count": 2572,
+          "sum": 555978
+        },
+        {
+          "begin": 61885,
+          "end": 127421,
+          "count": 10725,
+          "sum": 1780520
+        }
+      ],
+      "trial_order": [
+        [
+          "rle",
+          "bitplane_progressive",
+          "bitplane_eager",
+          "bitplane_adaptive",
+          "for",
+          "raw"
+        ],
+        [
+          "rle",
+          "raw",
+          "bitplane_adaptive",
+          "bitplane_eager",
+          "for",
+          "bitplane_progressive"
+        ],
+        [
+          "bitplane_adaptive",
+          "bitplane_eager",
+          "bitplane_progressive",
+          "for",
+          "rle",
+          "raw"
+        ],
+        [
+          "for",
+          "bitplane_eager",
+          "rle",
+          "bitplane_adaptive",
+          "raw",
+          "bitplane_progressive"
+        ],
+        [
+          "raw",
+          "bitplane_adaptive",
+          "bitplane_progressive",
+          "rle",
+          "bitplane_eager",
+          "for"
+        ],
+        [
+          "bitplane_progressive",
+          "bitplane_adaptive",
+          "raw",
+          "bitplane_eager",
+          "rle",
+          "for"
+        ],
+        [
+          "bitplane_progressive",
+          "for",
+          "raw",
+          "rle",
+          "bitplane_adaptive",
+          "bitplane_eager"
+        ],
+        [
+          "raw",
+          "bitplane_eager",
+          "rle",
+          "bitplane_progressive",
+          "for",
+          "bitplane_adaptive"
+        ],
+        [
+          "raw",
+          "bitplane_eager",
+          "bitplane_adaptive",
+          "bitplane_progressive",
+          "rle",
+          "for"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "verified": true,
+          "median_ms": 0.04625,
+          "samples_ms": [
+            0.047375,
+            0.045917,
+            0.04625,
+            0.04575,
+            0.045416,
+            0.04575,
+            0.047708,
+            0.047917,
+            0.049041
+          ]
+        },
+        {
+          "method": "for",
+          "verified": true,
+          "median_ms": 0.277917,
+          "samples_ms": [
+            0.277917,
+            0.273917,
+            0.272334,
+            0.27025,
+            0.272042,
+            0.282083,
+            0.301,
+            0.283125,
+            0.281125
+          ]
+        },
+        {
+          "method": "bitplane_eager",
+          "verified": true,
+          "median_ms": 0.0395,
+          "samples_ms": [
+            0.039167,
+            0.039333,
+            0.039334,
+            0.040208,
+            0.039375,
+            0.0395,
+            0.04075,
+            0.040917,
+            0.041292
+          ]
+        },
+        {
+          "method": "bitplane_progressive",
+          "verified": true,
+          "median_ms": 0.023541,
+          "samples_ms": [
+            0.024583,
+            0.0235,
+            0.023334,
+            0.023541,
+            0.023417,
+            0.023125,
+            0.024375,
+            0.02425,
+            0.024042
+          ]
+        },
+        {
+          "method": "bitplane_adaptive",
+          "verified": true,
+          "median_ms": 0.025416,
+          "samples_ms": [
+            0.025834,
+            0.025042,
+            0.025208,
+            0.025416,
+            0.025125,
+            0.025375,
+            0.026667,
+            0.026459,
+            0.025875
+          ]
+        },
+        {
+          "method": "rle",
+          "verified": true,
+          "median_ms": 0.2115,
+          "samples_ms": [
+            0.2115,
+            0.21,
+            0.209541,
+            0.211333,
+            0.208333,
+            0.213125,
+            0.216208,
+            0.215708,
+            0.217292
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "small_1k",
+      "threshold": 2654,
+      "logical_rows_per_schedule": 16384,
+      "inner_iterations": 8,
+      "queries": [
+        {
+          "begin": 125322,
+          "end": 126346,
+          "count": 67,
+          "sum": 4804
+        },
+        {
+          "begin": 1368552,
+          "end": 1369576,
+          "count": 107,
+          "sum": 22636
+        },
+        {
+          "begin": 666651,
+          "end": 667675,
+          "count": 46,
+          "sum": 10048
+        },
+        {
+          "begin": 551672,
+          "end": 552696,
+          "count": 53,
+          "sum": 8912
+        },
+        {
+          "begin": 1435473,
+          "end": 1436497,
+          "count": 96,
+          "sum": 34240
+        },
+        {
+          "begin": 1503586,
+          "end": 1504610,
+          "count": 0,
+          "sum": 0
+        },
+        {
+          "begin": 625764,
+          "end": 626788,
+          "count": 22,
+          "sum": 4814
+        },
+        {
+          "begin": 109197,
+          "end": 110221,
+          "count": 203,
+          "sum": 21424
+        },
+        {
+          "begin": 1308991,
+          "end": 1310015,
+          "count": 73,
+          "sum": 16172
+        },
+        {
+          "begin": 1305829,
+          "end": 1306853,
+          "count": 57,
+          "sum": 9450
+        },
+        {
+          "begin": 570824,
+          "end": 571848,
+          "count": 6,
+          "sum": 388
+        },
+        {
+          "begin": 172460,
+          "end": 173484,
+          "count": 112,
+          "sum": 7568
+        },
+        {
+          "begin": 235157,
+          "end": 236181,
+          "count": 163,
+          "sum": 20334
+        },
+        {
+          "begin": 116755,
+          "end": 117779,
+          "count": 79,
+          "sum": 9188
+        },
+        {
+          "begin": 409006,
+          "end": 410030,
+          "count": 12,
+          "sum": 4690
+        },
+        {
+          "begin": 1018222,
+          "end": 1019246,
+          "count": 11,
+          "sum": 2766
+        }
+      ],
+      "trial_order": [
+        [
+          "rle",
+          "for",
+          "bitplane_progressive",
+          "bitplane_adaptive",
+          "raw",
+          "bitplane_eager"
+        ],
+        [
+          "rle",
+          "bitplane_adaptive",
+          "raw",
+          "for",
+          "bitplane_eager",
+          "bitplane_progressive"
+        ],
+        [
+          "bitplane_adaptive",
+          "rle",
+          "for",
+          "raw",
+          "bitplane_eager",
+          "bitplane_progressive"
+        ],
+        [
+          "bitplane_eager",
+          "rle",
+          "bitplane_adaptive",
+          "raw",
+          "bitplane_progressive",
+          "for"
+        ],
+        [
+          "rle",
+          "bitplane_adaptive",
+          "bitplane_eager",
+          "for",
+          "raw",
+          "bitplane_progressive"
+        ],
+        [
+          "bitplane_progressive",
+          "bitplane_eager",
+          "rle",
+          "bitplane_adaptive",
+          "raw",
+          "for"
+        ],
+        [
+          "for",
+          "bitplane_adaptive",
+          "raw",
+          "rle",
+          "bitplane_progressive",
+          "bitplane_eager"
+        ],
+        [
+          "for",
+          "bitplane_adaptive",
+          "bitplane_progressive",
+          "raw",
+          "bitplane_eager",
+          "rle"
+        ],
+        [
+          "rle",
+          "bitplane_eager",
+          "raw",
+          "bitplane_adaptive",
+          "bitplane_progressive",
+          "for"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "verified": true,
+          "median_ms": 0.003,
+          "samples_ms": [
+            0.003083375,
+            0.00304175,
+            0.00331775,
+            0.002984375,
+            0.003005125,
+            0.003,
+            0.0028125,
+            0.002817625,
+            0.0028385
+          ]
+        },
+        {
+          "method": "for",
+          "verified": true,
+          "median_ms": 0.015984375,
+          "samples_ms": [
+            0.01628125,
+            0.041953125,
+            0.0163385,
+            0.015994875,
+            0.015984375,
+            0.015953125,
+            0.01566675,
+            0.01503125,
+            0.015073
+          ]
+        },
+        {
+          "method": "bitplane_eager",
+          "verified": true,
+          "median_ms": 0.003171875,
+          "samples_ms": [
+            0.00325,
+            0.003604125,
+            0.003224,
+            0.003145875,
+            0.003197875,
+            0.003171875,
+            0.00300525,
+            0.003015625,
+            0.003010375
+          ]
+        },
+        {
+          "method": "bitplane_progressive",
+          "verified": true,
+          "median_ms": 0.001958375,
+          "samples_ms": [
+            0.002125,
+            0.002328125,
+            0.00195825,
+            0.002015625,
+            0.00200525,
+            0.001958375,
+            0.0018855,
+            0.001864625,
+            0.001849
+          ]
+        },
+        {
+          "method": "bitplane_adaptive",
+          "verified": true,
+          "median_ms": 0.0020625,
+          "samples_ms": [
+            0.002098875,
+            0.0020625,
+            0.00220825,
+            0.0020625,
+            0.0020625,
+            0.00206775,
+            0.001916625,
+            0.001927125,
+            0.001927125
+          ]
+        },
+        {
+          "method": "rle",
+          "verified": true,
+          "median_ms": 0.0141355,
+          "samples_ms": [
+            0.014447875,
+            0.015140625,
+            0.01579175,
+            0.014453125,
+            0.014052,
+            0.0141355,
+            0.01335425,
+            0.01339575,
+            0.013171875
+          ]
+        }
+      ]
+    }
+  ],
+  "case": {
+    "name": "household",
+    "source_rows": 2075259,
+    "calibration_rows": 415051,
+    "rows": 1660208,
+    "fields": [
+      "Global_active_power x1000",
+      "Global_reactive_power x1000"
+    ],
+    "thresholds": [
+      196,
+      462,
+      2654
+    ],
+    "threshold_rule": "10th/50th/90th order-statistic quantiles of valid x in first 20%; floor index",
+    "evaluation_split": "Remaining 80% in source order, no repetition or shuffling",
+    "citation": "Hebrail & Berard (2006), UCI, https://doi.org/10.24432/C58K54, CC-BY-4.0",
+    "x": {
+      "path": "data/operations/household-x.i32",
+      "bytes": 6640832,
+      "sha256": "282c9a02dd114d0ccac2cca4f198667d2ed7e07afce06b339a9b67c8ae9297ef"
+    },
+    "y": {
+      "path": "data/operations/household-y.i32",
+      "bytes": 6640832,
+      "sha256": "4c96e696c02f393ad633070993012de8675c1a99638ef74f5943f849d4326bc0"
+    }
+  },
+  "family": "query",
+  "runner_elapsed_seconds": 0.4513187499833293,
+  "isolated_peak_rss": [
+    {
+      "method": "raw",
+      "bytes": 14680064,
+      "scope": "Separate process high-water RSS including construction, input loading, validation and workload; not steady-state store size"
+    },
+    {
+      "method": "for",
+      "bytes": 26492928,
+      "scope": "Separate process high-water RSS including construction, input loading, validation and workload; not steady-state store size"
+    },
+    {
+      "method": "bitplane_eager",
+      "bytes": 25608192,
+      "scope": "Separate process high-water RSS including construction, input loading, validation and workload; not steady-state store size"
+    },
+    {
+      "method": "bitplane_progressive",
+      "bytes": 26394624,
+      "scope": "Separate process high-water RSS including construction, input loading, validation and workload; not steady-state store size"
+    },
+    {
+      "method": "bitplane_adaptive",
+      "bytes": 26099712,
+      "scope": "Separate process high-water RSS including construction, input loading, validation and workload; not steady-state store size"
+    },
+    {
+      "method": "rle",
+      "bytes": 70778880,
+      "scope": "Separate process high-water RSS including construction, input loading, validation and workload; not steady-state store size"
+    }
+  ]
+}

@@ -1,12 +1,14 @@
 CC ?= cc
+CXX ?= c++
 PYTHON ?= python3
 CFLAGS ?= -O2 -std=c11 -Wall -Wextra -Werror
 BENCH_CFLAGS ?= -O3 -std=c11 -Wall -Wextra -Werror
+CXXFLAGS ?= -O3 -std=c++17 -Wall -Wextra -Werror
 SANITIZER_FLAGS ?= -O2 -g -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
 BUILD_DIR := build
 SYSTEM := $(shell uname -s)
 
-.PHONY: all test sanitize benchmark smoke clean help
+.PHONY: all test sanitize benchmark smoke operations test-operations sanitize-operations clean help
 
 all: test
 
@@ -24,6 +26,30 @@ $(BUILD_DIR)/codec-test-sanitize: codec.c codec.h codec_test.c | $(BUILD_DIR)
 
 sanitize: $(BUILD_DIR)/codec-test-sanitize
 	./$(BUILD_DIR)/codec-test-sanitize
+
+$(BUILD_DIR)/query-bench: experiments/query/query_bench.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $< -o $@
+
+$(BUILD_DIR)/recipe-codec.o: codec.c codec.h | $(BUILD_DIR)
+	$(CC) $(BENCH_CFLAGS) -c codec.c -o $@
+
+$(BUILD_DIR)/recipe-bench: experiments/recipe/recipe_bench.cpp $(BUILD_DIR)/recipe-codec.o
+	$(CXX) $(CXXFLAGS) $^ -o $@
+
+$(BUILD_DIR)/string-bench: experiments/strings/string_bench.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $< -lz -o $@
+
+operations: $(BUILD_DIR)/query-bench $(BUILD_DIR)/recipe-bench $(BUILD_DIR)/string-bench
+
+test-operations: operations
+	$(PYTHON) tests/test_query.py --binary $(abspath $(BUILD_DIR)/query-bench)
+	$(PYTHON) tests/test_recipe.py --binary $(abspath $(BUILD_DIR)/recipe-bench)
+	$(PYTHON) tests/test_strings.py --binary $(abspath $(BUILD_DIR)/string-bench)
+
+sanitize-operations:
+	$(MAKE) test-operations BUILD_DIR=build/operations-sanitize \
+	  CXXFLAGS='-O1 -g -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer' \
+	  BENCH_CFLAGS='-O1 -g -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer'
 
 ifeq ($(SYSTEM),Darwin)
 $(BUILD_DIR)/compare: compare.c codec.c codec.h | $(BUILD_DIR)
@@ -48,4 +74,7 @@ help:
 	@echo "make sanitize   Run the suite with AddressSanitizer and UBSan."
 	@echo "make benchmark  Build the Apple codec comparator (macOS only)."
 	@echo "make smoke      Validate comparator accounting on tiny fixtures (macOS only)."
+	@echo "make operations Build the three operation-level experiments (C++17 + zlib)."
+	@echo "make test-operations  Run deterministic correctness checks for those experiments."
+	@echo "make sanitize-operations  Run those checks with ASan and UBSan."
 	@echo "make clean      Remove generated build files."

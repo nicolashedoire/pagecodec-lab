@@ -1,0 +1,36 @@
+{
+  "frozen_utc": "2026-10-30T15:15:14.583336+00:00",
+  "sources_sha256": {
+    "codec.c": "fbc88ada9bc4654241a92353cd34b872132106916820334f1c30ab2efcf826c2",
+    "codec.h": "115016512729f5cfb0b6552a08c4c884ef99170190d7ed1287e93bd902327e25",
+    "Makefile": "5ce1c6e79387c1e5b5fcf1e9319a3965b6ccc0dd50f0f004c4ad8c4ebe4e578d",
+    "scripts/prepare_operations.py": "3a02bfe0ae79c9bf47fdad986de6f083a3cb679451cf831c1021b2c70ef452e9",
+    "scripts/run_operations.py": "f2272b597e1c0ac1879c34eb9f16b68f9c64e8bea3790ade4782e65d6265f95f",
+    "experiments/query/query_bench.cpp": "83ae4db8fb2b6304cdbebfc523a1f43bf57d248372f1bc2fc542d5e55c1ebfb0",
+    "experiments/recipe/recipe_bench.cpp": "b141c043cfddceeb56dd9de1c7285880b3db81c2da4b36c191968c32f8126e8b",
+    "experiments/strings/string_bench.cpp": "378d2bb605def82f2465174c472169b3d81c311b69a9d9c476bea9661df87696"
+  },
+  "manifest_sha256": "430dbd5a5a02ecc289e723812a87d33918fa12b413a910fd26cccb6949b69ece",
+  "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin24.1.0\nThread model: posix",
+  "platform": "Darwin 24.1.0 arm64",
+  "protocol": {
+    "repetitions": 9,
+    "seed": 20261030,
+    "query_block_rows": 1024,
+    "recipe_tile_rows": 256,
+    "recipe_cache_tiles": 64,
+    "string_block_bytes": 4096,
+    "string_queries": 20000,
+    "string_candidate_cap": 64,
+    "string_max_overlap_bytes": 256
+  },
+  "binary_sha256": {
+    "query-bench": "09bab66ef250c668ead5415abc4b0cb3298e483bde2fd7ddf494581c1f3e40d0",
+    "recipe-bench": "bcde52178876837f669f58075d76546f0cb8b088b9b1e05a346da43e286bfa13",
+    "string-bench": "f4a42ad51716030428043d557f03b320352fa194e3645234a81433d908166b72"
+  },
+  "machine": "hw.memsize: 25769803776\nhw.model: Mac16,8\nmachdep.cpu.brand_string: Apple M4 Pro",
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t15.1.1\nBuildVersion:\t\t24B2091",
+  "before_vm_stat": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                               10358.\nPages active:                            373970.\nPages inactive:                          369745.\nPages speculative:                         3891.\nPages throttled:                              0.\nPages wired down:                        290272.\nPages purgeable:                            721.\n\"Translation faults\":                2812022822.\nPages copy-on-write:                  117405778.\nPages zero filled:                    899857368.\nPages reactivated:                    877453988.\nPages purged:                          66556580.\nFile-backed pages:                       160014.\nAnonymous pages:                         587592.\nPages stored in compressor:             1773616.\nPages occupied by compressor:            483220.\nDecompressions:                       830272908.\nCompressions:                         910944079.\nPageins:                               45839444.\nPageouts:                                917812.\nSwapins:                               15179732.\nSwapouts:                              18492188.",
+  "before_swap": "vm.swapusage: total = 8192.00M  used = 7010.19M  free = 1181.81M  (encrypted)"
+}

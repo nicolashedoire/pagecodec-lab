@@ -1,0 +1,625 @@
+{
+  "schema_version": 1,
+  "experiment": "exact_masked_queries",
+  "rows": 13904,
+  "block_rows": 1024,
+  "x_name": "bike-x.i32",
+  "y_name": "bike-y.i32",
+  "x_fnv1a64": "8447457037459095238",
+  "y_fnv1a64": "11255452408880502939",
+  "missing_sentinel": -2147483648,
+  "seed": 20261030,
+  "repetitions": 1,
+  "warmup_rounds_per_workload_method": 1,
+  "validate_only": false,
+  "validation_cases": 163,
+  "verified": true,
+  "representation_roundtrips_verified": true,
+  "input_arrays_released_before_timing": true,
+  "input_arrays_retained_capacity_bytes": 0,
+  "threshold_source": "explicit CLI thresholds",
+  "semantics": "count valid x >= threshold in [begin,end); sum corresponding nonmissing y; empty sum=0; exact int64 accumulation",
+  "timing_scope": "single-thread warm repeated query schedules; no full output materialization; allocation, construction, IO and oracle validation excluded; answer digest included; per-schedule times divide batched duration by inner_iterations",
+  "memory_scope": "conceptual per-method owned representation capacities plus explicit reusable scratch, not RSS; vector capacity and object headers counted, allocator metadata/compiler stack excluded; all-method run retains raw oracle and multiple stores; eager/progressive/adaptive share one physical bitplane store",
+  "raw_kernel": "ARM NEON 4 int32 lanes with int64 widening accumulation",
+  "methods": [
+    {
+      "method": "bitplane_adaptive",
+      "construction_ms": 0.225749,
+      "payload_bytes": 39168,
+      "metadata_bytes": 1008,
+      "representation_bytes": 40176,
+      "allocated_capacity_bytes": 46216,
+      "explicit_scratch_bytes": 128,
+      "owned_working_bytes": 46344,
+      "model_metadata_bytes": 448
+    }
+  ],
+  "workloads": [
+    {
+      "kind": "full",
+      "threshold": 5,
+      "logical_rows_per_schedule": 13904,
+      "inner_iterations": 10,
+      "queries": [
+        {
+          "begin": 0,
+          "end": 13904,
+          "count": 13389,
+          "sum": 2372542
+        }
+      ],
+      "trial_order": [
+        [
+          "bitplane_adaptive"
+        ]
+      ],
+      "results": [
+        {
+          "method": "bitplane_adaptive",
+          "verified": true,
+          "median_ms": 0.0053042,
+          "samples_ms": [
+            0.0053042
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "medium_64k",
+      "threshold": 5,
+      "logical_rows_per_schedule": 55616,
+      "inner_iterations": 3,
+      "queries": [
+        {
+          "begin": 0,
+          "end": 13904,
+          "count": 13389,
+          "sum": 2372542
+        },
+        {
+          "begin": 0,
+          "end": 13904,
+          "count": 13389,
+          "sum": 2372542
+        },
+        {
+          "begin": 0,
+          "end": 13904,
+          "count": 13389,
+          "sum": 2372542
+        },
+        {
+          "begin": 0,
+          "end": 13904,
+          "count": 13389,
+          "sum": 2372542
+        }
+      ],
+      "trial_order": [
+        [
+          "bitplane_adaptive"
+        ]
+      ],
+      "results": [
+        {
+          "method": "bitplane_adaptive",
+          "verified": true,
+          "median_ms": 0.02119433333,
+          "samples_ms": [
+            0.02119433333
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "small_1k",
+      "threshold": 5,
+      "logical_rows_per_schedule": 16384,
+      "inner_iterations": 8,
+      "queries": [
+        {
+          "begin": 3928,
+          "end": 4952,
+          "count": 965,
+          "sum": 119743
+        },
+        {
+          "begin": 6851,
+          "end": 7875,
+          "count": 978,
+          "sum": 196164
+        },
+        {
+          "begin": 2236,
+          "end": 3260,
+          "count": 991,
+          "sum": 143923
+        },
+        {
+          "begin": 11688,
+          "end": 12712,
+          "count": 1008,
+          "sum": 228029
+        },
+        {
+          "begin": 5997,
+          "end": 7021,
+          "count": 944,
+          "sum": 150616
+        },
+        {
+          "begin": 151,
+          "end": 1175,
+          "count": 998,
+          "sum": 155159
+        },
+        {
+          "begin": 675,
+          "end": 1699,
+          "count": 1002,
+          "sum": 146486
+        },
+        {
+          "begin": 9105,
+          "end": 10129,
+          "count": 1013,
+          "sum": 223283
+        },
+        {
+          "begin": 6542,
+          "end": 7566,
+          "count": 967,
+          "sum": 182342
+        },
+        {
+          "begin": 3076,
+          "end": 4100,
+          "count": 981,
+          "sum": 137189
+        },
+        {
+          "begin": 663,
+          "end": 1687,
+          "count": 1003,
+          "sum": 148109
+        },
+        {
+          "begin": 2789,
+          "end": 3813,
+          "count": 986,
+          "sum": 140923
+        },
+        {
+          "begin": 7879,
+          "end": 8903,
+          "count": 992,
+          "sum": 206919
+        },
+        {
+          "begin": 2542,
+          "end": 3566,
+          "count": 998,
+          "sum": 147909
+        },
+        {
+          "begin": 7190,
+          "end": 8214,
+          "count": 978,
+          "sum": 196756
+        },
+        {
+          "begin": 10010,
+          "end": 11034,
+          "count": 1011,
+          "sum": 233847
+        }
+      ],
+      "trial_order": [
+        [
+          "bitplane_adaptive"
+        ]
+      ],
+      "results": [
+        {
+          "method": "bitplane_adaptive",
+          "verified": true,
+          "median_ms": 0.0080885,
+          "samples_ms": [
+            0.0080885
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "full",
+      "threshold": 73,
+      "logical_rows_per_schedule": 13904,
+      "inner_iterations": 10,
+      "queries": [
+        {
+          "begin": 0,
+          "end": 13904,
+          "count": 9745,
+          "sum": 2286657
+        }
+      ],
+      "trial_order": [
+        [
+          "bitplane_adaptive"
+        ]
+      ],
+      "results": [
+        {
+          "method": "bitplane_adaptive",
+          "verified": true,
+          "median_ms": 0.0052625,
+          "samples_ms": [
+            0.0052625
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "medium_64k",
+      "threshold": 73,
+      "logical_rows_per_schedule": 55616,
+      "inner_iterations": 3,
+      "queries": [
+        {
+          "begin": 0,
+          "end": 13904,
+          "count": 9745,
+          "sum": 2286657
+        },
+        {
+          "begin": 0,
+          "end": 13904,
+          "count": 9745,
+          "sum": 2286657
+        },
+        {
+          "begin": 0,
+          "end": 13904,
+          "count": 9745,
+          "sum": 2286657
+        },
+        {
+          "begin": 0,
+          "end": 13904,
+          "count": 9745,
+          "sum": 2286657
+        }
+      ],
+      "trial_order": [
+        [
+          "bitplane_adaptive"
+        ]
+      ],
+      "results": [
+        {
+          "method": "bitplane_adaptive",
+          "verified": true,
+          "median_ms": 0.02266666667,
+          "samples_ms": [
+            0.02266666667
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "small_1k",
+      "threshold": 73,
+      "logical_rows_per_schedule": 16384,
+      "inner_iterations": 8,
+      "queries": [
+        {
+          "begin": 2211,
+          "end": 3235,
+          "count": 712,
+          "sum": 140015
+        },
+        {
+          "begin": 4770,
+          "end": 5794,
+          "count": 585,
+          "sum": 97945
+        },
+        {
+          "begin": 2975,
+          "end": 3999,
+          "count": 694,
+          "sum": 131117
+        },
+        {
+          "begin": 7002,
+          "end": 8026,
+          "count": 734,
+          "sum": 187858
+        },
+        {
+          "begin": 9406,
+          "end": 10430,
+          "count": 776,
+          "sum": 219210
+        },
+        {
+          "begin": 1651,
+          "end": 2675,
+          "count": 723,
+          "sum": 139337
+        },
+        {
+          "begin": 964,
+          "end": 1988,
+          "count": 752,
+          "sum": 140460
+        },
+        {
+          "begin": 762,
+          "end": 1786,
+          "count": 758,
+          "sum": 142123
+        },
+        {
+          "begin": 11561,
+          "end": 12585,
+          "count": 768,
+          "sum": 232736
+        },
+        {
+          "begin": 389,
+          "end": 1413,
+          "count": 757,
+          "sum": 146423
+        },
+        {
+          "begin": 5094,
+          "end": 6118,
+          "count": 632,
+          "sum": 113946
+        },
+        {
+          "begin": 4895,
+          "end": 5919,
+          "count": 585,
+          "sum": 99387
+        },
+        {
+          "begin": 1955,
+          "end": 2979,
+          "count": 710,
+          "sum": 140524
+        },
+        {
+          "begin": 7371,
+          "end": 8395,
+          "count": 736,
+          "sum": 192589
+        },
+        {
+          "begin": 12088,
+          "end": 13112,
+          "count": 741,
+          "sum": 198619
+        },
+        {
+          "begin": 6164,
+          "end": 7188,
+          "count": 698,
+          "sum": 154082
+        }
+      ],
+      "trial_order": [
+        [
+          "bitplane_adaptive"
+        ]
+      ],
+      "results": [
+        {
+          "method": "bitplane_adaptive",
+          "verified": true,
+          "median_ms": 0.003015625,
+          "samples_ms": [
+            0.003015625
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "full",
+      "threshold": 256,
+      "logical_rows_per_schedule": 13904,
+      "inner_iterations": 10,
+      "queries": [
+        {
+          "begin": 0,
+          "end": 13904,
+          "count": 4600,
+          "sum": 1599044
+        }
+      ],
+      "trial_order": [
+        [
+          "bitplane_adaptive"
+        ]
+      ],
+      "results": [
+        {
+          "method": "bitplane_adaptive",
+          "verified": true,
+          "median_ms": 0.0019583,
+          "samples_ms": [
+            0.0019583
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "medium_64k",
+      "threshold": 256,
+      "logical_rows_per_schedule": 55616,
+      "inner_iterations": 3,
+      "queries": [
+        {
+          "begin": 0,
+          "end": 13904,
+          "count": 4600,
+          "sum": 1599044
+        },
+        {
+          "begin": 0,
+          "end": 13904,
+          "count": 4600,
+          "sum": 1599044
+        },
+        {
+          "begin": 0,
+          "end": 13904,
+          "count": 4600,
+          "sum": 1599044
+        },
+        {
+          "begin": 0,
+          "end": 13904,
+          "count": 4600,
+          "sum": 1599044
+        }
+      ],
+      "trial_order": [
+        [
+          "bitplane_adaptive"
+        ]
+      ],
+      "results": [
+        {
+          "method": "bitplane_adaptive",
+          "verified": true,
+          "median_ms": 0.007736,
+          "samples_ms": [
+            0.007736
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "small_1k",
+      "threshold": 256,
+      "logical_rows_per_schedule": 16384,
+      "inner_iterations": 8,
+      "queries": [
+        {
+          "begin": 12154,
+          "end": 13178,
+          "count": 384,
+          "sum": 143280
+        },
+        {
+          "begin": 5861,
+          "end": 6885,
+          "count": 222,
+          "sum": 75588
+        },
+        {
+          "begin": 10193,
+          "end": 11217,
+          "count": 511,
+          "sum": 188320
+        },
+        {
+          "begin": 11880,
+          "end": 12904,
+          "count": 437,
+          "sum": 167022
+        },
+        {
+          "begin": 7420,
+          "end": 8444,
+          "count": 425,
+          "sum": 151189
+        },
+        {
+          "begin": 5804,
+          "end": 6828,
+          "count": 214,
+          "sum": 72722
+        },
+        {
+          "begin": 370,
+          "end": 1394,
+          "count": 315,
+          "sum": 92658
+        },
+        {
+          "begin": 2233,
+          "end": 3257,
+          "count": 277,
+          "sum": 82409
+        },
+        {
+          "begin": 10496,
+          "end": 11520,
+          "count": 521,
+          "sum": 198518
+        },
+        {
+          "begin": 10260,
+          "end": 11284,
+          "count": 518,
+          "sum": 193210
+        },
+        {
+          "begin": 1112,
+          "end": 2136,
+          "count": 285,
+          "sum": 84772
+        },
+        {
+          "begin": 4864,
+          "end": 5888,
+          "count": 115,
+          "sum": 37231
+        },
+        {
+          "begin": 8227,
+          "end": 9251,
+          "count": 483,
+          "sum": 172673
+        },
+        {
+          "begin": 4137,
+          "end": 5161,
+          "count": 124,
+          "sum": 36352
+        },
+        {
+          "begin": 10905,
+          "end": 11929,
+          "count": 515,
+          "sum": 205220
+        },
+        {
+          "begin": 6123,
+          "end": 7147,
+          "count": 284,
+          "sum": 97195
+        }
+      ],
+      "trial_order": [
+        [
+          "bitplane_adaptive"
+        ]
+      ],
+      "results": [
+        {
+          "method": "bitplane_adaptive",
+          "verified": true,
+          "median_ms": 0.003,
+          "samples_ms": [
+            0.003
+          ]
+        }
+      ]
+    }
+  ]
+}

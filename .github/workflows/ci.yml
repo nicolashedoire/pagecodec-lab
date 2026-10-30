@@ -19,6 +19,8 @@ jobs:
         run: make test CC=clang
       - name: Run AddressSanitizer and UndefinedBehaviorSanitizer
         run: make sanitize CC=clang
+      - name: Check operation-level experiments
+        run: make test-operations sanitize-operations CC=clang CXX=clang++
 
   macos-comparator:
     name: Apple codec comparator / macOS
@@ -33,5 +35,7 @@ jobs:
         run: make test sanitize CC=clang
       - name: Build comparator and check tiny fixtures
         run: make smoke CC=clang
+      - name: Check operation-level experiments
+        run: make test-operations sanitize-operations CC=clang CXX=clang++
       # Shared CI runners validate correctness only. Their timings are not
       # used as benchmark results or evidence of performance superiority.

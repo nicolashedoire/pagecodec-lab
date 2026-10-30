@@ -1,0 +1,625 @@
+{
+  "schema_version": 1,
+  "experiment": "exact_masked_queries",
+  "rows": 1660208,
+  "block_rows": 1024,
+  "x_name": "household-x.i32",
+  "y_name": "household-y.i32",
+  "x_fnv1a64": "6831551829315760574",
+  "y_fnv1a64": "8709944665521901062",
+  "missing_sentinel": -2147483648,
+  "seed": 20261030,
+  "repetitions": 1,
+  "warmup_rounds_per_workload_method": 1,
+  "validate_only": false,
+  "validation_cases": 163,
+  "verified": true,
+  "representation_roundtrips_verified": true,
+  "input_arrays_released_before_timing": true,
+  "input_arrays_retained_capacity_bytes": 0,
+  "threshold_source": "explicit CLI thresholds",
+  "semantics": "count valid x >= threshold in [begin,end); sum corresponding nonmissing y; empty sum=0; exact int64 accumulation",
+  "timing_scope": "single-thread warm repeated query schedules; no full output materialization; allocation, construction, IO and oracle validation excluded; answer digest included; per-schedule times divide batched duration by inner_iterations",
+  "memory_scope": "conceptual per-method owned representation capacities plus explicit reusable scratch, not RSS; vector capacity and object headers counted, allocator metadata/compiler stack excluded; all-method run retains raw oracle and multiple stores; eager/progressive/adaptive share one physical bitplane store",
+  "raw_kernel": "ARM NEON 4 int32 lanes with int64 widening accumulation",
+  "methods": [
+    {
+      "method": "for",
+      "construction_ms": 12.712291,
+      "payload_bytes": 4990880,
+      "metadata_bytes": 64880,
+      "representation_bytes": 5055760,
+      "allocated_capacity_bytes": 6356464,
+      "explicit_scratch_bytes": 0,
+      "owned_working_bytes": 6356464,
+      "model_metadata_bytes": 0
+    }
+  ],
+  "workloads": [
+    {
+      "kind": "full",
+      "threshold": 196,
+      "logical_rows_per_schedule": 1660208,
+      "inner_iterations": 1,
+      "queries": [
+        {
+          "begin": 0,
+          "end": 1660208,
+          "count": 1561874,
+          "sum": 200491126
+        }
+      ],
+      "trial_order": [
+        [
+          "for"
+        ]
+      ],
+      "results": [
+        {
+          "method": "for",
+          "verified": true,
+          "median_ms": 2.642667,
+          "samples_ms": [
+            2.642667
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "medium_64k",
+      "threshold": 196,
+      "logical_rows_per_schedule": 262144,
+      "inner_iterations": 1,
+      "queries": [
+        {
+          "begin": 819461,
+          "end": 884997,
+          "count": 64794,
+          "sum": 8031736
+        },
+        {
+          "begin": 1142802,
+          "end": 1208338,
+          "count": 62398,
+          "sum": 8117658
+        },
+        {
+          "begin": 233297,
+          "end": 298833,
+          "count": 65535,
+          "sum": 7537298
+        },
+        {
+          "begin": 868511,
+          "end": 934047,
+          "count": 58214,
+          "sum": 8975870
+        }
+      ],
+      "trial_order": [
+        [
+          "for"
+        ]
+      ],
+      "results": [
+        {
+          "method": "for",
+          "verified": true,
+          "median_ms": 0.380125,
+          "samples_ms": [
+            0.380125
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "small_1k",
+      "threshold": 196,
+      "logical_rows_per_schedule": 16384,
+      "inner_iterations": 8,
+      "queries": [
+        {
+          "begin": 1314952,
+          "end": 1315976,
+          "count": 1024,
+          "sum": 108570
+        },
+        {
+          "begin": 275856,
+          "end": 276880,
+          "count": 1024,
+          "sum": 96078
+        },
+        {
+          "begin": 932704,
+          "end": 933728,
+          "count": 912,
+          "sum": 143174
+        },
+        {
+          "begin": 152048,
+          "end": 153072,
+          "count": 1024,
+          "sum": 90850
+        },
+        {
+          "begin": 329595,
+          "end": 330619,
+          "count": 926,
+          "sum": 196810
+        },
+        {
+          "begin": 1639162,
+          "end": 1640186,
+          "count": 1024,
+          "sum": 116456
+        },
+        {
+          "begin": 834882,
+          "end": 835906,
+          "count": 1024,
+          "sum": 109356
+        },
+        {
+          "begin": 1457574,
+          "end": 1458598,
+          "count": 1021,
+          "sum": 239690
+        },
+        {
+          "begin": 601191,
+          "end": 602215,
+          "count": 1024,
+          "sum": 104636
+        },
+        {
+          "begin": 1248727,
+          "end": 1249751,
+          "count": 1024,
+          "sum": 86682
+        },
+        {
+          "begin": 1543721,
+          "end": 1544745,
+          "count": 911,
+          "sum": 111972
+        },
+        {
+          "begin": 267691,
+          "end": 268715,
+          "count": 1024,
+          "sum": 90244
+        },
+        {
+          "begin": 104646,
+          "end": 105670,
+          "count": 1024,
+          "sum": 91684
+        },
+        {
+          "begin": 1308726,
+          "end": 1309750,
+          "count": 1024,
+          "sum": 116412
+        },
+        {
+          "begin": 1310514,
+          "end": 1311538,
+          "count": 1024,
+          "sum": 132610
+        },
+        {
+          "begin": 724152,
+          "end": 725176,
+          "count": 1024,
+          "sum": 79762
+        }
+      ],
+      "trial_order": [
+        [
+          "for"
+        ]
+      ],
+      "results": [
+        {
+          "method": "for",
+          "verified": true,
+          "median_ms": 0.024578125,
+          "samples_ms": [
+            0.024578125
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "full",
+      "threshold": 462,
+      "logical_rows_per_schedule": 1660208,
+      "inner_iterations": 1,
+      "queries": [
+        {
+          "begin": 0,
+          "end": 1660208,
+          "count": 927945,
+          "sum": 134340158
+        }
+      ],
+      "trial_order": [
+        [
+          "for"
+        ]
+      ],
+      "results": [
+        {
+          "method": "for",
+          "verified": true,
+          "median_ms": 2.739083,
+          "samples_ms": [
+            2.739083
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "medium_64k",
+      "threshold": 462,
+      "logical_rows_per_schedule": 262144,
+      "inner_iterations": 1,
+      "queries": [
+        {
+          "begin": 1110507,
+          "end": 1176043,
+          "count": 43180,
+          "sum": 6323702
+        },
+        {
+          "begin": 1180565,
+          "end": 1246101,
+          "count": 43620,
+          "sum": 6102854
+        },
+        {
+          "begin": 1541640,
+          "end": 1607176,
+          "count": 35313,
+          "sum": 5684238
+        },
+        {
+          "begin": 1076463,
+          "end": 1141999,
+          "count": 40990,
+          "sum": 6238640
+        }
+      ],
+      "trial_order": [
+        [
+          "for"
+        ]
+      ],
+      "results": [
+        {
+          "method": "for",
+          "verified": true,
+          "median_ms": 0.391833,
+          "samples_ms": [
+            0.391833
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "small_1k",
+      "threshold": 462,
+      "logical_rows_per_schedule": 16384,
+      "inner_iterations": 8,
+      "queries": [
+        {
+          "begin": 1522752,
+          "end": 1523776,
+          "count": 212,
+          "sum": 58546
+        },
+        {
+          "begin": 1099886,
+          "end": 1100910,
+          "count": 571,
+          "sum": 94306
+        },
+        {
+          "begin": 1139946,
+          "end": 1140970,
+          "count": 626,
+          "sum": 81490
+        },
+        {
+          "begin": 1511747,
+          "end": 1512771,
+          "count": 514,
+          "sum": 61710
+        },
+        {
+          "begin": 1552112,
+          "end": 1553136,
+          "count": 460,
+          "sum": 66842
+        },
+        {
+          "begin": 146367,
+          "end": 147391,
+          "count": 539,
+          "sum": 64322
+        },
+        {
+          "begin": 39266,
+          "end": 40290,
+          "count": 85,
+          "sum": 4302
+        },
+        {
+          "begin": 821142,
+          "end": 822166,
+          "count": 452,
+          "sum": 79932
+        },
+        {
+          "begin": 1401466,
+          "end": 1402490,
+          "count": 698,
+          "sum": 80144
+        },
+        {
+          "begin": 925027,
+          "end": 926051,
+          "count": 775,
+          "sum": 241886
+        },
+        {
+          "begin": 182249,
+          "end": 183273,
+          "count": 402,
+          "sum": 34266
+        },
+        {
+          "begin": 1317591,
+          "end": 1318615,
+          "count": 612,
+          "sum": 120578
+        },
+        {
+          "begin": 938748,
+          "end": 939772,
+          "count": 245,
+          "sum": 62268
+        },
+        {
+          "begin": 1540507,
+          "end": 1541531,
+          "count": 581,
+          "sum": 84834
+        },
+        {
+          "begin": 1116763,
+          "end": 1117787,
+          "count": 908,
+          "sum": 183538
+        },
+        {
+          "begin": 690375,
+          "end": 691399,
+          "count": 452,
+          "sum": 41426
+        }
+      ],
+      "trial_order": [
+        [
+          "for"
+        ]
+      ],
+      "results": [
+        {
+          "method": "for",
+          "verified": true,
+          "median_ms": 0.022807375,
+          "samples_ms": [
+            0.022807375
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "full",
+      "threshold": 2654,
+      "logical_rows_per_schedule": 1660208,
+      "inner_iterations": 1,
+      "queries": [
+        {
+          "begin": 0,
+          "end": 1660208,
+          "count": 130606,
+          "sum": 24959644
+        }
+      ],
+      "trial_order": [
+        [
+          "for"
+        ]
+      ],
+      "results": [
+        {
+          "method": "for",
+          "verified": true,
+          "median_ms": 3.685041,
+          "samples_ms": [
+            3.685041
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "medium_64k",
+      "threshold": 2654,
+      "logical_rows_per_schedule": 262144,
+      "inner_iterations": 1,
+      "queries": [
+        {
+          "begin": 48047,
+          "end": 113583,
+          "count": 10074,
+          "sum": 1725856
+        },
+        {
+          "begin": 24542,
+          "end": 90078,
+          "count": 7907,
+          "sum": 1336512
+        },
+        {
+          "begin": 1520542,
+          "end": 1586078,
+          "count": 2572,
+          "sum": 555978
+        },
+        {
+          "begin": 61885,
+          "end": 127421,
+          "count": 10725,
+          "sum": 1780520
+        }
+      ],
+      "trial_order": [
+        [
+          "for"
+        ]
+      ],
+      "results": [
+        {
+          "method": "for",
+          "verified": true,
+          "median_ms": 0.291959,
+          "samples_ms": [
+            0.291959
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "small_1k",
+      "threshold": 2654,
+      "logical_rows_per_schedule": 16384,
+      "inner_iterations": 8,
+      "queries": [
+        {
+          "begin": 125322,
+          "end": 126346,
+          "count": 67,
+          "sum": 4804
+        },
+        {
+          "begin": 1368552,
+          "end": 1369576,
+          "count": 107,
+          "sum": 22636
+        },
+        {
+          "begin": 666651,
+          "end": 667675,
+          "count": 46,
+          "sum": 10048
+        },
+        {
+          "begin": 551672,
+          "end": 552696,
+          "count": 53,
+          "sum": 8912
+        },
+        {
+          "begin": 1435473,
+          "end": 1436497,
+          "count": 96,
+          "sum": 34240
+        },
+        {
+          "begin": 1503586,
+          "end": 1504610,
+          "count": 0,
+          "sum": 0
+        },
+        {
+          "begin": 625764,
+          "end": 626788,
+          "count": 22,
+          "sum": 4814
+        },
+        {
+          "begin": 109197,
+          "end": 110221,
+          "count": 203,
+          "sum": 21424
+        },
+        {
+          "begin": 1308991,
+          "end": 1310015,
+          "count": 73,
+          "sum": 16172
+        },
+        {
+          "begin": 1305829,
+          "end": 1306853,
+          "count": 57,
+          "sum": 9450
+        },
+        {
+          "begin": 570824,
+          "end": 571848,
+          "count": 6,
+          "sum": 388
+        },
+        {
+          "begin": 172460,
+          "end": 173484,
+          "count": 112,
+          "sum": 7568
+        },
+        {
+          "begin": 235157,
+          "end": 236181,
+          "count": 163,
+          "sum": 20334
+        },
+        {
+          "begin": 116755,
+          "end": 117779,
+          "count": 79,
+          "sum": 9188
+        },
+        {
+          "begin": 409006,
+          "end": 410030,
+          "count": 12,
+          "sum": 4690
+        },
+        {
+          "begin": 1018222,
+          "end": 1019246,
+          "count": 11,
+          "sum": 2766
+        }
+      ],
+      "trial_order": [
+        [
+          "for"
+        ]
+      ],
+      "results": [
+        {
+          "method": "for",
+          "verified": true,
+          "median_ms": 0.01620825,
+          "samples_ms": [
+            0.01620825
+          ]
+        }
+      ]
+    }
+  ]
+}

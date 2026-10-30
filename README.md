@@ -5,11 +5,43 @@
 
 # pagecodec-lab
 
-An experimental C codec for lossless compression of memory pages, with a reproducible benchmark against Apple's **LZ4, LZ4_RAW and LZFSE** implementations. The codec combines repeated values, fixed-width residuals and sparse exceptions. It uses no Apple compression calls internally.
+Experiments in exact, compact data representations: a C page codec benchmarked against Apple's **LZ4, LZ4_RAW and LZFSE**, plus C++ prototypes for queries on compressed integers, recomputing derived values, and shared immutable strings. Code, real-data preparation, timing samples, failures and measured charts are included.
 
-**The useful result:** on a 63.33 MiB column-oriented representation of real household electricity readings, V2 used **20.12% less storage than Apple LZ4_RAW**, encoded **2.34× faster**, and decoded **1.98× faster** in this run. **Apple LZFSE produced smaller output.** On the same values in row order, our codec used more storage than either LZ4 reference. It barely compressed the original text.
+This is application-level research on caller-owned data. It does not redesign DRAM, replace the macOS memory compressor, or establish general superiority to Apple.
 
-This is a software experiment on caller-owned buffers. It does not redesign DRAM, replace the macOS memory compressor, or demonstrate that an operating system uses less RAM. These are measurements of representation size and hot-buffer codec time on one machine.
+## New: three operation-level experiments
+
+**The most promising result is querying exact compressed values without reconstructing entire arrays.** On Covertype forest observations, progressive bitplanes use **55.49% less accounted working capacity** and achieve **1.18–2.00× ratios of median query times** against a native ARM NEON raw baseline, across all nine tested threshold/window scenarios. Construction costs extra, and the isolated process peak RSS is higher during construction and validation. This is a compact representation and repeated-query result, not a measured 55% reduction in application RAM.
+
+The completed run covers **2,138,922 held-out numeric rows across three independent real sources**, plus **135,166 CMU dictionary objects in each of two views of one source**. There are 254 method/workload results, 2,286 timing samples and 41 isolated peak-memory probes.
+
+| Experiment | What worked | What did not |
+|---|---|---|
+| Exact compressed queries | Covertype progressive wins all nine workload medians; 73/81 individual paired rounds | Progressive regresses on some household/Bike workloads; building the representation takes time |
+| Retain a computation recipe | Direct recomputation uses 88.79% less accounted capacity on the household feature pipeline | Queries are 1.36–2.23× slower there; a fixed cache uses more space than materialization on Bike |
+| Share string overlaps | Extra savings beyond interning: 3.71% for headwords, 0.76% for pronunciations | Expensive construction and no consistent lookup-speed advantage |
+
+![Exact queries: every method and workload, including regressions](assets/operations-query.png)
+
+These are single-machine, warm-operation measurements with synthetic access schedules over real values. The other two experiments and all trade-offs are shown in the [full illustrated report](docs/OPERATIONS.md), including [recipe results](assets/operations-recipe.png) and [string results](assets/operations-strings.png). The bitplane controls are our reference implementations; FastLanes, LeCo and NeaTS were not benchmarked. The string heuristic does not implement or inherit OpenAI's shortest-common-superstring approximation guarantee.
+
+[Research and mathematical connections](docs/RESEARCH.md) · [all medians, ranges and paired comparisons](results/operations-2026-10-30/timings.csv) · [raw samples](results/operations-2026-10-30/all-results.json) · [memory accounting](results/operations-2026-10-30/memory.csv).
+
+```sh
+# macOS or Linux: C++17, C11, zlib development headers/library, Python and curl.
+make test-operations sanitize-operations CC=clang CXX=clang++
+python3 scripts/prepare_operations.py
+python3 scripts/run_operations.py --output measurements/my-operations-run
+python3 scripts/summarize_operations.py --results measurements/my-operations-run
+```
+
+See [reproduction details](docs/OPERATIONS.md#reproduce-and-inspect). The original codec and comparison below remain unchanged.
+
+## Earlier page-codec result
+
+On a 63.33 MiB column-oriented representation of real household electricity readings, V2 used **20.12% less storage than Apple LZ4_RAW**, encoded **2.34× faster**, and decoded **1.98× faster** in this run. **Apple LZFSE produced smaller output.** On the same values in row order, our codec used more storage than either LZ4 reference. It barely compressed the original text.
+
+The codec combines repeated values, fixed-width residuals and sparse exceptions. It uses no Apple compression calls internally. The following measurements concern representation size and hot-buffer codec time on one machine, not OS memory savings.
 
 ## Real numerical corpus
 
@@ -72,7 +104,7 @@ python3.11 -m venv .venv
 .venv/bin/python scripts/plot_results.py
 ```
 
-The core C codec, corpus preparation and benchmark runner have no third-party Python dependencies. Matplotlib is needed only for the figures. GitHub Actions runs portable correctness/sanitizer checks and a macOS comparator smoke test; shared-runner timing is not treated as performance evidence.
+The core C codec, corpus preparation and benchmark runners have no third-party Python dependencies. Matplotlib is needed only for the figures. GitHub Actions checks the codec and all three operation experiments with sanitizers on Ubuntu and macOS, plus a macOS comparator smoke test; shared-runner timing is not treated as performance evidence.
 
 ## Implementation and experiment history
 
@@ -89,7 +121,7 @@ python3 scripts/prepare_initial.py
 python3 scripts/benchmark.py --manifest manifests/initial-v2.json --output measurements/my-initial-v2-run
 ```
 
-The algorithms build on established compression ideas. This repository makes no claim to invent base-delta packing, sparse encoding, or memory compression. Next useful experiments would compare dedicated numerical codecs, multiple independent real corpora, end-to-end conversion costs, and page access/update workloads under actual memory pressure.
+The algorithms build on established compression ideas. This repository makes no claim to invent base-delta packing, sparse encoding, bitplane queries, rematerialization or memory compression. The operation experiments broaden the corpus and measure useful access. Remaining work includes optimized numerical-codec comparisons, end-to-end integration, updates and workloads under actual memory pressure.
 
 ## License and artwork
 

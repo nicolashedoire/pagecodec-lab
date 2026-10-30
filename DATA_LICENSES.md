@@ -30,6 +30,34 @@ is also partitioned at line boundaries; concatenating the partitions reproduces
 the source bytes exactly. The manifest identifies the scales, counts and
 hashes. The authors and UCI do not endorse this experiment.
 
+## Additional operation-level corpora
+
+**Covertype:** Blackard, J. (1998). *Covertype* [Dataset]. UCI Machine
+Learning Repository. [DOI: 10.24432/C50K5N](https://doi.org/10.24432/C50K5N).
+The [official source](https://archive.ics.uci.edu/dataset/31/covertype)
+uses CC BY 4.0. We project elevation and horizontal distance to roadways,
+preserving their integer values and source order.
+
+**Bike Sharing:** Fanaee-T, H. (2013). *Bike Sharing* [Dataset]. UCI Machine
+Learning Repository. [DOI: 10.24432/C5W894](https://doi.org/10.24432/C5W894).
+The [official source](https://archive.ics.uci.edu/dataset/275/bike+sharing+dataset)
+uses CC BY 4.0. We project hourly total and registered rental counts. The pinned
+`hour.csv` has 17,379 records; the benchmark uses that verified count.
+
+For these two sources and the household operation-level projection, the first
+20% of rows calibrate query thresholds and only the last 80% are evaluated.
+These selected fields are not a lossless representation of the complete
+original datasets. Neither UCI nor the creators endorse this benchmark.
+
+**CMU Pronouncing Dictionary:** Carnegie Mellon University and the CMUSphinx
+contributors. The [upstream repository](https://github.com/cmusphinx/cmudict)
+is pinned at commit `74790861f652b15e4ac49015a90074ad62a27690`. Its full BSD-style
+notice and disclaimer are retained in [CMUDICT-LICENSE.txt](third_party/CMUDICT-LICENSE.txt).
+We split each record at its first space into headword and pronunciation fields;
+variant markers and internal phoneme spaces are preserved. These are two views
+of one source corpus. Downloaded source data are not committed. The pinned
+[manifest](manifests/operations-v1.json) records source and projection hashes.
+
 ## Seattle weather: NOAA via Vega Datasets
 
 The initial corpus uses `seattle-weather.csv` from Vega Datasets at immutable

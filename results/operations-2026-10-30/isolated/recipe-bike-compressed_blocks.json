@@ -1,0 +1,200 @@
+{
+  "schema_version": 1,
+  "experiment": "recipe",
+  "checksums_verified": true,
+  "inputs": {
+    "x_name": "bike-x.i32",
+    "y_name": "bike-y.i32",
+    "rows": 13904,
+    "source_logical_bytes": 111232,
+    "x_fnv1a64_le": "753b656b451f7ec6",
+    "y_fnv1a64_le": "9c336654f9a3189b",
+    "x_missing": 0,
+    "y_missing": 0
+  },
+  "configuration": {
+    "repetitions": 1,
+    "warmups": 0,
+    "seed": 20261030,
+    "tile_rows": 256,
+    "tile_derived_bytes": 16384,
+    "cache_tiles": 64,
+    "sparse_queries": 4096,
+    "only_method": "compressed_blocks",
+    "cache_policy": "direct-mapped tile_index modulo cache_tiles; reset before each workload"
+  },
+  "semantics": {
+    "source_type": "little-endian int32",
+    "derived_type": "int64",
+    "missing_input": -2147483648,
+    "missing_output": "-9223372036854775808",
+    "missing_policy": "Either missing source makes all eight features missing",
+    "derived_storage": "native-endian int64 within this process; codec is lossless on those bytes",
+    "features": [
+      {
+        "name": "sum",
+        "formula": "x+y"
+      },
+      {
+        "name": "difference",
+        "formula": "x-y"
+      },
+      {
+        "name": "product",
+        "formula": "x*y"
+      },
+      {
+        "name": "x_squared",
+        "formula": "x*x"
+      },
+      {
+        "name": "y_squared",
+        "formula": "y*y"
+      },
+      {
+        "name": "minimum",
+        "formula": "min(x,y)"
+      },
+      {
+        "name": "maximum",
+        "formula": "max(x,y)"
+      },
+      {
+        "name": "absolute_difference",
+        "formula": "abs(x-y)"
+      }
+    ]
+  },
+  "protocol": {
+    "construction_includes": "allocation, feature computation or recipe setup; compressed blocks also encode",
+    "queries_include": "tile lookup or direct scalar calculation, computation/decompression, checksum consumption",
+    "excluded": "input I/O, schedule generation, streamed oracle, per-value codec validation, JSON output; no source edits",
+    "memory_accounting": "actual vector capacities plus C++ objects and schedule; excludes allocator bookkeeping, executable, libraries and report bookkeeping",
+    "all_methods_retain_sources": true,
+    "one_method_state_at_a_time": true,
+    "construction_peak_note": "accounted retained bytes plus maximum extra encoded scratch; not measured RSS",
+    "rss_note": "process lifetime high-water; use --only-method in fresh processes for method attribution",
+    "checksum_note": "unsigned 64-bit modular sum of mixed value/row/feature terms; compressed payloads also checked per-value"
+  },
+  "process_peak_rss_bytes": 1933312,
+  "workloads": [
+    {
+      "name": "sequential_all",
+      "queries": 1,
+      "row_visits": 13904,
+      "value_visits": 111232,
+      "expected_checksum": "6cc4ca0364abae43"
+    },
+    {
+      "name": "repeated_hot_windows",
+      "queries": 256,
+      "row_visits": 65536,
+      "value_visits": 524288,
+      "expected_checksum": "5f94a74df62ff770"
+    },
+    {
+      "name": "sparse_points",
+      "queries": 4096,
+      "row_visits": 4096,
+      "value_visits": 4096,
+      "expected_checksum": "0ec2c26d43546967"
+    },
+    {
+      "name": "changing_hotset",
+      "queries": 1024,
+      "row_visits": 259328,
+      "value_visits": 2074624,
+      "expected_checksum": "8a5021dcd2daeb9c"
+    }
+  ],
+  "methods": [
+    {
+      "name": "compressed_blocks",
+      "memory": {
+        "source_logical_bytes": 111232,
+        "source_capacity_bytes": 111232,
+        "derived_stored_bytes": 279075,
+        "derived_capacity_bytes": 279075,
+        "index_capacity_bytes": 1320,
+        "cache_capacity_bytes": 0,
+        "scratch_capacity_bytes": 16384,
+        "recipe_descriptor_bytes": 8,
+        "other_object_metadata_bytes": 240,
+        "common_query_schedule_bytes": 129208,
+        "retained_accounted_bytes": 537467,
+        "construction_extra_scratch_bytes": 16409,
+        "construction_accounted_peak_bytes": 553876
+      },
+      "construction_median_wall_ms": 0.381125,
+      "construction_median_cpu_ms": 0.383,
+      "workloads": [
+        {
+          "name": "sequential_all",
+          "median_wall_ms": 0.198958,
+          "median_cpu_ms": 0.2,
+          "checksum": "6cc4ca0364abae43",
+          "samples": [
+            {
+              "wall_ms": 0.198958,
+              "cpu_ms": 0.2,
+              "tile_hits": 0,
+              "tile_misses": 55
+            }
+          ]
+        },
+        {
+          "name": "repeated_hot_windows",
+          "median_wall_ms": 0.932583,
+          "median_cpu_ms": 0.932,
+          "checksum": "5f94a74df62ff770",
+          "samples": [
+            {
+              "wall_ms": 0.932583,
+              "cpu_ms": 0.932,
+              "tile_hits": 0,
+              "tile_misses": 256
+            }
+          ]
+        },
+        {
+          "name": "sparse_points",
+          "median_wall_ms": 23.007958,
+          "median_cpu_ms": 15.788,
+          "checksum": "0ec2c26d43546967",
+          "samples": [
+            {
+              "wall_ms": 23.007958,
+              "cpu_ms": 15.788,
+              "tile_hits": 82,
+              "tile_misses": 4014
+            }
+          ]
+        },
+        {
+          "name": "changing_hotset",
+          "median_wall_ms": 9.59675,
+          "median_cpu_ms": 7.095,
+          "checksum": "8a5021dcd2daeb9c",
+          "samples": [
+            {
+              "wall_ms": 9.59675,
+              "cpu_ms": 7.095,
+              "tile_hits": 0,
+              "tile_misses": 1024
+            }
+          ]
+        }
+      ],
+      "construction_samples": [
+        {
+          "repetition": 0,
+          "order_position": 0,
+          "wall_ms": 0.381125,
+          "cpu_ms": 0.383
+        }
+      ]
+    }
+  ],
+  "amortization_vs_materialized": [],
+  "amortization_note": "Illustrative construction + executions * median workload time; one execution means the entire named workload, not one scalar query; no confidence claim"
+}

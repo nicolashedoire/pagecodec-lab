@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "experiment": "immutable_strings",
+  "input_name": "cmu-pronunciations.txt",
+  "input_bytes": 2438406,
+  "input_fnv1a64": "3795a30e52a1fc5e",
+  "object_count": 135166,
+  "total_object_bytes": 2303240,
+  "max_object_bytes": 80,
+  "trials": 1,
+  "queries_per_workload": 20000,
+  "seed": 20261030,
+  "block_bytes": 4096,
+  "candidate_cap": 64,
+  "max_overlap_bytes": 256,
+  "minimum_overlap_bytes": 8,
+  "hot_set_objects": 1351,
+  "hot_probability": 0.9,
+  "zlib_version": "1.2.12",
+  "zlib_level": 1,
+  "benchmark_trace_capacity_bytes": 524288,
+  "source_oracle_retained_during_lookup": false,
+  "timing_scope": "Batched object lookup plus full returned-byte FNV consumption; copy also copies every byte. Caller workspace allocation and verification excluded; zlib internal allocation/deallocation remains timed. Construction includes final compaction.",
+  "storage_scope": "Dynamic vector buffer capacities only, plus caller lookup scratch where labeled. Container/control objects, allocator headers and transient internal zlib allocations are excluded; these counters are not process RSS.",
+  "view_contract": "Borrowed view valid until next lookup on that workspace; zlib decodes each compressed-block access with no persistent decoded cache.",
+  "construction_estimate_note": "Estimated capacity accounting, not RSS or an upper bound; includes input strings and approximate hash-table nodes, omits allocator headers and zlib internals.",
+  "trial_order": [
+    [
+      "concat"
+    ]
+  ],
+  "workload_order": [
+    [
+      "0:concat",
+      "hot.copy",
+      "uniform.copy",
+      "uniform.view",
+      "hot.view"
+    ]
+  ],
+  "observable_checksum": "0000000000000000",
+  "methods": [
+    {
+      "method": "concat",
+      "verified_all_objects": true,
+      "payload_bytes": 2303240,
+      "index_bytes": 2162656,
+      "block_metadata_bytes": 0,
+      "logical_storage_bytes": 4465896,
+      "capacity_storage_bytes": 4465896,
+      "lookup_workspace_view_bytes": 0,
+      "lookup_workspace_copy_bytes": 80,
+      "resident_view_capacity_bytes": 4465896,
+      "resident_copy_capacity_bytes": 4465976,
+      "construction_estimated_peak_bytes": 15363832,
+      "block_count": 0,
+      "raw_fallback_blocks": 0,
+      "unique_objects": null,
+      "overlap_saved_bytes": 0,
+      "overlap_candidate_checks": 0,
+      "construction_samples_ms": [
+        1.711042
+      ],
+      "workloads": {
+        "uniform": {
+          "view": {
+            "checksum_fnv1a64": "886ac85436b003f7",
+            "ns_per_query_samples": [
+              56.2104
+            ]
+          },
+          "copy": {
+            "checksum_fnv1a64": "886ac85436b003f7",
+            "ns_per_query_samples": [
+              112.2396
+            ]
+          }
+        },
+        "hot": {
+          "view": {
+            "checksum_fnv1a64": "f3c517971cc1862d",
+            "ns_per_query_samples": [
+              26.47295
+            ]
+          },
+          "copy": {
+            "checksum_fnv1a64": "f3c517971cc1862d",
+            "ns_per_query_samples": [
+              22.32915
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
