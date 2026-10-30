@@ -34,7 +34,9 @@ The [dynamic multi-actor pointer router](experiments/dynamic_input/README.md) dr
 
 The [interactive graphics prototype](experiments/graph_interaction/README.md) adds synthetic clickable controls and independent logical focus. The [EL0 guest experiment](experiments/user_mode/README.md) tests a controlled user-mode call and a denied kernel-page access; it does not establish complete process isolation. See the [user-mode research](docs/USER_MODE_RESEARCH.md) for the implementation and remaining work.
 
-The [interleaved system VM](experiments/concurrent_vm/README.md) runs two EL0 loops between graphical service operations and tests synthetic two-slot snapshots in one QEMU image. A separate [process-isolation experiment](experiments/process_isolation/README.md) switches between two page tables and tests controlled forbidden reads. These scenarios do not yet establish complete process isolation or native hardware support. See the [kernel integration research](docs/KERNEL_INTEGRATION_RESEARCH.md).
+The [interleaved system VM](experiments/concurrent_isolation/README.md) runs two EL0 loops in separate page tables between graphical service operations and tests synthetic two-slot snapshots in one QEMU image. A separate [process-isolation experiment](experiments/process_isolation/README.md) tests controlled forbidden reads. These scenarios do not yet establish complete process isolation or native hardware support. See the [kernel integration research](docs/KERNEL_INTEGRATION_RESEARCH.md).
+
+A [tiny synthetic neural inference experiment](experiments/local_inference/README.md) runs in QEMU. Its fixed, hand-written weights are neither Jev nor Laya and do not control the system.
 
 ![Three experimental pointers rendered by the Rust guest in QEMU](assets/dual-pointer-vm.png)
 

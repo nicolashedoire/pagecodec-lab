@@ -1,0 +1,7 @@
+{
+  "guest_sha256": "3b37ac87192742ec90f8874349d660e12907614819ba11f8eac7f30fa5acd313",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "serial": "CASE input=0,0,0 hidden=0,20,0,30 scores=-40,30\nCASE input=100,100,100 hidden=150,220,400,30 scores=460,880\nCASE input=70,20,10 hidden=130,20,80,0 scores=330,30\nCASE input=100,0,0 hidden=250,0,100,0 scores=610,-70\nCHECK repeat=deterministic invalid_inputs=rejected corner_bounds=ok control=none\nPASS synthetic integer neural inference\n",
+  "input": "synthetic numeric fixtures",
+  "system_control": false
+}

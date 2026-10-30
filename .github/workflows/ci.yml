@@ -527,6 +527,39 @@ jobs:
             ${{ runner.temp }}/concurrent-vm-evidence/
             ${{ runner.temp }}/concurrent-vm-legacy-evidence/
           if-no-files-found: ignore
+      - name: Build and check synthetic local inference in QEMU
+        working-directory: experiments/local_inference
+        run: |
+          cargo build --release --locked --offline --features qemu-demo
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/local-inference-demo \
+            --output-dir "$RUNNER_TEMP/local-inference-evidence"
+      - name: Preserve local inference VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: local-inference-vm-evidence
+          path: ${{ runner.temp }}/local-inference-evidence/
+          if-no-files-found: ignore
+      - name: Build and check separate EL0 spaces in interleaved VM
+        working-directory: experiments/concurrent_isolation
+        run: |
+          cargo build --release --locked
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/concurrent-isolation-demo \
+            --output-dir "$RUNNER_TEMP/concurrent-isolation-evidence"
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/concurrent-isolation-demo \
+            --output-dir "$RUNNER_TEMP/concurrent-isolation-legacy-evidence" --transport legacy
+      - name: Preserve separate-space VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: concurrent-isolation-vm-evidence
+          path: |
+            ${{ runner.temp }}/concurrent-isolation-evidence/
+            ${{ runner.temp }}/concurrent-isolation-legacy-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM
