@@ -22,6 +22,12 @@ The [recorded run](../experiments/user_mode/evidence/user-mode-evidence.json) re
 
 This proves a particular EL0 read is denied and that the specified SVC round trip works in this controlled configuration. It does **not** establish complete security isolation: there is one fixed address space, no independent processes or address-space identifiers, no general syscall dispatcher, arbitrary program loader, scheduler integration, nested-exception recovery, FP/SIMD context management or DMA isolation. The final SVC does not return. Unexpected exceptions are fatal, and no latency or performance advantage is claimed.
 
+## Scripted exchange between two address spaces
+
+The separate [`user_ipc`](../experiments/user_ipc/README.md) guest uses two TTBR0 roots and ASIDs for a fixed sequence of eight SVCs. Two synthetic EL0 tasks exchange `HELLO` and `OK` via bounded kernel buffers and their own private page aliases. The handler checks the active actor/root, syndrome, saved mode, exact return site and phase, and checks the permitted page range before copying. The [QEMU trace](../experiments/user_ipc/evidence/user-ipc-evidence.json) includes rejection of a range crossing a page, an oversized length and the `u64::MAX - 1` plus 5 overflow case. In the latter, the range predicate's checked addition fails before a user-memory access; the scenario verifies the initially empty buffers remain unchanged.
+
+These are cooperative switches and exact, prearranged request sites and values. The guest does not implement a general IPC API, arbitrary process scheduling, authenticated callers, dynamic mapping validation, general fault recovery or DMA isolation. It is a separate experiment from both `user_mode` and the graphical guest.
+
 ## Remaining engineering work
 
 - Define process and address-space ownership, protected mappings, lifecycle and zeroing rules, including reuse of physical pages and user stacks.

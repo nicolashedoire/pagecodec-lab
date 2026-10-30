@@ -625,6 +625,20 @@ jobs:
             ${{ runner.temp }}/journal-regression-evidence/
             ${{ runner.temp }}/journal-regression-legacy-evidence/
           if-no-files-found: ignore
+      - name: Build and check controlled user IPC in QEMU
+        working-directory: experiments/user_ipc
+        run: |
+          cargo build --release --locked --offline
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/user-ipc-demo \
+            --output-dir "$RUNNER_TEMP/user-ipc-evidence"
+      - name: Preserve user IPC VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: user-ipc-vm-evidence
+          path: ${{ runner.temp }}/user-ipc-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM
