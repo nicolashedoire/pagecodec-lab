@@ -17,6 +17,9 @@ DEFAULT = ROOT / 'results/compaction-adaptive-2026-10-30'
 SOURCES = ('household_row', 'bike', 'cmu_pronunciations', 'random_control')
 REAL_SOURCES = SOURCES[:3]
 POLICIES = ('fifo', 'benefit', 'efficiency', 'tail_first', 'adaptive')
+EXPECTED_RULE = ('Exploratory criterion: adaptive median paired phase time >=10% below FIFO '
+                 'in scrambled 25% and 50% on at least 2 of 3 real sources, and no '
+                 'real-source median regression >10% at scrambled 100%.')
 QUOTAS = {'front': (.5,), 'tail': (.5,), 'random': (.25, .5, 1.),
           'mixed': (.25, .5, 1.), 'scrambled': (.25, .5, 1.),
           'rare_tail': (.25, .5, 1.)}
@@ -78,6 +81,8 @@ def load_report(location):
             'Unexpected reclaim fractions')
     require(protocol['repetitions'] == 5 and protocol['control_repetitions'] == 1,
             'Expected five paired trials and one no-compaction control')
+    require(protocol['success_rule'] == EXPECTED_RULE,
+            'The recorded success rule differs from the rule implemented by this summarizer')
     require(digest_shape(config['binary_sha256'], 64), 'Missing recorded executable SHA-256')
     require(config['sources_sha256'] and all(digest_shape(v, 64) for v in config['sources_sha256'].values()),
             'Malformed recorded code hashes')
@@ -121,6 +126,8 @@ def load_report(location):
             require(field in m, f'Missing nullable phase field {field}: {label}')
             if m[field] is not None:
                 number(m[field], f'{field} {label}')
+                require(m[field] <= m['elapsed_ms'] + 1e-6,
+                        f'Measured {field} exceeds native elapsed time: {label}')
         for field, value in m.items():
             if not isinstance(value, bool) and isinstance(value, (int, float)):
                 number(value, f'{field} {label}')

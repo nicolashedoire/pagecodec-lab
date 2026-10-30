@@ -70,6 +70,8 @@ extracted subset under synthetic conditions; it is not Apple's complete test
 harness, does not migrate real macOS threads and contains no timing comparison.
 The synthetic topology is a fixture, not a claim about the host's live cluster
 layout. The Apple source and generated extracts remain outside this repository.
+The [reproducible fixture](../experiments/scheduler_edge/README.md) downloads
+and verifies the matching public source before extracting the blocks locally.
 
 Apple's source itself identifies a potential optimization: account for a
 thread's recent history across clusters when choosing a processor. See the
