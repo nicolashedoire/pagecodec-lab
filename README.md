@@ -22,7 +22,9 @@ The separate [extensible actor registry](experiments/actor_core/README.md) model
 
 The [frame allocator model](experiments/memory_core/README.md) exercises reservations and allocation on synthetic addresses. A [VM arena experiment](experiments/memory_arena/README.md) applies it to a guest-owned static array and checks actual guest reads and writes; neither initializes an MMU or manages real Mac memory.
 
-The [VirtIO negotiation experiment](experiments/virtio_negotiation/README.md) examines a feature-acceptance gap in the current driver dependency using a simulated refusal and a QEMU device. It does not patch the dependency or demonstrate a complete driver.
+The [VirtIO negotiation experiment](experiments/virtio_negotiation/README.md) examines a feature-acceptance gap using a simulated refusal and a QEMU device. A [separate experimental local patch](experiments/virtio_fix/README.md) tests the change with the RNG driver; the other guests still use the unpatched dependency, and full driver conformance remains unproven.
+
+Separate QEMU prototypes explore [dynamic multi-actor pointer routing](experiments/dynamic_input/README.md) and [restoring a small synthetic workspace record across VM instances](experiments/workspace_persistence/README.md). Neither is yet integrated into the graphical guest.
 
 ![Two experimental pointers rendered by the Rust guest in QEMU](assets/dual-pointer-vm.png)
 

@@ -1,0 +1,12 @@
+{
+  "guest_sha256": "1be721caf33d6f0f7e2dba51142fca4a149474d7ad4d7b96bbee15314f8f5ef8",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "fixture": "fresh disposable 1 MiB image; control sector 0 and data sector 4",
+  "save_serial": "EDIT human title=human-version; assistant status=assistant-ready\nWRITE sector=4 bytes=512 flush=ok readback=exact\nPASS save synthetic bridge record\n",
+  "saved_record_sha256": "a86de1cd97cf5ebe6034a1e31834c8bc12dd17e5c377a4af4b9125c5d6f98d30",
+  "restore_serial": "READ sector=4 bytes=512 checksum=ok\nRESTORE human title=human-version origin=human; assistant status=assistant-ready origin=assistant copies=separate\nPASS restore synthetic bridge record\n",
+  "corrupt_checksum_serial": "REJECT malformed record\n",
+  "invalid_length_with_valid_checksum_serial": "REJECT malformed record\n",
+  "checks": "unmodified neighboring sectors; restore and rejected images unchanged",
+  "limitations": "FNV is not authentication; no transactions or crash durability; guest-owned synthetic fixtures only"
+}

@@ -1,0 +1,18 @@
+[package]
+name = "virtio-fix-lab"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+virtio-drivers = { path = "vendor/virtio-drivers", version = "=0.13.0", default-features = false }
+zerocopy = { version = "=0.8.63", default-features = false }
+
+[features]
+alloc = ["virtio-drivers/alloc"]
+
+[profile.release]
+panic = "abort"
+opt-level = 2
+codegen-units = 1
+lto = true
