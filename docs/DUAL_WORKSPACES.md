@@ -57,12 +57,43 @@ streams.
 
 ## Data, conflicts and user control
 
-The two workspaces can share selected data without copying it all. Each access
-retains the actor's authorization. For read-only work, both actors can often
-inspect the same object concurrently. The intended default is **concurrent
-work**, not having one actor wait for the other whenever collaboration is
-possible. Independent edits should proceed in parallel; compatible edits to the
-same object should be merged by the relevant collaboration mechanism.
+The intended default for editable work is **separate working copies** derived
+from a common version: the person and AI edit independently and concurrently.
+The AI then automatically merges both sets of changes, including deciding how
+to resolve conflicts within its delegated authority. A result view identifies
+human changes, AI changes, combined resolutions and uncertain attribution.
+This is a proposed behavior, not an implemented merge engine. Each access
+retains the actor's authorization; read-only data can be shared where allowed.
+
+```mermaid
+flowchart LR
+  BASE[Common starting version] --> HUMAN[Human working copy and changes]
+  BASE --> AI[AI working copy and changes]
+  HUMAN --> MERGE[AI merges and resolves conflicts]
+  AI --> MERGE
+  MERGE --> RESULT[Merged result]
+  RESULT --> VIEW[Diffs, provenance and merge decisions]
+  HUMAN -. retained history .-> VIEW
+  AI -. retained history .-> VIEW
+```
+
+The mechanism would record a stable base revision, two change sets, actor
+identity and the resulting merged revision. A three-way comparison like
+[Git's merge model](https://git-scm.com/docs/git-merge) is a useful reference
+for text; format-aware adapters are needed for other document types. After a
+deterministic merge of non-overlapping edits, the AI could select, combine or
+rewrite conflicting changes. The result view should disclose when the AI
+resolved a conflict and show the source changes and resulting decision, without
+claiming that its resolution is necessarily correct. If a merge cannot be
+performed or its input changes mid-operation, the system retains both branches
+and reports the failure rather than fabricating a completed result.
+
+Provenance is recorded when changes are made, not guessed solely from the final
+text. An AI-written conflict resolution that combines both sides must be marked
+as such; imported or untracked edits may have unknown origin. Depending on the
+format, attribution may be at file, object, paragraph or character level. The
+user can inspect the diff, the resolution and prior versions; the design does
+not require interrupting the user for each conflict.
 
 For a collaboration-aware document, the system could track actor, operation,
 document version and causal history, then exchange updates and merge them.
@@ -79,11 +110,11 @@ one of several modes:
 | Mode | Behavior | Trade-off |
 |---|---|---|
 | Shared live state | Both work on the same underlying object. | Needs coordination, version checks and clear conflict reporting. |
-| Working copy or snapshot | The AI works on an isolated version, then proposes or applies a merge under the user's delegated authority. | Copying, storage and merge cost; remote side effects may not be reversible. |
+| Separate working copies (intended default) | Human and AI work independently; the AI merges both changes under delegated authority and reports provenance. | Copying, storage, conflict resolution and validation cost; remote side effects may not be reversible. |
 | Exclusive operation | One actor temporarily reserves a conflicting resource. | Simple semantics but can delay the other actor. |
 
-An arbiter should detect incompatible edits or stale object versions; it must
-not silently overwrite another actor's work. Permission to view a document is
+The merge service detects incompatible edits or stale object versions and keeps
+both prior histories so the AI's resolution remains inspectable. Permission to view a document is
 not automatically permission to change it or act on an external account.
 Transactions, rollback and snapshots only apply where the underlying service
 actually provides them; sent messages and external changes can be irreversible.
