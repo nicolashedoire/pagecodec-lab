@@ -268,6 +268,12 @@ APIs. A kernel cannot wait on a user-space predictor during a page fault or an
 interrupt. An external recommendation may go stale while a workload changes;
 timeouts and a safe default are part of the design, not an afterthought.
 
+The proposed [MCP and neural decision control plane](AI_CONTROL_PLANE.md)
+describes how an AI could observe and request authorized actions across
+subsystems, with Jev as the reference decision advisor under the project owner's
+assumption of usefulness and reliability. Neither the MCP endpoints
+nor that model integration are implemented.
+
 For example, a proposed resource snapshot would carry a timestamp, workload
 identity and generation, CPU queue estimates, memory pressure and I/O backlog.
 Any policy budget derived from it would include an expiry and bounded advice
