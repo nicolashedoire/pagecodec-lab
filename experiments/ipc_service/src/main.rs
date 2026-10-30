@@ -213,19 +213,20 @@ pub extern "C" fn rust_main()->! {
 global_asm!(include_str!("svc.S"));
 #[no_mangle] pub extern "C" fn finish()->! {
     let st=unsafe{&*addr_of!(STATE)};
-    check(st.switches==2 && st.inbox[0].len==0 && st.inbox[1].len==0 && st.inbox[0].slots==[EMPTY_MSG;2] && st.inbox[1].slots==[EMPTY_MSG;2],"empty mailboxes");
-    check(st.stats[0]==Stats {ok_send:2,ok_recv:2,invalid:3,target:1,size:1,full:1,empty:2} && st.stats[1]==Stats {ok_send:2,ok_recv:2,invalid:0,target:0,size:1,full:1,empty:1},"service counters");
+    check(st.switches==10 && st.inbox[0].len==0 && st.inbox[1].len==0 && st.inbox[0].slots==[EMPTY_MSG;2] && st.inbox[1].slots==[EMPTY_MSG;2],"empty mailboxes");
+    check(st.stats[0]==Stats {ok_send:10,ok_recv:2,invalid:35,target:1,size:13,full:69,empty:6} && st.stats[1]==Stats {ok_send:2,ok_recv:10,invalid:0,target:0,size:1,full:1,empty:5},"service counters");
     let a=addr_of!(A_STACK).cast::<u8>(); let b=addr_of!(B_STACK).cast::<u8>();
     for i in 0..PAGE {
-      let av=if i<5 {b"HELLO"[i]} else if (16..20).contains(&i){b"PING"[i-16]} else if (64..66).contains(&i){b"OK"[i-64]} else if (80..82).contains(&i){b"GO"[i-80]} else {0};
-      let bv=if i<2 {b"OK"[i]} else if (16..18).contains(&i){b"GO"[i-16]} else if (64..69).contains(&i){b"HELLO"[i-64]} else if (80..84).contains(&i){b"PING"[i-80]} else {0};
+      let av=if i<5 {b"HELLO"[i]} else if (16..20).contains(&i){b"PING"[i-16]} else if (64..66).contains(&i){b"OK"[i-64]} else if (80..82).contains(&i){b"GO"[i-80]} else if i==128 {b'D'} else if i==129 {b'd'} else {0};
+      let bv=if i<2 {b"OK"[i]} else if (16..18).contains(&i){b"GO"[i-16]} else if i==64 {b'D'} else if (65..69).contains(&i){b"HELLO"[i-64]} else if i==80 {b'd'} else if (81..84).contains(&i){b"PING"[i-80]} else {0};
       check(unsafe{read_volatile(a.add(i))}==av && unsafe{read_volatile(b.add(i))}==bv,"page contents");
     }
     write("CHECK counters=saturating_at_255\r\n");
     write("CHECK requests=a:HELLO,PING b:OK,GO fifo=preserved\r\n");
     write("REJECT pointer=page_cross,overflow,kernel size=17,short_buffer target=invalid mailbox_unchanged=yes\r\n");
     write("REJECT full=a,b empty=a,a,b mailboxes_unchanged=yes\r\n");
-    write("CHECK a_send=2 a_receive=2 b_send=2 b_receive=2 switches=2 pages=expected\r\n");
+    write("CHECK generated_rounds=4 pointer_cases=36 size_cases=76 oracle=matched fifo_wrap=matched reject_mailboxes=unchanged\r\n");
+    write("CHECK a_send=10 a_receive=2 b_send=2 b_receive=10 switches=10 pages=expected\r\n");
     write("PASS EL0 bounded IPC dispatcher\r\n");halt()
 }
 #[panic_handler]

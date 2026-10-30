@@ -245,6 +245,61 @@ user_a:
     ldrb w4, [x3, #81]
     cmp w4, #79
     b.ne user_fail
+    // Four deterministic rounds. The caller's arithmetic oracle is independent
+    // of the dispatcher's checked_add/range implementation.
+    mov x19, #0
+agent_a_generated_round:
+    mov x3, #0x50000000
+    add w4, w19, #65
+    strb w4, [x3, #128]
+    add w4, w19, #97
+    strb w4, [x3, #129]
+    send 128, 1, 1, 0
+    send 129, 1, 1, 0
+    recv 96, 4, 0
+    // For length 4, end-4 is valid/full; end-3 through end+4
+    // must be rejected for range before the full-mailbox status.
+    mov x20, #0
+agent_a_range_cases:
+    mov x0, #0x50000000
+    add x0, x0, #1, lsl #12
+    sub x0, x0, #4
+    add x0, x0, x20
+    mov x1, #4
+    mov x2, #1
+    svc #0x10
+    mov x23, #1
+    cmp x20, #0
+    b.ne 4f
+    mov x23, #3
+4:  cmp x0, x23
+    b.ne user_fail
+    add x20, x20, #1
+    cmp x20, #9
+    b.lo agent_a_range_cases
+    // At a valid start address, sizes 1..16 reach full; 0, 17, 18
+    // are invalid size. This expected result is computed in EL0.
+    mov x20, #0
+agent_a_size_cases:
+    mov x0, #0x50000000
+    mov x1, x20
+    mov x2, #1
+    svc #0x10
+    mov x23, #2
+    cbz x20, 5f
+    cmp x20, #16
+    b.hi 5f
+    mov x23, #3
+5:  cmp x0, x23
+    b.ne user_fail
+    add x20, x20, #1
+    cmp x20, #19
+    b.lo agent_a_size_cases
+    svc #0x12
+    cbnz x0, user_fail
+    add x19, x19, #1
+    cmp x19, #4
+    b.lo agent_a_generated_round
     svc #0x13
     b user_fail
     .global user_b
@@ -301,6 +356,26 @@ user_b:
     send 16, 2, 0, 0
     send 0, 2, 0, 3
     svc #0x12
+    cbnz x0, user_fail
+    mov x19, #0
+agent_b_generated_round:
+    recv 64, 0, 1
+    recv 80, 0, 1
+    recv 96, 4, 0
+    mov x3, #0x50000000
+    ldrb w4, [x3, #64]
+    add w5, w19, #65
+    cmp w4, w5
+    b.ne user_fail
+    ldrb w4, [x3, #80]
+    add w5, w19, #97
+    cmp w4, w5
+    b.ne user_fail
+    add x19, x19, #1
+    svc #0x12
+    cbnz x0, user_fail
+    cmp x19, #4
+    b.lo agent_b_generated_round
     b user_fail
 user_fail:
     svc #0x7bad

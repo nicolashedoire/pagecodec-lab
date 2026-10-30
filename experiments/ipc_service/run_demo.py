@@ -51,7 +51,8 @@ def main():
         "CHECK requests=a:HELLO,PING b:OK,GO fifo=preserved",
         "REJECT pointer=page_cross,overflow,kernel size=17,short_buffer target=invalid mailbox_unchanged=yes",
         "REJECT full=a,b empty=a,a,b mailboxes_unchanged=yes",
-        "CHECK a_send=2 a_receive=2 b_send=2 b_receive=2 switches=2 pages=expected",
+        "CHECK generated_rounds=4 pointer_cases=36 size_cases=76 oracle=matched fifo_wrap=matched reject_mailboxes=unchanged",
+        "CHECK a_send=10 a_receive=2 b_send=2 b_receive=10 switches=10 pages=expected",
         "PASS EL0 bounded IPC dispatcher",
     ]
     if serial.splitlines() != expected:
@@ -60,7 +61,7 @@ def main():
         raise RuntimeError("guest image changed while the test was running")
     version = subprocess.run([args.qemu, "--version"], check=True, capture_output=True, text=True).stdout.splitlines()[0]
     result = {"guest_sha256": guest_hash, "qemu_version": version,
-              "serial": serial, "input": "two synthetic EL0 actors each send and receive two messages",
+              "serial": serial, "input": "two synthetic EL0 actors exchange initial messages and four generated rounds",
               "limitations": "fixed single-CPU scenario; no general IPC, authentication, certified isolation, IOMMU, FP/SIMD or native Apple hardware"}
     destination = Path(args.output_dir)
     destination.mkdir(parents=True, exist_ok=True)
