@@ -1,0 +1,7 @@
+{
+  "guest_sha256": "1b5e6ac2999c8974123d39da0c7617d5123a02a413e9bcf55af98ec26249bf05",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "serial": "REQUEST actor=human space=human-space put title=human\nRESPONSE accepted\nREQUEST actor=assistant space=assistant-space put status=assistant\nRESPONSE accepted\nREQUEST assistant human-space edit; RESPONSE wrong-space\nREQUEST remote remote-space edit; RESPONSE unbound-actor\nRESPONSE merge title=human origin=human status=assistant origin=assistant\nREQUEST both edit title differently\nRESPONSE conflict base=base human=human-version assistant=assistant-version materialize=rejected\nCHECK bindings=validated delete_tombstone=human same_change=both deterministic=yes\nPASS workspace bridge synthetic scenario\n",
+  "input": "synthetic fixture",
+  "security_isolation": false
+}

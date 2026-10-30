@@ -18,7 +18,9 @@ Development of the proposed system now uses [Rust and a VM-first test plan](docs
 
 The [dual-pointer VM experiment](experiments/dual_pointer_display/README.md) boots a minimal Rust guest, draws its own screen, receives virtual tablet input and exposes a small MCP server for moving the second pointer. The panels are graphical mockups, not isolated workspaces or applications. A [reproducible QEMU run](experiments/dual_pointer_display/README.md#repeat-the-end-to-end-demonstration) records synthetic input and the MCP exchange. [Native Apple Silicon boot research](docs/NATIVE_BOOT_RESEARCH.md) documents the work still needed before any physical installation.
 
-The separate [extensible actor registry](experiments/actor_core/README.md) models multiple participants and pointers. The [VM integration contracts](docs/VM_INTEGRATION_CONTRACTS.md) describe how the pieces might connect and what is still missing.
+The separate [extensible actor registry](experiments/actor_core/README.md) models multiple participants and pointers. A [workspace bridge](experiments/workspace_bridge/README.md) connects actor labels to two document copies and a deterministic merge; it does not yet use AI to resolve conflicts. The [VM integration contracts](docs/VM_INTEGRATION_CONTRACTS.md) describe how the pieces might connect and what is still missing.
+
+The [frame allocator model](experiments/memory_core/README.md) exercises reservations and allocation on synthetic addresses; it does not initialize an MMU or manage real Mac memory.
 
 ![Two experimental pointers rendered by the Rust guest in QEMU](assets/dual-pointer-vm.png)
 

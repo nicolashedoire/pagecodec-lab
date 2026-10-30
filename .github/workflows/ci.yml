@@ -80,6 +80,34 @@ jobs:
           name: actor-core-vm-evidence
           path: ${{ runner.temp }}/actor-core-evidence/
           if-no-files-found: ignore
+      - name: Build and check workspace bridge in QEMU
+        working-directory: experiments/workspace_bridge
+        run: |
+          cargo build --release --locked --features qemu-demo
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/workspace-bridge-demo \
+            --output-dir "$RUNNER_TEMP/workspace-bridge-evidence"
+      - name: Preserve workspace VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: workspace-bridge-vm-evidence
+          path: ${{ runner.temp }}/workspace-bridge-evidence/
+          if-no-files-found: ignore
+      - name: Build and check synthetic frame allocator in QEMU
+        working-directory: experiments/memory_core
+        run: |
+          cargo build --release --locked --offline --features qemu-demo
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/memory-core-demo \
+            --output-dir "$RUNNER_TEMP/memory-core-evidence"
+      - name: Preserve memory VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: memory-core-vm-evidence
+          path: ${{ runner.temp }}/memory-core-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM

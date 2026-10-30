@@ -1,0 +1,25 @@
+[package]
+name = "workspace-bridge-sketch"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+actor-core-sketch = { path = "../actor_core" }
+system-core-sketch = { path = "../system_core" }
+
+[features]
+qemu-demo = []
+
+[[bin]]
+name = "workspace-bridge-demo"
+path = "src/bin/qemu.rs"
+required-features = ["qemu-demo"]
+test = false
+bench = false
+
+[profile.release]
+panic = "abort"
+opt-level = 2
+codegen-units = 1
+lto = true

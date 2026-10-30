@@ -1,0 +1,7 @@
+{
+  "guest_sha256": "437f26f17f3cfc48581a51d7e10822dd5e8d395c73d58d78be9b15d3ffcd7eb5",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "serial": "CHECK allocations=4 reserved_skipped=2 exhaustion=ok reallocation=ok\nCHECK invalid_free=reserved,unaligned,outside,double-free\nCHECK invalid_pools_and_reservations=rejected\nCHECK bitmap_boundaries=63,64,2047 overlapping_reservations=ok\nPASS physical frame state synthetic scenario\n",
+  "input": "synthetic physical addresses, never dereferenced",
+  "limitations": "single-thread state model; no real memory map, MMU or native driver"
+}

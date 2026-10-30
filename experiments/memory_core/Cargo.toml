@@ -1,0 +1,22 @@
+[package]
+name = "memory-core-sketch"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT"
+
+[features]
+qemu-demo = []
+
+[[bin]]
+name = "memory-core-demo"
+path = "src/bin/qemu.rs"
+required-features = ["qemu-demo"]
+test = false
+bench = false
+
+[profile.release]
+panic = "abort"
+opt-level = 2
+codegen-units = 1
+lto = true
