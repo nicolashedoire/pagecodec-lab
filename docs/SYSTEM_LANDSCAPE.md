@@ -7,6 +7,8 @@ implemented operating system or proof of compatibility or performance.
 
 For a fuller project-by-project comparison, source links and driver dependency
 sketch, see [Open systems and Apple Silicon: evidence map](PROJECT_COMPARISON.md).
+For memory, scheduling, device flows and proposed interfaces, see the
+[deep architecture](DEEP_ARCHITECTURE.md).
 
 ## Existing work
 
