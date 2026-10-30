@@ -89,6 +89,14 @@ The script reads the selected member as bytes and verifies its published
 manifest hash. It does not install or execute REA. In this benchmark REA is a
 JavaScript text input, not a tool used to inspect physical memory.
 
+The later [native compaction experiment](docs/COMPACTION.md) reuses this source
+text, the household and Covertype derivatives above, and the synthetic random
+control below. It packs their pages using zlib and explicitly records repeated
+copies; no new independent data or production memory-access traces are implied.
+The [separate native-memory investigation](docs/NATIVE_MEMORY.md) actually runs
+REA to inspect kernel-image metadata and Ghidra to inspect instructions. No Apple
+kernel binary or extracted image is distributed in this repository.
+
 The archive's `package/LICENSE` notice is retained verbatim:
 
 ```text

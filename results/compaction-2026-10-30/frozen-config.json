@@ -1,0 +1,67 @@
+{
+  "recorded_utc": "2026-10-30T16:44:41.949931+00:00",
+  "sources_sha256": {
+    "Makefile": "c347ac106d3d1daf605c4daa5c59b1fa0327f9ce2d181548fb41d861b9d11405",
+    "experiments/compaction/compaction_bench.cpp": "7a0a0ed938b9dff43068c6643eca08f2422623f661500021094550f751fee9cf",
+    "tests/test_compaction.py": "1c2f88855c9ebc1fc983102551dc4d360ee90302518650217d3bacd1cc529423",
+    "scripts/prepare_compaction.py": "7966e480f73de3bd3d916bda89d607a71d0201ee6dddb74bae66bf95adf7d6e3",
+    "scripts/run_compaction.py": "0e5ac16cb97892ba5216ced2021034b37935ab1b1ad3636b555f6ed8f4ca8afc",
+    "manifests/compaction-v1.json": "0dfce0b2101e8609054493093641a69cbf5eb9aeebb92b714d93d73342d6170e"
+  },
+  "binary_sha256": "6904a8cc6f9d9ccce0976be3e0f82c86cdd8be1982a51a38ef94c050b4a53bea",
+  "platform": "Darwin 24.1.0 arm64",
+  "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin24.1.0\nThread model: posix",
+  "pilot": false,
+  "protocol": {
+    "policies": [
+      "fifo",
+      "benefit",
+      "efficiency"
+    ],
+    "layouts": [
+      "none",
+      "subpage",
+      "front",
+      "tail",
+      "random",
+      "mixed"
+    ],
+    "quotas_by_layout": {
+      "none": [
+        0.5
+      ],
+      "subpage": [
+        0.5
+      ],
+      "front": [
+        0.5
+      ],
+      "tail": [
+        0.5
+      ],
+      "random": [
+        0.25,
+        0.5,
+        1.0
+      ],
+      "mixed": [
+        0.25,
+        0.5,
+        1.0
+      ]
+    },
+    "repetitions": 9,
+    "order_seed": 20261030,
+    "layout_seed_base": 84000,
+    "segment_bytes": 65536,
+    "cache_scrub_mib": 64,
+    "none_control_repetitions": 1,
+    "primary_timing": "Native decision + memmove + handle update + munmap phase.",
+    "setup_and_validation": "Reported separately; not a complete application speedup.",
+    "selection_rule": "Freeze all policies before timing; no final-run parameter tuning."
+  },
+  "machine": "hw.memsize: 25769803776\nhw.model: Mac16,8\nmachdep.cpu.brand_string: Apple M4 Pro",
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t15.1.1\nBuildVersion:\t\t24B2091",
+  "vm_before": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                5070.\nPages active:                            416030.\nPages inactive:                          413774.\nPages speculative:                          594.\nPages throttled:                              0.\nPages wired down:                        262455.\nPages purgeable:                          10484.\n\"Translation faults\":                2857625571.\nPages copy-on-write:                  120613678.\nPages zero filled:                    921292989.\nPages reactivated:                    882459287.\nPages purged:                          67513112.\nFile-backed pages:                       225728.\nAnonymous pages:                         604670.\nPages stored in compressor:             1489461.\nPages occupied by compressor:            433138.\nDecompressions:                       833368423.\nCompressions:                         914631691.\nPageins:                               46676140.\nPageouts:                                925458.\nSwapins:                               15297017.\nSwapouts:                              18533563.",
+  "swap_before": "vm.swapusage: total = 6144.00M  used = 5071.25M  free = 1072.75M  (encrypted)"
+}

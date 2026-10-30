@@ -1,0 +1,196 @@
+{
+  "schema_version": 1,
+  "study": "native-memory-reverse-engineering",
+  "observed_on": "2026-10-30",
+  "publication_scope": "Sanitized observations, hashes, and public-source references only; no proprietary binary, Ghidra project, disassembly, decompiler output, or machine-specific path.",
+  "evidence_classes": {
+    "native_static": "Observed in the locally obtained native boot image; not a live kernel-memory measurement.",
+    "public_source": "Read from Apple's exact public xnu-11215.41.3 tag; not independently confirmed in every downstream compiled function.",
+    "source_assisted_inference": "A correspondence between observed instructions and public source, with stripped internal symbol names.",
+    "user_space_experiment": "Measures an explicitly implemented user-space mechanism; no result is asserted by this manifest.",
+    "simulation": "Modeled or replayed behavior; cannot establish physical page reclamation or native-kernel performance."
+  },
+  "tools": {
+    "rea": {
+      "package": "rea-agents",
+      "version": "6.8.0",
+      "url": "https://github.com/morluto/rea",
+      "operation": "inspect_macho",
+      "provider_id": "native-macos",
+      "runtime_node_version": "24.22.1",
+      "evidence_id": "ev_051f97ba6fb49cac533a966d4081a83547ed08344b109750ea8820cf6f9c7159"
+    },
+    "ghidra": {
+      "version": "12.1.4",
+      "url": "https://github.com/NationalSecurityAgency/ghidra",
+      "java_major_version": 21,
+      "loader": "Extracted Mach-O File Set Entry",
+      "language": "AARCH64:LE:64:AppleSilicon",
+      "heap_limit_gib": 2,
+      "active_processor_count": 2,
+      "max_cpu": 2,
+      "whole_program_auto_analysis": false,
+      "chained_pointer_fixups": "Applied by Ghidra's MachoFileSetFileSystem before extracting the kernel entry."
+    }
+  },
+  "native_image": {
+    "evidence_class": "native_static",
+    "origin": "Local boot kernelcache, decoded from its local container; no proprietary binary downloaded.",
+    "decoded_bytes": 109740032,
+    "decoded_sha256": "8dab3ec8cfd458bf6704bee437e51edd498e3c392dca3cab9f55bdb08ab33e3f",
+    "format": "MH_FILESET",
+    "mach_o_file_type": 12,
+    "architecture": "arm64e",
+    "word_bits": 64,
+    "endian": "little",
+    "uuid": "D80B13B3-E724-0280-FC39-5016BE107E39",
+    "load_command_count": 382,
+    "fileset_entry_count": 369,
+    "darwin_release": "24.1.0",
+    "xnu_build": "xnu-11215.41.3~13/RELEASE_ARM64_T6041",
+    "build_timestamp": "Thu Nov 14 18:15:21 PST 2024",
+    "matching_embedded_version_strings": 2,
+    "matches_identified_running_build_string": true,
+    "kernel_entry": {
+      "id": "com.apple.kernel",
+      "file_offset": 32768,
+      "image_virtual_address": "0xfffffe000700c000"
+    },
+    "address_semantics": "Image virtual addresses; not measured live KASLR addresses."
+  },
+  "candidate_policy": {
+    "evidence_class": "native_static",
+    "embedded_tunable_name": "vm_compressor_minor_frag_threshold_pct",
+    "tunable_name_address": "0xfffffe000bf835c0",
+    "descriptor_address": "0xfffffe000bf835e8",
+    "variable_address": "0xfffffe000bf8e3d8",
+    "variable_bytes": 8,
+    "image_initial_value": 10,
+    "runtime_value_read": false,
+    "matching_adrp_address": "0xfffffe00087c0bc0",
+    "matching_load_address": "0xfffffe00087c0bc4",
+    "matching_loads_under_targeted_pattern": 1,
+    "pattern_search_limit": "ADRP plus nearby unsigned-offset 64-bit LDR only; not an exhaustive proof of all accesses.",
+    "function_bound_source": "LC_FUNCTION_STARTS",
+    "function_start": "0xfffffe00087c0aec",
+    "function_end_exclusive": "0xfffffe00087c0ce0",
+    "function_bytes": 500,
+    "instruction_count": 125,
+    "page_size_shift_observed": 14,
+    "page_size_bytes_in_observed_calculation": 16384,
+    "code_verification": {
+      "original_file_offset": 24890092,
+      "extracted_file_offset": 3793116,
+      "bytes": 500,
+      "byte_for_byte_equal": true,
+      "sha256": "21cf4476906f51f4342c56d1124260c29dcfb30a6193cb6c7faae6ad344a0b97"
+    },
+    "source_attribution": {
+      "evidence_class": "source_assisted_inference",
+      "candidate_function": "vm_consider_waking_compactor_swapper",
+      "candidate_inlined_helper": "vm_compressor_needs_to_minor_compact",
+      "internal_symbol_name_survives": false,
+      "scope": "Pending-work, pressure, fragmentation-percentage, locking, and wake-up structure; not a complete native-subsystem reconstruction."
+    }
+  },
+  "decompilation": {
+    "accepted_policy_evidence": "Bounded 125-instruction disassembly verified against original cache bytes; no code dump published.",
+    "candidate_pseudocode_validated": false,
+    "candidate_pseudocode_published": false,
+    "rejection_reason": "Even after Function-body bounding and direct-callee definitions, pseudo-C followed paths outside the body and emitted PIC/branch warnings; completion status alone was insufficient.",
+    "symbol_identified_exported_interfaces_inspected": [
+      {
+        "name": "mach_vm_pressure_monitor",
+        "image_address": "0xfffffe00088070bc"
+      },
+      {
+        "name": "mach_vm_pressure_level_monitor",
+        "image_address": "0xfffffe000880aa58"
+      }
+    ],
+    "exported_interface_scope": "Pressure observation and waiting, not a demonstrated policy replacement.",
+    "intermediate_compatibility": "Ghidra-specific fileset extraction; REA/LLVM reports a section-offset error on that intermediate, while the original fileset inspection succeeds."
+  },
+  "public_source": {
+    "repository": "https://github.com/apple-oss-distributions/xnu",
+    "tag": "xnu-11215.41.3",
+    "tag_matches_build_source_number": true,
+    "whole_proprietary_build_equivalence_claimed": false,
+    "files": {
+      "osfmk/vm/vm_compressor.c": {
+        "git_blob_sha": "ad7da3fa9b1ebc5d9e47763184a92db32b44e077"
+      },
+      "osfmk/vm/vm_pageout.c": {
+        "git_blob_sha": "d9b5275093fbb034db09c84ebfe160f541eeb421"
+      },
+      "osfmk/vm/vm_compressor_xnu.h": {
+        "git_blob_sha": "82daf78e47d4908390011375a8a3f9156695916a"
+      }
+    },
+    "baseline_guards": [
+      {
+        "claim": "macOS ARM64 segment capacity defaults to 65536 bytes, with a boot-argument override; this is not a read of the running segment-size variable.",
+        "url": "https://github.com/apple-oss-distributions/xnu/blob/xnu-11215.41.3/osfmk/vm/vm_compressor.c#L68-L95",
+        "override_url": "https://github.com/apple-oss-distributions/xnu/blob/xnu-11215.41.3/osfmk/vm/vm_compressor.c#L832-L843"
+      },
+      {
+        "claim": "Minor compaction skips a nonempty segment with no empty slot or less than one page of unused space.",
+        "url": "https://github.com/apple-oss-distributions/xnu/blob/xnu-11215.41.3/osfmk/vm/vm_compressor.c#L2217-L2225"
+      },
+      {
+        "claim": "Unused space includes holes plus already populated trailing slack; the immediate minor-compaction threshold is one quarter of segment capacity.",
+        "url": "https://github.com/apple-oss-distributions/xnu/blob/xnu-11215.41.3/osfmk/vm/vm_compressor_xnu.h#L291-L304"
+      },
+      {
+        "claim": "Local queueing and opportunistic compaction paths exist independently of treating the global 10% wake threshold as the entire policy.",
+        "url": "https://github.com/apple-oss-distributions/xnu/blob/xnu-11215.41.3/osfmk/vm/vm_compressor.c#L5484-L5496"
+      },
+      {
+        "claim": "Minor compaction moves live slots after the first hole, updates mappings, rounds the compacted end to a page, and depopulates the released physical tail.",
+        "url": "https://github.com/apple-oss-distributions/xnu/blob/xnu-11215.41.3/osfmk/vm/vm_compressor.c#L2236-L2284"
+      },
+      {
+        "claim": "Removing the last live slot can release resident physical pages before delayed segment cleanup.",
+        "url": "https://github.com/apple-oss-distributions/xnu/blob/xnu-11215.41.3/osfmk/vm/vm_compressor.c#L5429-L5475"
+      },
+      {
+        "claim": "Major compaction rejects a pair if both segments are at least 90% full, or the destination is full by bytes or slots.",
+        "url": "https://github.com/apple-oss-distributions/xnu/blob/xnu-11215.41.3/osfmk/vm/vm_compressor.c#L2359-L2381"
+      },
+      {
+        "claim": "Major compaction can populate destination pages; donor release alone is not net physical memory saved.",
+        "url": "https://github.com/apple-oss-distributions/xnu/blob/xnu-11215.41.3/osfmk/vm/vm_compressor.c#L2433-L2455"
+      },
+      {
+        "claim": "The source includes contention handling, yielding, and bytes-freed-per-microsecond instrumentation; a learned selector using that rate was not established.",
+        "url": "https://github.com/apple-oss-distributions/xnu/blob/xnu-11215.41.3/osfmk/vm/vm_compressor.c#L4078-L4115"
+      },
+      {
+        "claim": "The historical thrashing-detector call path is conditionally excluded for macOS ARM64.",
+        "url": "https://github.com/apple-oss-distributions/xnu/blob/xnu-11215.41.3/osfmk/vm/vm_compressor.c#L2735-L2755"
+      }
+    ]
+  },
+  "local_reproduction": {
+    "scripts_distributed_in_repository": false,
+    "workspace_relative_directory": "work/reverse-memory/ghidra",
+    "scripts": [
+      "scripts/ExtractKernel.java",
+      "locate_policy.py",
+      "scripts/InspectMemory.java",
+      "scripts/BoundedPolicy.java"
+    ],
+    "prerequisites": "Original local experiment workspace and its scripts, a lawfully obtained local native cache, REA 6.8.0, Ghidra 12.1.4, Java 21, and Python 3.",
+    "build_specific_addresses": true,
+    "candidate_pseudocode_must_be_excluded": true,
+    "public_repository_alone_is_self_contained_reproduction": false
+  },
+  "claims_not_made": [
+    "A live read of kernel policy variables",
+    "A kernel modification or policy replacement",
+    "A benchmark win against native macOS",
+    "A measured compaction-benchmark result in this document",
+    "A reconstruction of all proprietary ARM memory-management behavior",
+    "A faster physical RAM device"
+  ]
+}

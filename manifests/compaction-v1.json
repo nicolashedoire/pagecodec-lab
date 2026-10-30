@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "codec": "zlib level 1",
+  "zlib_version": "1.2.12",
+  "purpose": "Real compressed payloads; synthetic deletion layouts; native minor compaction only.",
+  "pool_target_mib": 96,
+  "protocol": {
+    "policies": [
+      "fifo",
+      "benefit",
+      "efficiency"
+    ],
+    "layouts": [
+      "none",
+      "subpage",
+      "front",
+      "tail",
+      "random",
+      "mixed"
+    ],
+    "quotas_by_layout": {
+      "none": [
+        0.5
+      ],
+      "subpage": [
+        0.5
+      ],
+      "front": [
+        0.5
+      ],
+      "tail": [
+        0.5
+      ],
+      "random": [
+        0.25,
+        0.5,
+        1.0
+      ],
+      "mixed": [
+        0.25,
+        0.5,
+        1.0
+      ]
+    },
+    "repetitions": 9,
+    "order_seed": 20261030,
+    "layout_seed_base": 84000,
+    "segment_bytes": 65536,
+    "cache_scrub_mib": 64,
+    "none_control_repetitions": 1,
+    "primary_timing": "Native decision + memmove + handle update + munmap phase.",
+    "setup_and_validation": "Reported separately; not a complete application speedup.",
+    "selection_rule": "Freeze all policies before timing; no final-run parameter tuning."
+  },
+  "cases": [
+    {
+      "name": "household",
+      "kind": "real numeric corpus",
+      "source": {
+        "path": "data/household/household-column-i32.bin",
+        "bytes": 66408288,
+        "sha256": "910ab4ec9d1fe12a892bf841c7e95586f02adc5e158934b2d721d8cdb919249d"
+      },
+      "upstream_manifest": {
+        "path": "manifests/household.json",
+        "sha256": "c7b76443fdad103757557df27da65deb7ab18e0cb5e52143f15f04b0faec6134"
+      },
+      "packed": {
+        "path": "data/compaction/household.pcmp",
+        "bytes": 13947971,
+        "sha256": "df0a962ef09fb722778e0932474424589a6dc0e43435d2a170f54b232190b0eb"
+      },
+      "logical_page_bytes": 16384,
+      "records": 4054,
+      "compressed_payload_bytes": 13915523,
+      "copies": 8,
+      "replicated_payload_bytes": 111324184,
+      "note": "Copies repeat the same corpus; they are not independent real-world data."
+    },
+    {
+      "name": "covertype",
+      "kind": "real numeric corpus",
+      "source": {
+        "path": "data/operations/covertype-x.i32",
+        "bytes": 1859240,
+        "sha256": "c562dcd33b5bc260654e07721e76008bfb57a8d9db8f59be96842546d0e26eaa"
+      },
+      "upstream_manifest": {
+        "path": "manifests/operations-v1.json",
+        "sha256": "430dbd5a5a02ecc289e723812a87d33918fa12b413a910fd26cccb6949b69ece"
+      },
+      "packed": {
+        "path": "data/compaction/covertype.pcmp",
+        "bytes": 727286,
+        "sha256": "7c8a7775d8724f822ca9456c8aa47b7d9c36802c79ba2e46bb53c78216aeaf53"
+      },
+      "logical_page_bytes": 16384,
+      "records": 114,
+      "compressed_payload_bytes": 726358,
+      "copies": 139,
+      "replicated_payload_bytes": 100963762,
+      "note": "Copies repeat the same corpus; they are not independent real-world data."
+    },
+    {
+      "name": "rea_source",
+      "kind": "real public JavaScript source",
+      "source": {
+        "path": "data/initial/rea_cli_public.js",
+        "bytes": 3195569,
+        "sha256": "710d98719a1a7ce7c65e2a33d3dc4dda1c67074c9ec089d240368deb16c5368e"
+      },
+      "upstream_manifest": {
+        "path": "manifests/initial-v2.json",
+        "sha256": "1da038688b4e686c367aebedc2e2d5719685f61d40059b88b6ae4e9eeba034a6"
+      },
+      "packed": {
+        "path": "data/compaction/rea_source.pcmp",
+        "bytes": 1027530,
+        "sha256": "0342515b62e5d54b6925f0842b8645b85b66f0d69763d874e5c6470e1fdfd1d3"
+      },
+      "logical_page_bytes": 16384,
+      "records": 196,
+      "compressed_payload_bytes": 1025946,
+      "copies": 99,
+      "replicated_payload_bytes": 101568654,
+      "note": "Copies repeat the same corpus; they are not independent real-world data."
+    },
+    {
+      "name": "random_control",
+      "kind": "synthetic incompressible control",
+      "source": {
+        "path": "data/initial/random.bin",
+        "bytes": 4194304,
+        "sha256": "36793342fab8cee6d5c4566eb4d4a609f37e0587d61de4bf45d768c513e3d62f"
+      },
+      "upstream_manifest": {
+        "path": "manifests/initial-v2.json",
+        "sha256": "1da038688b4e686c367aebedc2e2d5719685f61d40059b88b6ae4e9eeba034a6"
+      },
+      "packed": {
+        "path": "data/compaction/random_control.pcmp",
+        "bytes": 4199184,
+        "sha256": "77defc4578cc475ef7f2244cbe689f15637e09c27a22d92ba00f14a8f799a159"
+      },
+      "logical_page_bytes": 16384,
+      "records": 256,
+      "compressed_payload_bytes": 4197120,
+      "copies": 24,
+      "replicated_payload_bytes": 100730880,
+      "note": "Copies repeat the same corpus; they are not independent real-world data."
+    }
+  ]
+}

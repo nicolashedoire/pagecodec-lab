@@ -5,11 +5,41 @@
 
 # pagecodec-lab
 
-Experiments in exact, compact data representations: a C page codec benchmarked against Apple's **LZ4, LZ4_RAW and LZFSE**, plus C++ prototypes for queries on compressed integers, recomputing derived values, and shared immutable strings. Code, real-data preparation, timing samples, failures and measured charts are included.
+Experiments in exact data representations and native memory-management mechanisms: compressed-segment compaction, a C page codec benchmarked against Apple's **LZ4, LZ4_RAW and LZFSE**, and C++ prototypes for operations on compact data. Code, real-data preparation, timing samples, failures and measured charts are included.
 
-This is application-level research on caller-owned data. It does not redesign DRAM, replace the macOS memory compressor, or establish general superiority to Apple.
+The prototypes operate on caller-owned memory. A separate REA/Ghidra investigation inspects the local ARM kernel image and matching public XNU sources. These experiments do not redesign DRAM, replace the macOS memory compressor, or establish general superiority to Apple.
 
-## New: a complete application, including construction and peak RSS
+## New: a native memory-compaction experiment
+
+**Choosing which segments to compact can avoid real copies and release actual
+pages—but a more elaborate ranking can also make the operation slower.** After
+locating a compaction decision in the ARM kernel with REA and Ghidra, we built a
+user-space arena that performs native `memmove`, handle updates and `munmap`.
+Its FIFO reference includes a one-page eligibility guard and starts at the first
+hole, following the relevant mechanisms in Apple's public source.
+
+The frozen run has **1,120 fresh processes**, about **96 MiB of compressed
+payload per pool**, three real corpora plus a random-byte control, and synthetic
+deletion layouts. On mixed layouts with a 25% reclaim quota, efficiency ordering
+saves **30.59–38.55% of phase time** on the three real corpora and wins **9/9**
+repetitions each. It does this by selecting trailing holes that can be released
+with no payload copies. The repeated copies of small corpora do not create new
+independent data.
+
+**Negative result:** on Covertype with random holes and a full reclaim quota,
+the same rule takes **57.01% more time**, losing **9/9**, despite moving and
+releasing the same number of bytes as FIFO. These are median paired changes,
+not an overall Mac speedup. No learned model is involved, and a cheaper tail-first
+reference remains to be tested.
+
+![Native compaction: benefits, overhead and regressions](assets/compaction-results.png)
+
+[Full results and limitations](docs/COMPACTION.md) ·
+[REA/Ghidra evidence and Apple safeguards](docs/NATIVE_MEMORY.md) ·
+[1,120 process measurements](results/compaction-2026-10-30/process-samples.csv) ·
+[Observed resident-memory recovery](assets/compaction-costs.png).
+
+## Earlier: a complete application, including construction and peak RSS
 
 **An offline analytical report can finish faster and use less peak memory by
 answering its known questions during one source pass.** We implemented five

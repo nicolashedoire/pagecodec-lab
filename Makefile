@@ -8,7 +8,7 @@ SANITIZER_FLAGS ?= -O2 -g -std=c11 -Wall -Wextra -Werror -fsanitize=address,unde
 BUILD_DIR := build
 SYSTEM := $(shell uname -s)
 
-.PHONY: all test sanitize benchmark smoke operations test-operations sanitize-operations end-to-end test-end-to-end sanitize-end-to-end clean help
+.PHONY: all test sanitize benchmark smoke operations test-operations sanitize-operations end-to-end test-end-to-end sanitize-end-to-end compaction test-compaction sanitize-compaction clean help
 
 all: test
 
@@ -63,6 +63,18 @@ sanitize-end-to-end:
 	$(MAKE) test-end-to-end BUILD_DIR=build/end-to-end-sanitize \
 	  CXXFLAGS='-O1 -g -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer'
 
+$(BUILD_DIR)/compaction-bench: experiments/compaction/compaction_bench.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $< -o $@
+
+compaction: $(BUILD_DIR)/compaction-bench
+
+test-compaction: compaction
+	$(PYTHON) tests/test_compaction.py --binary $(abspath $(BUILD_DIR)/compaction-bench)
+
+sanitize-compaction:
+	$(MAKE) test-compaction BUILD_DIR=build/compaction-sanitize \
+	  CXXFLAGS='-O1 -g -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer'
+
 ifeq ($(SYSTEM),Darwin)
 $(BUILD_DIR)/compare: compare.c codec.c codec.h | $(BUILD_DIR)
 	$(CC) $(BENCH_CFLAGS) compare.c codec.c -lcompression -o $@
@@ -90,4 +102,5 @@ help:
 	@echo "make test-operations  Run deterministic correctness checks for those experiments."
 	@echo "make sanitize-operations  Run those checks with ASan and UBSan."
 	@echo "make test-end-to-end sanitize-end-to-end  Check the complete offline report application."
+	@echo "make test-compaction sanitize-compaction  Check native compressed-segment compaction."
 	@echo "make clean      Remove generated build files."
