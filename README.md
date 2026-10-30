@@ -26,7 +26,7 @@ Other VM experiments test a [logical FIFO scheduler](experiments/scheduler_core/
 
 Separate guests demonstrate [cooperative stack and integer-register switching](experiments/cooperative_tasks/README.md), [scheduler-selected cooperative tasks](experiments/cooperative_scheduler/README.md) and a [controlled virtual timer interrupt](experiments/arm_timer/README.md). These narrow demonstrations are not integrated into a preemptive scheduler and do not establish process isolation.
 
-Another guest [enables a small ARM virtual-memory map](experiments/virtual_memory/README.md) in QEMU. The [preemption research](docs/PREEMPTIVE_SCHEDULING_RESEARCH.md) explains why the existing cooperative and timer experiments are not yet a preemptive scheduler.
+Another guest [enables a small ARM virtual-memory map](experiments/virtual_memory/README.md) in QEMU; a [separate protection-fault experiment](experiments/virtual_memory_faults/README.md) tests a controlled write fault against a writable control. The [preemption experiment](experiments/preemptive_demo/README.md) alternates two fixed loops using a virtual timer. The [preemption research](docs/PREEMPTIVE_SCHEDULING_RESEARCH.md) records the remaining work toward a general scheduler.
 
 The [VirtIO negotiation experiment](experiments/virtio_negotiation/README.md) examines a feature-acceptance gap using a simulated refusal and a QEMU device. A [separate experimental local patch](experiments/virtio_fix/README.md) tests the change with the RNG driver; the other guests still use the unpatched dependency, and full driver conformance remains unproven.
 

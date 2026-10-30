@@ -262,6 +262,40 @@ jobs:
           name: cooperative-scheduler-vm-evidence
           path: ${{ runner.temp }}/cooperative-scheduler-evidence/
           if-no-files-found: ignore
+      - name: Build and check guest memory faults in QEMU
+        working-directory: experiments/virtual_memory_faults
+        run: |
+          CARGO_TARGET_DIR=target/fault cargo build --release --locked --offline
+          CARGO_TARGET_DIR=target/control cargo build --release --locked --offline --features writable-control
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/fault/aarch64-unknown-none-softfloat/release/virtual-memory-faults-demo \
+            --output-dir "$RUNNER_TEMP/memory-fault-evidence"
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/control/aarch64-unknown-none-softfloat/release/virtual-memory-faults-demo \
+            --output-dir "$RUNNER_TEMP/memory-fault-control-evidence" --writable-control
+      - name: Preserve memory fault VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: memory-fault-vm-evidence
+          path: |
+            ${{ runner.temp }}/memory-fault-evidence/
+            ${{ runner.temp }}/memory-fault-control-evidence/
+          if-no-files-found: ignore
+      - name: Build and check timer-driven task alternation in QEMU
+        working-directory: experiments/preemptive_demo
+        run: |
+          cargo build --release --locked --offline
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/preemptive-demo \
+            --output-dir "$RUNNER_TEMP/preemptive-demo-evidence"
+      - name: Preserve preemption VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: preemptive-demo-vm-evidence
+          path: ${{ runner.temp }}/preemptive-demo-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM

@@ -1,0 +1,15 @@
+[package]
+name = "virtual-memory-faults-demo"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT"
+
+[features]
+writable-control = []
+
+[profile.release]
+panic = "abort"
+opt-level = 2
+codegen-units = 1
+lto = true

@@ -1,0 +1,7 @@
+{
+  "guest_sha256": "94426509bb608af67207893ffa973b18933bbf0099f31a22c3787b982829f082",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "serial": "BOOT el=1 pages=4k image=bounded uart=one-page tables=aligned\nMMU enabled=yes translation=identity text=ro-exec data=rw-xn uart=device-xn\nCHECK probe=read-write stack=translated uart=translated neighbor-pages=unmapped\nCHECK text-write=denied data-write=allowed el0-reads=denied xn=descriptor-bits\nCONTROL writable_store=completed faults=0 other_words=unchanged\nPASS writable permission control\n",
+  "input": "one controlled guest write to a writable page",
+  "limitations": "single-CPU EL1 fault demonstration; no process isolation or native Apple support"
+}
