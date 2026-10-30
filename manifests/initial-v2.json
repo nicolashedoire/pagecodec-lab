@@ -1,0 +1,210 @@
+{
+  "created_utc": "2026-10-30T14:02:01.027518+00:00",
+  "protocol": {
+    "page_bytes": 16384,
+    "repetitions": 9,
+    "warmups": 1,
+    "inner_iterations": "min(1024, max(1, ceil(8 MiB / file size)))",
+    "trial_order": "deterministically permuted per paired round",
+    "strict_win": "size <= reference AND encode <=0.90*reference AND decode <=0.90*reference",
+    "baselines": [
+      "apple_lz4",
+      "apple_lz4_raw",
+      "apple_lzfse"
+    ],
+    "source_policy": "freeze codec before full corpus performance run; no tuning on holdout results",
+    "scope": "User-space page representation, not macOS kernel memory compressor."
+  },
+  "datasets": [
+    {
+      "name": "zeros.bin",
+      "path": "data/initial/zeros.bin",
+      "size": 1048576,
+      "sha256": "30e14955ebf1352266dc2ff8067e68104607e750abb9d3b36582b8af909fcb58",
+      "category": "v1-regression / control",
+      "description": "All-zero 1 MiB buffer; excluded from headline performance conclusions.",
+      "source": null
+    },
+    {
+      "name": "events_dev.bin",
+      "path": "data/initial/events_dev.bin",
+      "size": 4194304,
+      "sha256": "9a577e2d928c2702fe668928cf525db95f1d059f1159e0f3377aeb0c5d4e41c5",
+      "category": "v1-regression / synthetic-development",
+      "description": "Four interleaved 32-bit fields: timestamp, device ID, signed measurement, status. Synthetic.",
+      "source": null
+    },
+    {
+      "name": "events_holdout.bin",
+      "path": "data/initial/events_holdout.bin",
+      "size": 4194304,
+      "sha256": "88af48379c845dcbe90815b65c1e1af9d2c18168aa9ba2938cb5eb40d1be0b93",
+      "category": "v1-regression / synthetic-holdout",
+      "description": "New seed, wider device range, occasional full-width signed outliers. Synthetic.",
+      "source": null
+    },
+    {
+      "name": "events_shifted.bin",
+      "path": "data/initial/events_shifted.bin",
+      "size": 4194305,
+      "sha256": "e0fd4253cd0f89c7c43b85540957d7b7989dd4dc39b85bc4fc97bb0311d3159c",
+      "category": "v1-regression / synthetic-adversarial",
+      "description": "Same held-out records with one-byte prefix: breaks word alignment and lane layout.",
+      "source": null
+    },
+    {
+      "name": "random.bin",
+      "path": "data/initial/random.bin",
+      "size": 4194304,
+      "sha256": "36793342fab8cee6d5c4566eb4d4a609f37e0587d61de4bf45d768c513e3d62f",
+      "category": "v1-regression / control",
+      "description": "Uniform pseudo-random bytes; also models already packed uniform 4-bit symbols, not cryptographic RNG.",
+      "source": null
+    },
+    {
+      "name": "scattered_palette.bin",
+      "path": "data/initial/scattered_palette.bin",
+      "size": 4194304,
+      "sha256": "2ae346ad1704a148d93f2c12ce847cf8a49d737865c379132b4b3794b08f2838",
+      "category": "v1-regression / synthetic-adversarial",
+      "description": "16 scattered byte symbols, not contiguous nibble values. Lossless entropy coding may outperform range packing.",
+      "source": null
+    },
+    {
+      "name": "sparse_outliers.bin",
+      "path": "data/initial/sparse_outliers.bin",
+      "size": 4194304,
+      "sha256": "0cd2985d243ce2b046a2fdf506088e2be5fa8e24bdf9eeb0713a8f6d155e7eb2",
+      "category": "v1-regression / synthetic-adversarial",
+      "description": "Mostly zero 32-bit words with 0.5 percent full-width random outliers. Synthetic.",
+      "source": null
+    },
+    {
+      "name": "weather_dev.csv",
+      "path": "data/initial/weather_dev.csv",
+      "size": 24198,
+      "sha256": "d186ddb735e50d2dfae7eb669cff76b3420c836c3360725b7d9738129411c611",
+      "category": "v1-regression / real-dev",
+      "description": "Unrepeated weather CSV rows, preserving all columns; normalized newline serialization.",
+      "source": "https://github.com/vega/vega-datasets/blob/5448e25297c8f705be78e879d5423d55d04dc6f1/data/seattle-weather.csv"
+    },
+    {
+      "name": "weather_dev_i32.bin",
+      "path": "data/initial/weather_dev_i32.bin",
+      "size": 11696,
+      "sha256": "39cf065a3f977cf53edfa8c14137e2253ff60f0151a021e7b611af985d576f20",
+      "category": "v1-regression / real-derived-dev",
+      "description": "Four numerical fields as signed little-endian int32 scaled by10, exact at given precision. Dates and weather labels omitted; NOT a compression of whole CSV. Same binary input for every codec.",
+      "source": "https://github.com/vega/vega-datasets/blob/5448e25297c8f705be78e879d5423d55d04dc6f1/data/seattle-weather.csv"
+    },
+    {
+      "name": "weather_holdout.csv",
+      "path": "data/initial/weather_holdout.csv",
+      "size": 24071,
+      "sha256": "c7721423c8304af59d5b81a998a8e775b29ede0498b0d33988c013435cb0f66f",
+      "category": "v1-regression / real-holdout",
+      "description": "Unrepeated weather CSV rows, preserving all columns; normalized newline serialization.",
+      "source": "https://github.com/vega/vega-datasets/blob/5448e25297c8f705be78e879d5423d55d04dc6f1/data/seattle-weather.csv"
+    },
+    {
+      "name": "weather_holdout_i32.bin",
+      "path": "data/initial/weather_holdout_i32.bin",
+      "size": 11680,
+      "sha256": "a24d30b958315d474288f37b58a4faa5cd83c5ad868283cff91aad0e373db44e",
+      "category": "v1-regression / real-derived-holdout",
+      "description": "Four numerical fields as signed little-endian int32 scaled by10, exact at given precision. Dates and weather labels omitted; NOT a compression of whole CSV. Same binary input for every codec.",
+      "source": "https://github.com/vega/vega-datasets/blob/5448e25297c8f705be78e879d5423d55d04dc6f1/data/seattle-weather.csv"
+    },
+    {
+      "name": "rea_cli_public.js",
+      "path": "data/initial/rea_cli_public.js",
+      "size": 3195569,
+      "sha256": "710d98719a1a7ce7c65e2a33d3dc4dda1c67074c9ec089d240368deb16c5368e",
+      "category": "v1-regression / real-public-software",
+      "description": "Unmodified JavaScript runtime bundle from published rea-agents6.8.0.",
+      "source": "https://registry.npmjs.org/rea-agents/-/rea-agents-6.8.0.tgz"
+    },
+    {
+      "name": "previous_plot.png",
+      "path": "data/initial/previous_plot.png",
+      "size": 144335,
+      "sha256": "13c5f0e756b38fc5eb01bcc34a209ee61ae2b1d8f1954250090e7d4521141ab6",
+      "category": "v1-regression / real-precompressed-control",
+      "description": "Actual PNG from previous experiment, already compressed. Not a user/private image.",
+      "source": null
+    },
+    {
+      "name": "new_sparse_01pct.bin",
+      "path": "data/initial/new_sparse_01pct.bin",
+      "size": 2097152,
+      "sha256": "856f3a95bfb52d257cbce619df59c1101622b50b863edc1d3bcc8655945ee4d3",
+      "category": "v2-fresh-validation",
+      "description": "Nonzero uint32 background 0x13579bdf, random full-width exceptions at 0.1 percent; unseen seed.",
+      "source": "Deterministic synthetic buffer; generator included."
+    },
+    {
+      "name": "new_sparse_5pct.bin",
+      "path": "data/initial/new_sparse_5pct.bin",
+      "size": 2097152,
+      "sha256": "2e23988fb64d1bb72773dec882b0c3aa641cb3cd1df7361cf48b9aa3f81232d0",
+      "category": "v2-fresh-validation",
+      "description": "Nonzero uint32 background 0x13579bdf, random full-width exceptions at 5 percent; unseen seed.",
+      "source": "Deterministic synthetic buffer; generator included."
+    },
+    {
+      "name": "new_sparse_20pct.bin",
+      "path": "data/initial/new_sparse_20pct.bin",
+      "size": 2097152,
+      "sha256": "c986ae32b585af7f76655d7fe9ff1757207740bf62a34ee1ac520020767f6240",
+      "category": "v2-fresh-validation",
+      "description": "Nonzero uint32 background 0x13579bdf, random full-width exceptions at 20 percent; unseen seed.",
+      "source": "Deterministic synthetic buffer; generator included."
+    },
+    {
+      "name": "new_sparse_50pct.bin",
+      "path": "data/initial/new_sparse_50pct.bin",
+      "size": 2097152,
+      "sha256": "0c4fb90c6f7e90b2165f991bdfe89ec630c1c40d675954ab23752f54b210f15b",
+      "category": "v2-fresh-validation",
+      "description": "Nonzero uint32 background 0x13579bdf, random full-width exceptions at 50 percent; unseen seed.",
+      "source": "Deterministic synthetic buffer; generator included."
+    },
+    {
+      "name": "new_sparse_1pct_first_outlier.bin",
+      "path": "data/initial/new_sparse_1pct_first_outlier.bin",
+      "size": 2097152,
+      "sha256": "3655adb3d24cc3a941e4f72c8e18e902064b470d5fbb6dddd86fa0ada45224fa",
+      "category": "v2-fresh-validation",
+      "description": "1 percent random exceptions; first and last uint32 of every page forced to an outlier. Nonzero background.",
+      "source": "Deterministic synthetic buffer; generator included."
+    },
+    {
+      "name": "new_sparse_shifted_tail.bin",
+      "path": "data/initial/new_sparse_shifted_tail.bin",
+      "size": 2097167,
+      "sha256": "c64f5c0df5dc87d7f276828d537e51c0c6ccbc6f67815703a35a0d341e8452bd",
+      "category": "v2-fresh-validation",
+      "description": "1 percent exceptions; one-byte alignment shift and15-byte final partial page. Nonzero multibyte background.",
+      "source": "Deterministic synthetic buffer; generator included."
+    },
+    {
+      "name": "new_alternating_sparse_dense.bin",
+      "path": "data/initial/new_alternating_sparse_dense.bin",
+      "size": 2097152,
+      "sha256": "c0af55ea7b0273f4d6af480c8c77cffd7eb1272eaab5a31f1ef744219053f5b7",
+      "category": "v2-fresh-validation",
+      "description": "Alternating16KiB pages with1percent and50percent full-width exceptions. Nonzero background.",
+      "source": "Deterministic synthetic buffer; generator included."
+    },
+    {
+      "name": "new_misleading_prefix.bin",
+      "path": "data/initial/new_misleading_prefix.bin",
+      "size": 2097152,
+      "sha256": "e74e26ec639a0bfa8f058e43bd083c56b879e4ad901670124babf7f8275c62af",
+      "category": "v2-fresh-validation",
+      "description": "Adversarial1percent exceptions with first3words of everypage replaced: defeats a naive initial background guess.",
+      "source": "Deterministic synthetic buffer; generator included."
+    }
+  ],
+  "iteration": "V2:13 observed V1cases reused only as regression,8 new validation cases; protocol unchanged."
+}

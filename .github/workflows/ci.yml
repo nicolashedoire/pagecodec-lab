@@ -1,0 +1,37 @@
+name: Correctness
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portable-codec:
+    name: Portable codec / Ubuntu
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run codec tests
+        run: make test CC=clang
+      - name: Run AddressSanitizer and UndefinedBehaviorSanitizer
+        run: make sanitize CC=clang
+
+  macos-comparator:
+    name: Apple codec comparator / macOS
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.13'
+      - name: Run codec tests and sanitizers
+        run: make test sanitize CC=clang
+      - name: Build comparator and check tiny fixtures
+        run: make smoke CC=clang
+      # Shared CI runners validate correctness only. Their timings are not
+      # used as benchmark results or evidence of performance superiority.

@@ -1,0 +1,31 @@
+{
+  "frozen_utc": "2026-10-30T14:24:28.184104+00:00",
+  "sources_sha256": {
+    "codec.c": "fbc88ada9bc4654241a92353cd34b872132106916820334f1c30ab2efcf826c2",
+    "codec.h": "115016512729f5cfb0b6552a08c4c884ef99170190d7ed1287e93bd902327e25",
+    "compare.c": "11cc8da529d5b9449040e547bdb2e752b22aa8db5c766709b45e44281f989587"
+  },
+  "binary_sha256": "22bdcd4843f21545495ef25a401222ece13d44288cbd9f5e4660ccfa76afdb81",
+  "manifest_sha256": "c7b76443fdad103757557df27da65deb7ab18e0cb5e52143f15f04b0faec6134",
+  "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin24.1.0\nThread model: posix",
+  "compiler_flags": [
+    "-O3",
+    "-Wall",
+    "-Wextra",
+    "-Werror"
+  ],
+  "machine": "hw.memsize: 25769803776\nhw.model: Mac16,8\nmachdep.cpu.brand_string: Apple M4 Pro",
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t15.1.1\nBuildVersion:\t\t24B2091",
+  "protocol": {
+    "page_bytes": 16384,
+    "repetitions": 9,
+    "warmups": 1,
+    "codec": "frozen V2",
+    "strict_win": "size <= reference AND encode <=0.90*reference AND decode <=0.90*reference"
+  },
+  "page_bytes": 16384,
+  "repetitions": 9,
+  "first_seed": 20261030,
+  "before_vm_stat": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                5278.\nPages active:                            395914.\nPages inactive:                          391880.\nPages speculative:                         4212.\nPages throttled:                              0.\nPages wired down:                        247932.\nPages purgeable:                          10618.\n\"Translation faults\":                2783583385.\nPages copy-on-write:                  115773752.\nPages zero filled:                    887819195.\nPages reactivated:                    873107397.\nPages purged:                          65217478.\nFile-backed pages:                       196333.\nAnonymous pages:                         595673.\nPages stored in compressor:             1674481.\nPages occupied by compressor:            485771.\nDecompressions:                       826535500.\nCompressions:                         906461069.\nPageins:                               45063171.\nPageouts:                                913054.\nSwapins:                               15164916.\nSwapouts:                              18406468.",
+  "before_swap": "vm.swapusage: total = 7168.00M  used = 5894.81M  free = 1273.19M  (encrypted)"
+}

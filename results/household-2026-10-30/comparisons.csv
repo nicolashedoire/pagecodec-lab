@@ -1,0 +1,13 @@
+input,reference,custom_storage_over_reference,encode_speedup_reference_over_custom,decode_speedup_reference_over_custom,size_pass,encode_pass,decode_pass,strict_win,paired_rounds_passed
+household-row-i32.bin,apple_lz4,1.0856649052179235,3.958207669108143,2.216644807440086,False,True,True,False,0
+household-row-i32.bin,apple_lz4_raw,1.0879377643141603,3.6568289530374836,2.4354357934899244,False,True,True,False,0
+household-row-i32.bin,apple_lzfse,1.7793866948289763,23.32313657906075,5.795755335638488,False,True,True,False,0
+household-column-i32.bin,apple_lz4,0.7972457655817381,2.431425873465533,1.9677284595300264,True,True,True,True,8
+household-column-i32.bin,apple_lz4_raw,0.7987813592198223,2.3439471199244566,1.979530026109661,True,True,True,True,8
+household-column-i32.bin,apple_lzfse,1.503237914187899,17.077544853635505,5.60313315926893,False,True,True,False,0
+household-text-part-01.txt,apple_lz4,3.049019060275151,4.379198023138268,6.405691594970219,False,True,True,False,0
+household-text-part-01.txt,apple_lz4_raw,3.058209538313736,3.6365270133662806,5.351091992058239,False,True,True,False,0
+household-text-part-01.txt,apple_lzfse,5.924760093980715,24.318600471751093,11.176042356055593,False,True,True,False,0
+household-text-part-02.txt,apple_lz4,2.960627393682286,3.503102171520064,8.780126849894291,False,True,True,False,0
+household-text-part-02.txt,apple_lz4_raw,2.969237712278188,3.565445812068448,9.223572938689218,False,True,True,False,0
+household-text-part-02.txt,apple_lzfse,5.823802911694642,21.94831381967377,22.446617336152222,False,True,True,False,0

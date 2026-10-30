@@ -1,0 +1,14 @@
+/build/
+/data/
+/cache/
+/downloads/
+/measurements/
+/.venv/
+__pycache__/
+*.py[cod]
+*.dSYM/
+*.o
+*.a
+*.so
+*.dylib
+.DS_Store

@@ -1,0 +1,106 @@
+dataset,category,input_bytes,method,total_storage_bytes,ratio,encode_ms,decode_ms,encode_min_ms,encode_max_ms,decode_min_ms,decode_max_ms,verified
+zeros.bin,v1-regression / control,1048576,raw,1048576,1.0,0.012625,0.012625,0.01225,0.018625,0.01225,0.012625,True
+zeros.bin,v1-regression / control,1048576,apple_lz4,14400,0.01373291015625,0.0525,1.214375,0.050875,0.067875,0.26425,1.39425,True
+zeros.bin,v1-regression / control,1048576,apple_lz4_raw,13376,0.01275634765625,0.05225,1.053125,0.05075,0.059375,0.269375,1.7095,True
+zeros.bin,v1-regression / control,1048576,apple_lzfse,11008,0.010498046875,5.185875,0.1895,5.0745,5.280125,0.16975,0.24825,True
+zeros.bin,v1-regression / control,1048576,custom_rc,1152,0.0010986328125,0.010125,0.011625,0.009875,0.010625,0.01125,0.012375,True
+events_dev.bin,v1-regression / synthetic-development,4194304,raw,4194304,1.0,0.0605,0.055,0.052,0.1835,0.052,0.1655,True
+events_dev.bin,v1-regression / synthetic-development,4194304,apple_lz4,2808681,0.6696417331695557,6.6725,1.291,6.567,8.353,1.259,1.3445,True
+events_dev.bin,v1-regression / synthetic-development,4194304,apple_lz4_raw,2804585,0.6686651706695557,6.6605,1.291,6.5045,9.6195,1.253,2.0755,True
+events_dev.bin,v1-regression / synthetic-development,4194304,apple_lzfse,1670502,0.39827871322631836,34.595,3.4335,34.083,50.569,3.3245,5.9555,True
+events_dev.bin,v1-regression / synthetic-development,4194304,custom_rc,1189120,0.28350830078125,1.5935,0.4815,1.56,3.4815,0.4695,1.547,True
+events_holdout.bin,v1-regression / synthetic-holdout,4194304,raw,4194304,1.0,0.059,0.059,0.054,0.238,0.052,0.1395,True
+events_holdout.bin,v1-regression / synthetic-holdout,4194304,apple_lz4,2857964,0.681391716003418,7.8555,1.4155,5.571,13.048,1.1025,2.157,True
+events_holdout.bin,v1-regression / synthetic-holdout,4194304,apple_lz4_raw,2853868,0.680415153503418,5.693,1.1305,5.4235,7.56,1.0805,2.2085,True
+events_holdout.bin,v1-regression / synthetic-holdout,4194304,apple_lzfse,1831868,0.4367513656616211,41.7035,3.759,34.525,45.8955,3.6095,7.815,True
+events_holdout.bin,v1-regression / synthetic-holdout,4194304,custom_rc,1641216,0.39129638671875,2.4605,0.3735,1.4475,5.85,0.358,0.966,True
+events_shifted.bin,v1-regression / synthetic-adversarial,4194305,raw,4194305,1.0,0.056,0.0535,0.053,0.071,0.052,0.0605,True
+events_shifted.bin,v1-regression / synthetic-adversarial,4194305,apple_lz4,2857815,0.6813560291871955,5.617,1.1025,5.339,6.312,1.05,1.2,True
+events_shifted.bin,v1-regression / synthetic-adversarial,4194305,apple_lz4_raw,2853719,0.680379466920026,5.612,1.0995,5.4765,5.772,1.064,1.1715,True
+events_shifted.bin,v1-regression / synthetic-adversarial,4194305,apple_lzfse,1832075,0.4368006141661133,30.0935,3.6915,29.472,36.8655,3.5275,4.013,True
+events_shifted.bin,v1-regression / synthetic-adversarial,4194305,custom_rc,2556689,0.6095620132536856,1.637,0.518,1.577,3.233,0.4825,1.541,True
+random.bin,v1-regression / control,4194304,raw,4194304,1.0,0.0555,0.0545,0.0515,0.065,0.0515,0.0575,True
+random.bin,v1-regression / control,4194304,apple_lz4,4198400,1.0009765625,1.709,0.0545,1.6905,1.7675,0.0515,0.062,True
+random.bin,v1-regression / control,4194304,apple_lz4_raw,4198400,1.0009765625,1.6315,0.055,1.549,1.6445,0.0525,0.101,True
+random.bin,v1-regression / control,4194304,apple_lzfse,4198400,1.0009765625,16.373,0.064,16.1705,16.6575,0.0595,0.0845,True
+random.bin,v1-regression / control,4194304,custom_rc,4198400,1.0009765625,3.0325,0.0555,2.977,3.0605,0.0515,0.059,True
+scattered_palette.bin,v1-regression / synthetic-adversarial,4194304,raw,4194304,1.0,0.1825,0.139,0.0535,0.2275,0.053,0.228,True
+scattered_palette.bin,v1-regression / synthetic-adversarial,4194304,apple_lz4,4105684,0.9788713455200195,5.058,0.7385,3.3085,8.8595,0.6715,1.3925,True
+scattered_palette.bin,v1-regression / synthetic-adversarial,4194304,apple_lz4_raw,4101588,0.9778947830200195,4.0675,0.7465,3.431,8.532,0.707,1.2105,True
+scattered_palette.bin,v1-regression / synthetic-adversarial,4194304,apple_lzfse,2250727,0.5366151332855225,38.7495,6.557,32.6005,42.2015,4.7425,10.1675,True
+scattered_palette.bin,v1-regression / synthetic-adversarial,4194304,custom_rc,4198400,1.0009765625,3.4365,0.0575,3.0615,4.8865,0.0525,0.1485,True
+sparse_outliers.bin,v1-regression / synthetic-adversarial,4194304,raw,4194304,1.0,0.0865,0.0565,0.053,2.638,0.053,0.141,True
+sparse_outliers.bin,v1-regression / synthetic-adversarial,4194304,apple_lz4,106061,0.02528691291809082,0.48,0.1895,0.4645,0.8165,0.1765,0.404,True
+sparse_outliers.bin,v1-regression / synthetic-adversarial,4194304,apple_lz4_raw,101965,0.02431035041809082,0.48,0.192,0.464,0.7835,0.176,0.373,True
+sparse_outliers.bin,v1-regression / synthetic-adversarial,4194304,apple_lzfse,82100,0.01957416534423828,23.392,1.0155,21.184,25.159,0.9775,1.988,True
+sparse_outliers.bin,v1-regression / synthetic-adversarial,4194304,custom_rc,36938,0.008806705474853516,0.401,0.293,0.3805,0.785,0.282,0.319,True
+weather_dev.csv,v1-regression / real-dev,24198,raw,24198,1.0,0.000231,0.000369,0.000219,0.000444,0.000225,0.00049,True
+weather_dev.csv,v1-regression / real-dev,24198,apple_lz4,11482,0.47450202496074056,0.024767,0.006182,0.023501,0.025524,0.005899,0.008107,True
+weather_dev.csv,v1-regression / real-dev,24198,apple_lz4_raw,11450,0.4731796016199686,0.025262,0.006343,0.023859,0.034807,0.005957,0.007651,True
+weather_dev.csv,v1-regression / real-dev,24198,apple_lzfse,6442,0.2662203487891561,0.127268,0.01453,0.117032,0.148991,0.013839,0.01572,True
+weather_dev.csv,v1-regression / real-dev,24198,custom_rc,24230,1.001322423340772,0.005107,0.000427,0.004841,0.010519,0.000239,0.000599,True
+weather_dev_i32.bin,v1-regression / real-derived-dev,11696,raw,11696,1.0,0.000114,0.000103,0.0001,0.000159,0.000102,0.000107,True
+weather_dev_i32.bin,v1-regression / real-derived-dev,11696,apple_lz4,7763,0.6637311901504788,0.017219,0.004359,0.017018,0.017341,0.00426,0.004436,True
+weather_dev_i32.bin,v1-regression / real-derived-dev,11696,apple_lz4_raw,7747,0.6623632010943913,0.017174,0.004401,0.017065,0.017957,0.004322,0.00478,True
+weather_dev_i32.bin,v1-regression / real-derived-dev,11696,apple_lzfse,3492,0.29856361149110805,0.064607,0.007766,0.064171,0.066019,0.007606,0.008358,True
+weather_dev_i32.bin,v1-regression / real-derived-dev,11696,custom_rc,3693,0.31574897400820795,0.003287,0.001326,0.003259,0.003673,0.001319,0.001538,True
+weather_holdout.csv,v1-regression / real-holdout,24071,raw,24071,1.0,0.000218,0.000344,0.000203,0.000711,0.000221,0.000662,True
+weather_holdout.csv,v1-regression / real-holdout,24071,apple_lz4,11409,0.47397283037680193,0.02737,0.006212,0.02333,0.042794,0.006066,0.010057,True
+weather_holdout.csv,v1-regression / real-holdout,24071,apple_lz4_raw,11377,0.4726434298533505,0.023725,0.006115,0.023415,0.03902,0.006006,0.010559,True
+weather_holdout.csv,v1-regression / real-holdout,24071,apple_lzfse,6376,0.26488305429770265,0.147587,0.01412,0.116381,0.178186,0.013728,0.027648,True
+weather_holdout.csv,v1-regression / real-holdout,24071,custom_rc,24103,1.0013294005234514,0.004968,0.00033,0.004725,0.010702,0.000235,0.000596,True
+weather_holdout_i32.bin,v1-regression / real-derived-holdout,11680,raw,11680,1.0,0.00014,0.000117,0.000111,0.000317,0.000108,0.000318,True
+weather_holdout_i32.bin,v1-regression / real-derived-holdout,11680,apple_lz4,7511,0.6430650684931507,0.01984,0.005448,0.016709,0.026503,0.004231,0.008255,True
+weather_holdout_i32.bin,v1-regression / real-derived-holdout,11680,apple_lz4_raw,7495,0.641695205479452,0.017401,0.004421,0.016871,0.029908,0.004229,0.007819,True
+weather_holdout_i32.bin,v1-regression / real-derived-holdout,11680,apple_lzfse,3486,0.29845890410958903,0.083075,0.008594,0.070423,0.094764,0.007773,0.012971,True
+weather_holdout_i32.bin,v1-regression / real-derived-holdout,11680,custom_rc,3687,0.31566780821917806,0.003389,0.001414,0.003246,0.008458,0.001345,0.002612,True
+rea_cli_public.js,v1-regression / real-public-software,3195569,raw,3195569,1.0,0.040333,0.039667,0.039667,0.128,0.039,0.094,True
+rea_cli_public.js,v1-regression / real-public-software,3195569,apple_lz4,1437761,0.44992331569119615,3.935333,0.741667,3.817,5.4,0.739333,0.995667,True
+rea_cli_public.js,v1-regression / real-public-software,3195569,apple_lz4_raw,1434625,0.44894195681582844,3.992667,0.765333,3.748667,5.126333,0.698,1.256,True
+rea_cli_public.js,v1-regression / real-public-software,3195569,apple_lzfse,938995,0.29384281797701756,25.400333,2.245333,22.247,31.462333,2.104667,2.607,True
+rea_cli_public.js,v1-regression / real-public-software,3195569,custom_rc,3198705,1.0009813588753678,0.638333,0.04,0.631667,2.961,0.039,0.106,True
+previous_plot.png,v1-regression / real-precompressed-control,144335,raw,144335,1.0,0.001559,0.001695,0.001407,0.001814,0.001542,0.002695,True
+previous_plot.png,v1-regression / real-precompressed-control,144335,apple_lz4,137318,0.951383933210933,0.071763,0.005424,0.070034,0.073559,0.005254,0.005593,True
+previous_plot.png,v1-regression / real-precompressed-control,144335,apple_lz4_raw,137174,0.9503862542002979,0.07122,0.005424,0.070729,0.072322,0.005271,0.006831,True
+previous_plot.png,v1-regression / real-precompressed-control,144335,apple_lzfse,136096,0.942917518273461,0.596068,0.130475,0.594153,0.606966,0.128542,0.132322,True
+previous_plot.png,v1-regression / real-precompressed-control,144335,custom_rc,144479,1.000997679010635,0.04561,0.001627,0.036695,0.052153,0.001559,0.002051,True
+new_sparse_01pct.bin,v2-fresh-validation,2097152,raw,2097152,1.0,0.02575,0.02525,0.025,0.03625,0.0245,0.02625,True
+new_sparse_01pct.bin,v2-fresh-validation,2097152,apple_lz4,34643,0.01651906967163086,0.172,0.14375,0.16625,0.178,0.139,0.149,True
+new_sparse_01pct.bin,v2-fresh-validation,2097152,apple_lz4_raw,32595,0.01554250717163086,0.172,0.149,0.16825,0.17825,0.14025,0.16225,True
+new_sparse_01pct.bin,v2-fresh-validation,2097152,apple_lzfse,29583,0.014106273651123047,5.2095,0.3795,5.1455,5.24975,0.369,0.38925,True
+new_sparse_01pct.bin,v2-fresh-validation,2097152,custom_rc,6256,0.00298309326171875,0.18425,0.13975,0.17925,0.205,0.135,0.14275,True
+new_sparse_5pct.bin,v2-fresh-validation,2097152,raw,2097152,1.0,0.0265,0.02625,0.02525,0.10975,0.025,0.06675,True
+new_sparse_5pct.bin,v2-fresh-validation,2097152,apple_lz4,256867,0.12248373031616211,0.9,0.2295,0.529,1.11375,0.21075,0.46225,True
+new_sparse_5pct.bin,v2-fresh-validation,2097152,apple_lz4_raw,254819,0.12150716781616211,0.5645,0.221,0.48125,1.101,0.14575,0.52475,True
+new_sparse_5pct.bin,v2-fresh-validation,2097152,apple_lzfse,200799,0.0957484245300293,8.5225,0.8705,7.05825,14.91175,0.8365,1.75325,True
+new_sparse_5pct.bin,v2-fresh-validation,2097152,custom_rc,188938,0.09009265899658203,0.73425,0.16425,0.697,1.33825,0.157,0.284,True
+new_sparse_20pct.bin,v2-fresh-validation,2097152,raw,2097152,1.0,0.03825,0.02675,0.026,0.12775,0.026,0.135,True
+new_sparse_20pct.bin,v2-fresh-validation,2097152,apple_lz4,788502,0.37598705291748047,2.60075,0.56425,1.8,2.93675,0.4965,1.17125,True
+new_sparse_20pct.bin,v2-fresh-validation,2097152,apple_lz4_raw,786454,0.37501049041748047,1.86175,0.681,1.761,3.937,0.51075,2.09825,True
+new_sparse_20pct.bin,v2-fresh-validation,2097152,apple_lzfse,631676,0.3012065887451172,14.67775,1.966,12.6195,19.943,1.4535,3.628,True
+new_sparse_20pct.bin,v2-fresh-validation,2097152,custom_rc,929446,0.4431943893432617,1.1815,0.1885,1.11725,2.1615,0.18025,0.3485,True
+new_sparse_50pct.bin,v2-fresh-validation,2097152,raw,2097152,1.0,0.027,0.02775,0.026,0.065,0.0255,0.062,True
+new_sparse_50pct.bin,v2-fresh-validation,2097152,apple_lz4,1536502,0.732661247253418,3.236,0.78325,2.52625,6.34525,0.73975,1.635,True
+new_sparse_50pct.bin,v2-fresh-validation,2097152,apple_lz4_raw,1534454,0.731684684753418,2.58625,0.78825,2.4675,4.383,0.73525,1.64125,True
+new_sparse_50pct.bin,v2-fresh-validation,2097152,apple_lzfse,1309792,0.6245574951171875,15.18775,1.94675,13.838,47.98675,1.89775,8.1115,True
+new_sparse_50pct.bin,v2-fresh-validation,2097152,custom_rc,2099200,1.0009765625,1.19675,0.02825,0.95475,2.0465,0.02575,0.102,True
+new_sparse_1pct_first_outlier.bin,v2-fresh-validation,2097152,raw,2097152,1.0,0.0255,0.0265,0.02475,0.0385,0.025,0.0295,True
+new_sparse_1pct_first_outlier.bin,v2-fresh-validation,2097152,apple_lz4,78547,0.03745412826538086,0.244,0.09525,0.23075,0.25625,0.08525,0.10575,True
+new_sparse_1pct_first_outlier.bin,v2-fresh-validation,2097152,apple_lz4_raw,76499,0.03647756576538086,0.2295,0.08625,0.21875,0.24275,0.0805,0.09875,True
+new_sparse_1pct_first_outlier.bin,v2-fresh-validation,2097152,apple_lzfse,64508,0.030759811401367188,5.82775,0.51675,5.6665,5.95975,0.49025,0.561,True
+new_sparse_1pct_first_outlier.bin,v2-fresh-validation,2097152,custom_rc,68206,0.032523155212402344,0.206,0.141,0.201,0.208,0.139,0.14225,True
+new_sparse_shifted_tail.bin,v2-fresh-validation,2097167,raw,2097167,1.0,0.026,0.0255,0.025,0.0465,0.02475,0.04225,True
+new_sparse_shifted_tail.bin,v2-fresh-validation,2097167,apple_lz4,77602,0.037003252482992535,0.23975,0.0945,0.227,0.251,0.08225,0.09775,True
+new_sparse_shifted_tail.bin,v2-fresh-validation,2097167,apple_lz4_raw,75554,0.036026696967861885,0.23125,0.08475,0.22475,0.247,0.081,0.095,True
+new_sparse_shifted_tail.bin,v2-fresh-validation,2097167,apple_lzfse,63403,0.03023269010050225,5.776,0.514,5.6685,5.85525,0.49075,0.542,True
+new_sparse_shifted_tail.bin,v2-fresh-validation,2097167,custom_rc,81206,0.03872176130942362,0.2175,0.1445,0.2105,0.22325,0.14275,0.14775,True
+new_alternating_sparse_dense.bin,v2-fresh-validation,2097152,raw,2097152,1.0,0.02675,0.026,0.0255,0.0395,0.02525,0.02725,True
+new_alternating_sparse_dense.bin,v2-fresh-validation,2097152,apple_lz4,809043,0.38578176498413086,1.3295,0.409,1.24625,2.27425,0.364,0.441,True
+new_alternating_sparse_dense.bin,v2-fresh-validation,2097152,apple_lz4_raw,806995,0.38480520248413086,1.3145,0.4055,1.25625,2.16575,0.3695,0.415,True
+new_alternating_sparse_dense.bin,v2-fresh-validation,2097152,apple_lzfse,688527,0.32831525802612305,9.785,1.1965,9.55975,14.642,1.15325,1.2565,True
+new_alternating_sparse_dense.bin,v2-fresh-validation,2097152,custom_rc,1067128,0.5088462829589844,0.57925,0.085,0.56575,0.591,0.08325,0.0865,True
+new_misleading_prefix.bin,v2-fresh-validation,2097152,raw,2097152,1.0,0.02675,0.026,0.0255,0.06725,0.0255,0.0675,True
+new_misleading_prefix.bin,v2-fresh-validation,2097152,apple_lz4,79668,0.03798866271972656,0.26675,0.10175,0.2255,0.48025,0.08375,0.21125,True
+new_misleading_prefix.bin,v2-fresh-validation,2097152,apple_lz4_raw,77620,0.03701210021972656,0.24725,0.098,0.22675,0.5085,0.08525,0.18875,True
+new_misleading_prefix.bin,v2-fresh-validation,2097152,apple_lzfse,65299,0.03113698959350586,8.315,0.5885,5.79775,10.46675,0.51425,1.3165,True
+new_misleading_prefix.bin,v2-fresh-validation,2097152,custom_rc,2099200,1.0009765625,0.43875,0.02675,0.41925,1.08925,0.02625,0.08075,True

@@ -1,0 +1,16 @@
+Generation mode: Built-in image_gen tool, new image, transparent_background=false.
+Use: Illustrative GitHub README hero; not experimental evidence or a technical schematic.
+Asset: banner.png
+Generated: 2026-10-30
+
+Use case: stylized-concept
+Asset type: Wide GitHub README hero banner, landscape aspect ratio approximately 2.5:1.
+Primary request: Create a polished editorial illustration for a scientific software experiment called pagecodec-lab.
+Subject: Abstract memory pages transform into compact numerical lanes, with tiny separated exception markers. Use layered thin rectangular memory pages and precise compact blocks as a visual metaphor, not a technical schematic. Elegant three-dimensional forms, orderly but dynamic composition, ample breathing room.
+Style/medium: High-end editorial 3D render, restrained and tactile, precise bevels, soft ambient shadows, sophisticated technology research aesthetic.
+Composition/framing: A wide horizontal banner with generous clean negative space for the title and subtitle, and a coherent sculptural transformation occupying the remaining area. All text remains easily readable at GitHub README width.
+Color palette: Deep navy, warm ivory, restrained teal and cobalt. A calm ivory background, richly colored dimensional blocks, no garish glow.
+Text (verbatim): "pagecodec-lab"
+Subtitle (verbatim): "Lossless compression. Measured trade-offs."
+Typography: Crisp, legible contemporary sans serif with a modest monospaced research character. Large title, small subtitle.
+Constraints: Illustrative hero only. Show no charts, axes, measurements, performance values, percentages, numeric labels, claims of superiority, Apple logo or other logos. No additional words, no watermark. Keep the exact lowercase project name and exact subtitle punctuation. Finished composition should look carefully art-directed and suitable for a public open-source research repository.

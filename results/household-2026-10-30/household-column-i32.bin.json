@@ -1,0 +1,257 @@
+{
+  "schema_version": 1,
+  "input_path": "data/household/household-column-i32.bin",
+  "input_bytes": 66408288,
+  "page_size": 16384,
+  "page_count": 4054,
+  "repetitions": 9,
+  "inner_iterations": 1,
+  "warmup_rounds_per_method": 1,
+  "shuffle_seed": 20261031,
+  "checksum_fnv1a64": "6ac47d08625ce671",
+  "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+  "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+  "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+  "custom_selection": "keep custom output including its headers only if smaller than original page",
+  "trial_order": [
+    [
+      "apple_lzfse",
+      "apple_lz4",
+      "raw",
+      "apple_lz4_raw",
+      "custom_rc"
+    ],
+    [
+      "custom_rc",
+      "apple_lzfse",
+      "raw",
+      "apple_lz4_raw",
+      "apple_lz4"
+    ],
+    [
+      "custom_rc",
+      "apple_lzfse",
+      "raw",
+      "apple_lz4_raw",
+      "apple_lz4"
+    ],
+    [
+      "apple_lzfse",
+      "custom_rc",
+      "raw",
+      "apple_lz4",
+      "apple_lz4_raw"
+    ],
+    [
+      "custom_rc",
+      "apple_lz4_raw",
+      "apple_lzfse",
+      "raw",
+      "apple_lz4"
+    ],
+    [
+      "custom_rc",
+      "apple_lz4_raw",
+      "apple_lz4",
+      "apple_lzfse",
+      "raw"
+    ],
+    [
+      "raw",
+      "apple_lz4",
+      "apple_lzfse",
+      "custom_rc",
+      "apple_lz4_raw"
+    ],
+    [
+      "custom_rc",
+      "apple_lz4",
+      "apple_lzfse",
+      "apple_lz4_raw",
+      "raw"
+    ],
+    [
+      "apple_lz4",
+      "raw",
+      "custom_rc",
+      "apple_lz4_raw",
+      "apple_lzfse"
+    ]
+  ],
+  "results": [
+    {
+      "method": "raw",
+      "payload_bytes": 66408288,
+      "metadata_bytes": 0,
+      "total_storage_bytes": 66408288,
+      "raw_pages": 4054,
+      "compressed_pages": 0,
+      "encode_ms": 1.006,
+      "decode_ms": 1.011,
+      "encode_samples_ms": [
+        4.123,
+        2.351,
+        0.999,
+        0.996,
+        1.011,
+        0.992,
+        0.997,
+        1.371,
+        1.006
+      ],
+      "decode_samples_ms": [
+        2.634,
+        1.2,
+        0.996,
+        1.025,
+        1.011,
+        1.011,
+        1.009,
+        1.014,
+        1.0
+      ],
+      "verified": true
+    },
+    {
+      "method": "apple_lz4",
+      "payload_bytes": 29464576,
+      "metadata_bytes": 64864,
+      "total_storage_bytes": 29529440,
+      "raw_pages": 506,
+      "compressed_pages": 3548,
+      "encode_ms": 64.372,
+      "decode_ms": 18.841,
+      "encode_samples_ms": [
+        80.649,
+        57.647,
+        56.984,
+        68.772,
+        76.969,
+        57.545,
+        56.775,
+        64.902,
+        64.372
+      ],
+      "decode_samples_ms": [
+        29.432,
+        18.352,
+        18.199,
+        26.483,
+        18.841,
+        18.29,
+        18.125,
+        34.84,
+        23.968
+      ],
+      "verified": true
+    },
+    {
+      "method": "apple_lz4_raw",
+      "payload_bytes": 29407808,
+      "metadata_bytes": 64864,
+      "total_storage_bytes": 29472672,
+      "raw_pages": 506,
+      "compressed_pages": 3548,
+      "encode_ms": 62.056,
+      "decode_ms": 18.954,
+      "encode_samples_ms": [
+        80.024,
+        59.345,
+        57.002,
+        62.056,
+        66.3,
+        57.764,
+        71.987,
+        69.022,
+        58.207
+      ],
+      "decode_samples_ms": [
+        21.151,
+        18.954,
+        18.265,
+        18.849,
+        24.793,
+        18.438,
+        22.534,
+        20.276,
+        18.334
+      ],
+      "verified": true
+    },
+    {
+      "method": "apple_lzfse",
+      "payload_bytes": 15596144,
+      "metadata_bytes": 64864,
+      "total_storage_bytes": 15661008,
+      "raw_pages": 0,
+      "compressed_pages": 4054,
+      "encode_ms": 452.128,
+      "decode_ms": 53.65,
+      "encode_samples_ms": [
+        462.749,
+        459.617,
+        366.053,
+        439.609,
+        452.128,
+        365.724,
+        469.627,
+        467.519,
+        367.519
+      ],
+      "decode_samples_ms": [
+        53.65,
+        55.707,
+        40.464,
+        56.168,
+        51.131,
+        40.875,
+        55.699,
+        60.019,
+        40.712
+      ],
+      "verified": true
+    },
+    {
+      "method": "custom_rc",
+      "payload_bytes": 23477357,
+      "metadata_bytes": 64864,
+      "total_storage_bytes": 23542221,
+      "raw_pages": 108,
+      "compressed_pages": 3946,
+      "encode_ms": 26.475,
+      "decode_ms": 9.575,
+      "encode_samples_ms": [
+        28.421,
+        26.179,
+        19.542,
+        25.075,
+        34.501,
+        29.503,
+        33.291,
+        26.406,
+        26.475
+      ],
+      "decode_samples_ms": [
+        7.618,
+        15.481,
+        8.701,
+        15.947,
+        7.596,
+        10.758,
+        22.203,
+        9.575,
+        7.833
+      ],
+      "verified": true
+    }
+  ],
+  "dataset": {
+    "name": "household-column-i32.bin",
+    "path": "data/household/household-column-i32.bin",
+    "size": 66408288,
+    "sha256": "910ab4ec9d1fe12a892bf841c7e95586f02adc5e158934b2d721d8cdb919249d",
+    "category": "real-household-power",
+    "representation": "column-major fixed-point int32",
+    "source_corpus": "uci-household-power-235"
+  }
+}

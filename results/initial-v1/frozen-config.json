@@ -1,0 +1,33 @@
+{
+  "frozen_utc": "2026-10-30T13:56:32.057984+00:00",
+  "sources_sha256": {
+    "codec.c": "c7d8f44f8cbee7c85f8f6f6f6194d3aa3a685ba1392fde31449d4ef23f0b043d",
+    "codec.h": "115016512729f5cfb0b6552a08c4c884ef99170190d7ed1287e93bd902327e25",
+    "compare.c": "11cc8da529d5b9449040e547bdb2e752b22aa8db5c766709b45e44281f989587"
+  },
+  "binary_sha256": "67b7dc8d1270746987f84ef15903c702edae7a843f31f76164610627402e1a7a",
+  "manifest_sha256": "c9af35d3223b18e9067e7fd3eacbb37e2d2ff7fb44753eef4f7224bf24338bb4",
+  "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin24.1.0\nThread model: posix",
+  "machine": "hw.memsize: 25769803776\nhw.model: Mac16,8\nmachdep.cpu.brand_string: Apple M4 Pro",
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t15.1.1\nBuildVersion:\t\t24B2091",
+  "protocol": {
+    "page_bytes": 16384,
+    "repetitions": 9,
+    "warmups": 1,
+    "inner_iterations": "min(1024, max(1, ceil(8 MiB / file size)))",
+    "trial_order": "deterministically permuted per paired round",
+    "strict_win": "size <= reference AND encode <=0.90*reference AND decode <=0.90*reference",
+    "baselines": [
+      "apple_lz4",
+      "apple_lz4_raw",
+      "apple_lzfse"
+    ],
+    "source_policy": "freeze codec before full corpus performance run; no tuning on holdout results",
+    "scope": "User-space page representation, not macOS kernel memory compressor."
+  },
+  "before_vm_stat": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                               55826.\nPages active:                            346622.\nPages inactive:                          340805.\nPages speculative:                         4659.\nPages throttled:                              0.\nPages wired down:                        247542.\nPages purgeable:                          26967.\n\"Translation faults\":                2771646772.\nPages copy-on-write:                  115107199.\nPages zero filled:                    882435889.\nPages reactivated:                    871747800.\nPages purged:                          65067086.\nFile-backed pages:                       172394.\nAnonymous pages:                         519692.\nPages stored in compressor:             1791771.\nPages occupied by compressor:            535746.\nDecompressions:                       825757248.\nCompressions:                         905499998.\nPageins:                               44834623.\nPageouts:                                912103.\nSwapins:                               15159080.\nSwapouts:                              18406468.",
+  "before_swap": "vm.swapusage: total = 7168.00M  used = 5982.81M  free = 1185.19M  (encrypted)",
+  "original_manifest_sha256": "c9af35d3223b18e9067e7fd3eacbb37e2d2ff7fb44753eef4f7224bf24338bb4",
+  "published_manifest_sha256": "9c04a865e74f4452b7b94b11f38ca1804b6404255f948a22ee9d39a8b15ca955",
+  "path_redaction_note": "Public archive: dataset path and input_path values use data/initial/<name>; the compiler InstalledDir line was removed. manifest_sha256 and original_manifest_sha256 identify the original private-path manifest frozen before measurement. published_manifest_sha256 identifies the separately serialized public manifest in manifests/initial-v1.json. Only paths and this provenance annotation changed; corpus bytes, source digests, measurements, trial order and machine performance context are unchanged."
+}

@@ -1,0 +1,5436 @@
+{
+  "frozen_config": {
+    "frozen_utc": "2026-10-30T14:05:42.156413+00:00",
+    "sources_sha256": {
+      "codec.c": "fbc88ada9bc4654241a92353cd34b872132106916820334f1c30ab2efcf826c2",
+      "codec.h": "115016512729f5cfb0b6552a08c4c884ef99170190d7ed1287e93bd902327e25",
+      "compare.c": "11cc8da529d5b9449040e547bdb2e752b22aa8db5c766709b45e44281f989587"
+    },
+    "binary_sha256": "b9e3533cb9ca59d01602bb2df95a2ee2532efb8680bb520b0273b005df223e2d",
+    "manifest_sha256": "c1eed0428c8863423f19fd7c27dc6a051a7c1120752af860ad7f4d7dd6aaee88",
+    "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin24.1.0\nThread model: posix",
+    "machine": "hw.memsize: 25769803776\nhw.model: Mac16,8\nmachdep.cpu.brand_string: Apple M4 Pro",
+    "os": "ProductName:\t\tmacOS\nProductVersion:\t\t15.1.1\nBuildVersion:\t\t24B2091",
+    "protocol": {
+      "page_bytes": 16384,
+      "repetitions": 9,
+      "warmups": 1,
+      "inner_iterations": "min(1024, max(1, ceil(8 MiB / file size)))",
+      "trial_order": "deterministically permuted per paired round",
+      "strict_win": "size <= reference AND encode <=0.90*reference AND decode <=0.90*reference",
+      "baselines": [
+        "apple_lz4",
+        "apple_lz4_raw",
+        "apple_lzfse"
+      ],
+      "source_policy": "freeze codec before full corpus performance run; no tuning on holdout results",
+      "scope": "User-space page representation, not macOS kernel memory compressor."
+    },
+    "before_vm_stat": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                               24524.\nPages active:                            365291.\nPages inactive:                          356482.\nPages speculative:                         7856.\nPages throttled:                              0.\nPages wired down:                        252011.\nPages purgeable:                          19547.\n\"Translation faults\":                2775368398.\nPages copy-on-write:                  115324142.\nPages zero filled:                    884154647.\nPages reactivated:                    872168179.\nPages purged:                          65126321.\nFile-backed pages:                       178823.\nAnonymous pages:                         550806.\nPages stored in compressor:             1743603.\nPages occupied by compressor:            525080.\nDecompressions:                       826002891.\nCompressions:                         905790625.\nPageins:                               44903818.\nPageouts:                                912407.\nSwapins:                               15160870.\nSwapouts:                              18406468.",
+    "before_swap": "vm.swapusage: total = 7168.00M  used = 5966.81M  free = 1201.19M  (encrypted)",
+    "original_manifest_sha256": "c1eed0428c8863423f19fd7c27dc6a051a7c1120752af860ad7f4d7dd6aaee88",
+    "published_manifest_sha256": "1da038688b4e686c367aebedc2e2d5719685f61d40059b88b6ae4e9eeba034a6",
+    "path_redaction_note": "Public archive: dataset path and input_path values use data/initial/<name>; the compiler InstalledDir line was removed. manifest_sha256 and original_manifest_sha256 identify the original private-path manifest frozen before measurement. published_manifest_sha256 identifies the separately serialized public manifest in manifests/initial-v2.json. Only paths and this provenance annotation changed; corpus bytes, source digests, measurements, trial order and machine performance context are unchanged."
+  },
+  "corpus": [
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/zeros.bin",
+      "input_bytes": 1048576,
+      "page_size": 16384,
+      "page_count": 64,
+      "repetitions": 9,
+      "inner_iterations": 8,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261030,
+      "checksum_fnv1a64": "a96777069d622325",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "apple_lz4",
+          "raw",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lzfse"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4",
+          "raw",
+          "apple_lzfse",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lz4",
+          "raw",
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "custom_rc"
+        ],
+        [
+          "custom_rc",
+          "apple_lzfse",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "raw"
+        ],
+        [
+          "apple_lzfse",
+          "apple_lz4",
+          "custom_rc",
+          "apple_lz4_raw",
+          "raw"
+        ],
+        [
+          "raw",
+          "apple_lz4",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lz4",
+          "apple_lzfse",
+          "raw",
+          "apple_lz4_raw",
+          "custom_rc"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "raw",
+          "apple_lzfse"
+        ],
+        [
+          "raw",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lz4",
+          "apple_lzfse"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 1048576,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 1048576,
+          "raw_pages": 64,
+          "compressed_pages": 0,
+          "encode_ms": 0.012625,
+          "decode_ms": 0.012625,
+          "encode_samples_ms": [
+            0.012625,
+            0.018625,
+            0.01275,
+            0.012625,
+            0.01275,
+            0.012625,
+            0.01225,
+            0.01275,
+            0.012375
+          ],
+          "decode_samples_ms": [
+            0.012625,
+            0.0125,
+            0.0125,
+            0.012625,
+            0.012625,
+            0.012625,
+            0.012375,
+            0.012625,
+            0.01225
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 13376,
+          "metadata_bytes": 1024,
+          "total_storage_bytes": 14400,
+          "raw_pages": 0,
+          "compressed_pages": 64,
+          "encode_ms": 0.0525,
+          "decode_ms": 1.214375,
+          "encode_samples_ms": [
+            0.0535,
+            0.052375,
+            0.0525,
+            0.067875,
+            0.052625,
+            0.0525,
+            0.051625,
+            0.050875,
+            0.05175
+          ],
+          "decode_samples_ms": [
+            1.39425,
+            0.324375,
+            0.46725,
+            1.214375,
+            1.3485,
+            0.2695,
+            1.333125,
+            1.3245,
+            0.26425
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 12352,
+          "metadata_bytes": 1024,
+          "total_storage_bytes": 13376,
+          "raw_pages": 0,
+          "compressed_pages": 64,
+          "encode_ms": 0.05225,
+          "decode_ms": 1.053125,
+          "encode_samples_ms": [
+            0.05225,
+            0.059375,
+            0.052375,
+            0.05275,
+            0.054875,
+            0.05225,
+            0.051,
+            0.05125,
+            0.05075
+          ],
+          "decode_samples_ms": [
+            1.21775,
+            1.7095,
+            0.26975,
+            0.269375,
+            1.053125,
+            1.327125,
+            1.3125,
+            0.439875,
+            0.49325
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 9984,
+          "metadata_bytes": 1024,
+          "total_storage_bytes": 11008,
+          "raw_pages": 0,
+          "compressed_pages": 64,
+          "encode_ms": 5.185875,
+          "decode_ms": 0.1895,
+          "encode_samples_ms": [
+            5.228875,
+            5.280125,
+            5.185875,
+            5.19575,
+            5.218375,
+            5.12725,
+            5.0745,
+            5.114125,
+            5.100875
+          ],
+          "decode_samples_ms": [
+            0.1795,
+            0.1895,
+            0.199625,
+            0.178875,
+            0.24825,
+            0.203,
+            0.17675,
+            0.16975,
+            0.214125
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 128,
+          "metadata_bytes": 1024,
+          "total_storage_bytes": 1152,
+          "raw_pages": 0,
+          "compressed_pages": 64,
+          "encode_ms": 0.010125,
+          "decode_ms": 0.011625,
+          "encode_samples_ms": [
+            0.010625,
+            0.010125,
+            0.01025,
+            0.01,
+            0.010125,
+            0.010125,
+            0.010125,
+            0.009875,
+            0.009875
+          ],
+          "decode_samples_ms": [
+            0.01175,
+            0.011625,
+            0.011375,
+            0.0115,
+            0.011625,
+            0.012375,
+            0.012,
+            0.011875,
+            0.01125
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "zeros.bin",
+        "path": "data/initial/zeros.bin",
+        "size": 1048576,
+        "sha256": "30e14955ebf1352266dc2ff8067e68104607e750abb9d3b36582b8af909fcb58",
+        "category": "v1-regression / control",
+        "description": "All-zero 1 MiB buffer; excluded from headline performance conclusions.",
+        "source": null
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/events_dev.bin",
+      "input_bytes": 4194304,
+      "page_size": 16384,
+      "page_count": 256,
+      "repetitions": 9,
+      "inner_iterations": 2,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261031,
+      "checksum_fnv1a64": "65655660b1fbd32b",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "apple_lzfse",
+          "apple_lz4",
+          "raw",
+          "apple_lz4_raw",
+          "custom_rc"
+        ],
+        [
+          "custom_rc",
+          "apple_lzfse",
+          "raw",
+          "apple_lz4_raw",
+          "apple_lz4"
+        ],
+        [
+          "custom_rc",
+          "apple_lzfse",
+          "raw",
+          "apple_lz4_raw",
+          "apple_lz4"
+        ],
+        [
+          "apple_lzfse",
+          "custom_rc",
+          "raw",
+          "apple_lz4",
+          "apple_lz4_raw"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "raw",
+          "apple_lz4"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4_raw",
+          "apple_lz4",
+          "apple_lzfse",
+          "raw"
+        ],
+        [
+          "raw",
+          "apple_lz4",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4_raw"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4",
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "raw"
+        ],
+        [
+          "apple_lz4",
+          "raw",
+          "custom_rc",
+          "apple_lz4_raw",
+          "apple_lzfse"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 4194304,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 4194304,
+          "raw_pages": 256,
+          "compressed_pages": 0,
+          "encode_ms": 0.0605,
+          "decode_ms": 0.055,
+          "encode_samples_ms": [
+            0.0655,
+            0.058,
+            0.0605,
+            0.052,
+            0.0535,
+            0.0805,
+            0.055,
+            0.1515,
+            0.1835
+          ],
+          "decode_samples_ms": [
+            0.055,
+            0.054,
+            0.062,
+            0.0595,
+            0.052,
+            0.053,
+            0.0535,
+            0.142,
+            0.1655
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 2804585,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 2808681,
+          "raw_pages": 0,
+          "compressed_pages": 256,
+          "encode_ms": 6.6725,
+          "decode_ms": 1.291,
+          "encode_samples_ms": [
+            6.6895,
+            6.7295,
+            6.567,
+            6.6525,
+            6.6725,
+            6.574,
+            8.353,
+            6.603,
+            6.7515
+          ],
+          "decode_samples_ms": [
+            1.287,
+            1.2985,
+            1.304,
+            1.2985,
+            1.259,
+            1.2825,
+            1.291,
+            1.2815,
+            1.3445
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 2800489,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 2804585,
+          "raw_pages": 0,
+          "compressed_pages": 256,
+          "encode_ms": 6.6605,
+          "decode_ms": 1.291,
+          "encode_samples_ms": [
+            6.571,
+            6.6605,
+            6.8385,
+            6.5215,
+            6.5045,
+            6.586,
+            7.1525,
+            9.6195,
+            8.04
+          ],
+          "decode_samples_ms": [
+            1.269,
+            1.2885,
+            1.3135,
+            1.291,
+            1.295,
+            1.253,
+            1.2875,
+            1.506,
+            2.0755
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 1666406,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 1670502,
+          "raw_pages": 0,
+          "compressed_pages": 256,
+          "encode_ms": 34.595,
+          "decode_ms": 3.4335,
+          "encode_samples_ms": [
+            34.083,
+            34.595,
+            34.857,
+            34.345,
+            34.5135,
+            43.369,
+            34.3595,
+            50.569,
+            38.776
+          ],
+          "decode_samples_ms": [
+            3.4335,
+            3.471,
+            3.3835,
+            3.407,
+            3.3245,
+            5.9555,
+            3.3925,
+            3.5305,
+            3.453
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 1185024,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 1189120,
+          "raw_pages": 0,
+          "compressed_pages": 256,
+          "encode_ms": 1.5935,
+          "decode_ms": 0.4815,
+          "encode_samples_ms": [
+            1.5865,
+            1.5645,
+            1.572,
+            1.5935,
+            1.56,
+            1.615,
+            2.9555,
+            3.4815,
+            1.7065
+          ],
+          "decode_samples_ms": [
+            0.4695,
+            0.4715,
+            0.477,
+            0.4785,
+            0.4815,
+            0.485,
+            0.585,
+            1.547,
+            0.4975
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "events_dev.bin",
+        "path": "data/initial/events_dev.bin",
+        "size": 4194304,
+        "sha256": "9a577e2d928c2702fe668928cf525db95f1d059f1159e0f3377aeb0c5d4e41c5",
+        "category": "v1-regression / synthetic-development",
+        "description": "Four interleaved 32-bit fields: timestamp, device ID, signed measurement, status. Synthetic.",
+        "source": null
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/events_holdout.bin",
+      "input_bytes": 4194304,
+      "page_size": 16384,
+      "page_count": 256,
+      "repetitions": 9,
+      "inner_iterations": 2,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261032,
+      "checksum_fnv1a64": "abc5c72f6711faff",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "raw",
+          "apple_lz4",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4_raw"
+        ],
+        [
+          "raw",
+          "apple_lz4",
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "custom_rc"
+        ],
+        [
+          "apple_lz4_raw",
+          "raw",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4"
+        ],
+        [
+          "custom_rc",
+          "raw",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "apple_lzfse"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4_raw",
+          "apple_lz4",
+          "raw",
+          "apple_lzfse"
+        ],
+        [
+          "apple_lzfse",
+          "raw",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lz4"
+        ],
+        [
+          "raw",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lzfse",
+          "apple_lz4"
+        ],
+        [
+          "apple_lz4_raw",
+          "apple_lz4",
+          "raw",
+          "apple_lzfse",
+          "custom_rc"
+        ],
+        [
+          "apple_lz4_raw",
+          "raw",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 4194304,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 4194304,
+          "raw_pages": 256,
+          "compressed_pages": 0,
+          "encode_ms": 0.059,
+          "decode_ms": 0.059,
+          "encode_samples_ms": [
+            0.238,
+            0.1685,
+            0.0585,
+            0.059,
+            0.0565,
+            0.055,
+            0.054,
+            0.2265,
+            0.1605
+          ],
+          "decode_samples_ms": [
+            0.1395,
+            0.135,
+            0.055,
+            0.057,
+            0.0545,
+            0.059,
+            0.052,
+            0.1385,
+            0.137
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 2853868,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 2857964,
+          "raw_pages": 0,
+          "compressed_pages": 256,
+          "encode_ms": 7.8555,
+          "decode_ms": 1.4155,
+          "encode_samples_ms": [
+            7.966,
+            5.838,
+            7.8555,
+            6.261,
+            6.745,
+            5.571,
+            8.6265,
+            13.048,
+            9.565
+          ],
+          "decode_samples_ms": [
+            1.1025,
+            1.1305,
+            1.812,
+            1.9305,
+            1.1315,
+            1.1035,
+            1.4155,
+            2.157,
+            1.8715
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 2849772,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 2853868,
+          "raw_pages": 0,
+          "compressed_pages": 256,
+          "encode_ms": 5.693,
+          "decode_ms": 1.1305,
+          "encode_samples_ms": [
+            5.49,
+            5.693,
+            5.517,
+            7.2185,
+            6.428,
+            7.56,
+            5.4235,
+            6.614,
+            5.6395
+          ],
+          "decode_samples_ms": [
+            1.2995,
+            1.1095,
+            1.0805,
+            1.128,
+            1.8005,
+            1.802,
+            1.085,
+            2.2085,
+            1.1305
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 1827772,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 1831868,
+          "raw_pages": 0,
+          "compressed_pages": 256,
+          "encode_ms": 41.7035,
+          "decode_ms": 3.759,
+          "encode_samples_ms": [
+            41.7035,
+            43.538,
+            35.597,
+            37.355,
+            45.8955,
+            44.5165,
+            34.525,
+            39.2145,
+            42.595
+          ],
+          "decode_samples_ms": [
+            6.9735,
+            3.6095,
+            3.703,
+            5.7285,
+            3.7135,
+            3.633,
+            3.759,
+            4.6485,
+            7.815
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 1637120,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 1641216,
+          "raw_pages": 0,
+          "compressed_pages": 256,
+          "encode_ms": 2.4605,
+          "decode_ms": 0.3735,
+          "encode_samples_ms": [
+            2.4605,
+            1.4715,
+            1.4825,
+            3.5315,
+            3.477,
+            2.904,
+            1.4475,
+            1.578,
+            5.85
+          ],
+          "decode_samples_ms": [
+            0.3845,
+            0.361,
+            0.3735,
+            0.364,
+            0.966,
+            0.3745,
+            0.358,
+            0.365,
+            0.4005
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "events_holdout.bin",
+        "path": "data/initial/events_holdout.bin",
+        "size": 4194304,
+        "sha256": "88af48379c845dcbe90815b65c1e1af9d2c18168aa9ba2938cb5eb40d1be0b93",
+        "category": "v1-regression / synthetic-holdout",
+        "description": "New seed, wider device range, occasional full-width signed outliers. Synthetic.",
+        "source": null
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/events_shifted.bin",
+      "input_bytes": 4194305,
+      "page_size": 16384,
+      "page_count": 257,
+      "repetitions": 9,
+      "inner_iterations": 2,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261033,
+      "checksum_fnv1a64": "d8ebed1fa438fe6d",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "custom_rc",
+          "apple_lz4_raw",
+          "raw",
+          "apple_lzfse",
+          "apple_lz4"
+        ],
+        [
+          "apple_lz4",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lzfse",
+          "raw"
+        ],
+        [
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "raw",
+          "custom_rc"
+        ],
+        [
+          "custom_rc",
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "apple_lz4",
+          "raw"
+        ],
+        [
+          "custom_rc",
+          "raw",
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "apple_lz4"
+        ],
+        [
+          "apple_lz4",
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "custom_rc",
+          "raw"
+        ],
+        [
+          "apple_lz4",
+          "custom_rc",
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "raw"
+        ],
+        [
+          "raw",
+          "custom_rc",
+          "apple_lz4_raw",
+          "apple_lz4",
+          "apple_lzfse"
+        ],
+        [
+          "apple_lzfse",
+          "apple_lz4",
+          "custom_rc",
+          "apple_lz4_raw",
+          "raw"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 4194305,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 4194305,
+          "raw_pages": 257,
+          "compressed_pages": 0,
+          "encode_ms": 0.056,
+          "decode_ms": 0.0535,
+          "encode_samples_ms": [
+            0.071,
+            0.064,
+            0.056,
+            0.0555,
+            0.0555,
+            0.0545,
+            0.053,
+            0.057,
+            0.0565
+          ],
+          "decode_samples_ms": [
+            0.052,
+            0.0605,
+            0.0525,
+            0.0545,
+            0.052,
+            0.052,
+            0.0545,
+            0.0535,
+            0.0575
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 2853703,
+          "metadata_bytes": 4112,
+          "total_storage_bytes": 2857815,
+          "raw_pages": 1,
+          "compressed_pages": 256,
+          "encode_ms": 5.617,
+          "decode_ms": 1.1025,
+          "encode_samples_ms": [
+            6.312,
+            5.4215,
+            5.518,
+            5.6615,
+            5.8155,
+            5.617,
+            5.453,
+            5.6235,
+            5.339
+          ],
+          "decode_samples_ms": [
+            1.13,
+            1.1025,
+            1.2,
+            1.13,
+            1.1955,
+            1.0895,
+            1.065,
+            1.066,
+            1.05
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 2849607,
+          "metadata_bytes": 4112,
+          "total_storage_bytes": 2853719,
+          "raw_pages": 1,
+          "compressed_pages": 256,
+          "encode_ms": 5.612,
+          "decode_ms": 1.0995,
+          "encode_samples_ms": [
+            5.7025,
+            5.685,
+            5.732,
+            5.772,
+            5.5185,
+            5.5275,
+            5.612,
+            5.5365,
+            5.4765
+          ],
+          "decode_samples_ms": [
+            1.108,
+            1.117,
+            1.1715,
+            1.125,
+            1.095,
+            1.081,
+            1.0995,
+            1.064,
+            1.068
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 1827963,
+          "metadata_bytes": 4112,
+          "total_storage_bytes": 1832075,
+          "raw_pages": 1,
+          "compressed_pages": 256,
+          "encode_ms": 30.0935,
+          "decode_ms": 3.6915,
+          "encode_samples_ms": [
+            36.8655,
+            31.516,
+            34.1135,
+            31.2655,
+            30.014,
+            30.0935,
+            29.5645,
+            29.472,
+            29.5715
+          ],
+          "decode_samples_ms": [
+            3.853,
+            3.702,
+            4.013,
+            3.7165,
+            3.6915,
+            3.609,
+            3.5425,
+            3.5275,
+            3.5635
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 2552577,
+          "metadata_bytes": 4112,
+          "total_storage_bytes": 2556689,
+          "raw_pages": 1,
+          "compressed_pages": 256,
+          "encode_ms": 1.637,
+          "decode_ms": 0.518,
+          "encode_samples_ms": [
+            2.462,
+            2.814,
+            3.233,
+            1.7235,
+            1.6305,
+            1.5995,
+            1.618,
+            1.577,
+            1.637
+          ],
+          "decode_samples_ms": [
+            0.518,
+            1.541,
+            0.73,
+            0.5295,
+            0.505,
+            0.4825,
+            0.5255,
+            0.4955,
+            0.4945
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "events_shifted.bin",
+        "path": "data/initial/events_shifted.bin",
+        "size": 4194305,
+        "sha256": "e0fd4253cd0f89c7c43b85540957d7b7989dd4dc39b85bc4fc97bb0311d3159c",
+        "category": "v1-regression / synthetic-adversarial",
+        "description": "Same held-out records with one-byte prefix: breaks word alignment and lane layout.",
+        "source": null
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/random.bin",
+      "input_bytes": 4194304,
+      "page_size": 16384,
+      "page_count": 256,
+      "repetitions": 9,
+      "inner_iterations": 2,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261034,
+      "checksum_fnv1a64": "037bd46934f74f77",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "apple_lz4",
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "raw",
+          "custom_rc"
+        ],
+        [
+          "raw",
+          "apple_lz4",
+          "custom_rc",
+          "apple_lzfse",
+          "apple_lz4_raw"
+        ],
+        [
+          "raw",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lzfse",
+          "custom_rc",
+          "raw",
+          "apple_lz4",
+          "apple_lz4_raw"
+        ],
+        [
+          "custom_rc",
+          "raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lz4_raw",
+          "apple_lz4",
+          "raw",
+          "apple_lzfse",
+          "custom_rc"
+        ],
+        [
+          "raw",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lzfse"
+        ],
+        [
+          "apple_lz4",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lzfse",
+          "raw"
+        ],
+        [
+          "custom_rc",
+          "apple_lzfse",
+          "raw",
+          "apple_lz4_raw",
+          "apple_lz4"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 4194304,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 4194304,
+          "raw_pages": 256,
+          "compressed_pages": 0,
+          "encode_ms": 0.0555,
+          "decode_ms": 0.0545,
+          "encode_samples_ms": [
+            0.0555,
+            0.0535,
+            0.065,
+            0.0515,
+            0.0565,
+            0.054,
+            0.0575,
+            0.054,
+            0.0565
+          ],
+          "decode_samples_ms": [
+            0.054,
+            0.0545,
+            0.056,
+            0.0515,
+            0.054,
+            0.0575,
+            0.0545,
+            0.0545,
+            0.0555
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 4194304,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 4198400,
+          "raw_pages": 256,
+          "compressed_pages": 0,
+          "encode_ms": 1.709,
+          "decode_ms": 0.0545,
+          "encode_samples_ms": [
+            1.709,
+            1.7675,
+            1.713,
+            1.746,
+            1.6905,
+            1.7035,
+            1.7275,
+            1.699,
+            1.692
+          ],
+          "decode_samples_ms": [
+            0.0545,
+            0.0515,
+            0.0535,
+            0.058,
+            0.062,
+            0.0555,
+            0.053,
+            0.0545,
+            0.0555
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 4194304,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 4198400,
+          "raw_pages": 256,
+          "compressed_pages": 0,
+          "encode_ms": 1.6315,
+          "decode_ms": 0.055,
+          "encode_samples_ms": [
+            1.636,
+            1.644,
+            1.6,
+            1.6445,
+            1.549,
+            1.6335,
+            1.6145,
+            1.6315,
+            1.6
+          ],
+          "decode_samples_ms": [
+            0.0545,
+            0.055,
+            0.056,
+            0.055,
+            0.0595,
+            0.053,
+            0.0525,
+            0.0535,
+            0.101
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 4194304,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 4198400,
+          "raw_pages": 256,
+          "compressed_pages": 0,
+          "encode_ms": 16.373,
+          "decode_ms": 0.064,
+          "encode_samples_ms": [
+            16.6575,
+            16.412,
+            16.373,
+            16.393,
+            16.336,
+            16.1875,
+            16.646,
+            16.2765,
+            16.1705
+          ],
+          "decode_samples_ms": [
+            0.0645,
+            0.0595,
+            0.0615,
+            0.06,
+            0.064,
+            0.0645,
+            0.0845,
+            0.068,
+            0.06
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 4194304,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 4198400,
+          "raw_pages": 256,
+          "compressed_pages": 0,
+          "encode_ms": 3.0325,
+          "decode_ms": 0.0555,
+          "encode_samples_ms": [
+            3.043,
+            3.0095,
+            3.0605,
+            2.997,
+            3.0325,
+            3.0355,
+            2.9935,
+            2.977,
+            3.042
+          ],
+          "decode_samples_ms": [
+            0.054,
+            0.057,
+            0.058,
+            0.0515,
+            0.053,
+            0.058,
+            0.059,
+            0.0555,
+            0.0525
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "random.bin",
+        "path": "data/initial/random.bin",
+        "size": 4194304,
+        "sha256": "36793342fab8cee6d5c4566eb4d4a609f37e0587d61de4bf45d768c513e3d62f",
+        "category": "v1-regression / control",
+        "description": "Uniform pseudo-random bytes; also models already packed uniform 4-bit symbols, not cryptographic RNG.",
+        "source": null
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/scattered_palette.bin",
+      "input_bytes": 4194304,
+      "page_size": 16384,
+      "page_count": 256,
+      "repetitions": 9,
+      "inner_iterations": 2,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261035,
+      "checksum_fnv1a64": "4d32a290c384e693",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "raw",
+          "custom_rc",
+          "apple_lz4_raw",
+          "apple_lz4",
+          "apple_lzfse"
+        ],
+        [
+          "apple_lz4",
+          "apple_lzfse",
+          "raw",
+          "custom_rc",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lz4_raw",
+          "apple_lz4",
+          "apple_lzfse",
+          "raw",
+          "custom_rc"
+        ],
+        [
+          "raw",
+          "apple_lz4",
+          "custom_rc",
+          "apple_lz4_raw",
+          "apple_lzfse"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "raw"
+        ],
+        [
+          "apple_lzfse",
+          "apple_lz4",
+          "raw",
+          "apple_lz4_raw",
+          "custom_rc"
+        ],
+        [
+          "apple_lz4_raw",
+          "raw",
+          "custom_rc",
+          "apple_lzfse",
+          "apple_lz4"
+        ],
+        [
+          "apple_lzfse",
+          "raw",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lz4"
+        ],
+        [
+          "raw",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lz4",
+          "apple_lzfse"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 4194304,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 4194304,
+          "raw_pages": 256,
+          "compressed_pages": 0,
+          "encode_ms": 0.1825,
+          "decode_ms": 0.139,
+          "encode_samples_ms": [
+            0.0535,
+            0.1825,
+            0.2275,
+            0.2275,
+            0.2185,
+            0.0555,
+            0.0575,
+            0.06,
+            0.185
+          ],
+          "decode_samples_ms": [
+            0.053,
+            0.1695,
+            0.228,
+            0.1475,
+            0.139,
+            0.055,
+            0.055,
+            0.058,
+            0.1845
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 4101588,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 4105684,
+          "raw_pages": 0,
+          "compressed_pages": 256,
+          "encode_ms": 5.058,
+          "decode_ms": 0.7385,
+          "encode_samples_ms": [
+            3.3085,
+            3.47,
+            3.4415,
+            4.149,
+            8.8595,
+            5.058,
+            5.986,
+            6.3985,
+            6.532
+          ],
+          "decode_samples_ms": [
+            0.6715,
+            0.815,
+            0.7285,
+            0.7385,
+            1.1405,
+            0.7145,
+            0.7175,
+            1.3925,
+            1.2335
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 4097492,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 4101588,
+          "raw_pages": 0,
+          "compressed_pages": 256,
+          "encode_ms": 4.0675,
+          "decode_ms": 0.7465,
+          "encode_samples_ms": [
+            4.0675,
+            3.431,
+            3.446,
+            8.532,
+            5.7825,
+            4.831,
+            3.4825,
+            4.7215,
+            3.551
+          ],
+          "decode_samples_ms": [
+            0.7115,
+            0.7465,
+            0.707,
+            1.2105,
+            0.7215,
+            0.7855,
+            0.7415,
+            1.187,
+            0.7655
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 2246631,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 2250727,
+          "raw_pages": 0,
+          "compressed_pages": 256,
+          "encode_ms": 38.7495,
+          "decode_ms": 6.557,
+          "encode_samples_ms": [
+            32.656,
+            39.285,
+            38.7495,
+            37.3375,
+            40.8025,
+            42.2015,
+            39.648,
+            32.6005,
+            37.685
+          ],
+          "decode_samples_ms": [
+            4.7425,
+            4.939,
+            4.787,
+            6.557,
+            5.175,
+            6.952,
+            6.8215,
+            8.4055,
+            10.1675
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 4194304,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 4198400,
+          "raw_pages": 256,
+          "compressed_pages": 0,
+          "encode_ms": 3.4365,
+          "decode_ms": 0.0575,
+          "encode_samples_ms": [
+            4.534,
+            3.12,
+            3.4365,
+            3.1195,
+            3.1315,
+            4.394,
+            4.6665,
+            4.8865,
+            3.0615
+          ],
+          "decode_samples_ms": [
+            0.0555,
+            0.0605,
+            0.0585,
+            0.054,
+            0.0545,
+            0.1485,
+            0.0605,
+            0.0575,
+            0.0525
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "scattered_palette.bin",
+        "path": "data/initial/scattered_palette.bin",
+        "size": 4194304,
+        "sha256": "2ae346ad1704a148d93f2c12ce847cf8a49d737865c379132b4b3794b08f2838",
+        "category": "v1-regression / synthetic-adversarial",
+        "description": "16 scattered byte symbols, not contiguous nibble values. Lossless entropy coding may outperform range packing.",
+        "source": null
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/sparse_outliers.bin",
+      "input_bytes": 4194304,
+      "page_size": 16384,
+      "page_count": 256,
+      "repetitions": 9,
+      "inner_iterations": 2,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261036,
+      "checksum_fnv1a64": "dd09564da382ed56",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "custom_rc",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "raw"
+        ],
+        [
+          "apple_lz4",
+          "raw",
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "custom_rc"
+        ],
+        [
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "custom_rc",
+          "raw"
+        ],
+        [
+          "apple_lzfse",
+          "raw",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "custom_rc"
+        ],
+        [
+          "raw",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lzfse"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4_raw",
+          "apple_lz4",
+          "apple_lzfse",
+          "raw"
+        ],
+        [
+          "custom_rc",
+          "apple_lzfse",
+          "raw",
+          "apple_lz4",
+          "apple_lz4_raw"
+        ],
+        [
+          "custom_rc",
+          "apple_lzfse",
+          "apple_lz4",
+          "raw",
+          "apple_lz4_raw"
+        ],
+        [
+          "raw",
+          "custom_rc",
+          "apple_lz4_raw",
+          "apple_lz4",
+          "apple_lzfse"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 4194304,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 4194304,
+          "raw_pages": 256,
+          "compressed_pages": 0,
+          "encode_ms": 0.0865,
+          "decode_ms": 0.0565,
+          "encode_samples_ms": [
+            0.054,
+            0.1535,
+            2.638,
+            0.0865,
+            0.2135,
+            0.0665,
+            0.053,
+            0.1635,
+            0.056
+          ],
+          "decode_samples_ms": [
+            0.0545,
+            0.1345,
+            0.0565,
+            0.1395,
+            0.141,
+            0.055,
+            0.0535,
+            0.1385,
+            0.053
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 101965,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 106061,
+          "raw_pages": 0,
+          "compressed_pages": 256,
+          "encode_ms": 0.48,
+          "decode_ms": 0.1895,
+          "encode_samples_ms": [
+            0.489,
+            0.48,
+            0.7255,
+            0.4935,
+            0.8165,
+            0.478,
+            0.48,
+            0.47,
+            0.4645
+          ],
+          "decode_samples_ms": [
+            0.1945,
+            0.1895,
+            0.404,
+            0.1955,
+            0.3255,
+            0.1805,
+            0.189,
+            0.188,
+            0.1765
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 97869,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 101965,
+          "raw_pages": 0,
+          "compressed_pages": 256,
+          "encode_ms": 0.48,
+          "decode_ms": 0.192,
+          "encode_samples_ms": [
+            0.474,
+            0.775,
+            0.7835,
+            0.4715,
+            0.558,
+            0.4895,
+            0.464,
+            0.48,
+            0.4695
+          ],
+          "decode_samples_ms": [
+            0.3625,
+            0.349,
+            0.373,
+            0.18,
+            0.176,
+            0.198,
+            0.1775,
+            0.192,
+            0.189
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 78004,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 82100,
+          "raw_pages": 0,
+          "compressed_pages": 256,
+          "encode_ms": 23.392,
+          "decode_ms": 1.0155,
+          "encode_samples_ms": [
+            23.981,
+            23.143,
+            25.159,
+            23.392,
+            24.002,
+            25.0265,
+            21.2015,
+            21.184,
+            21.611
+          ],
+          "decode_samples_ms": [
+            1.0125,
+            1.95,
+            1.0785,
+            1.019,
+            1.0155,
+            1.988,
+            1.007,
+            0.989,
+            0.9775
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 32842,
+          "metadata_bytes": 4096,
+          "total_storage_bytes": 36938,
+          "raw_pages": 0,
+          "compressed_pages": 256,
+          "encode_ms": 0.401,
+          "decode_ms": 0.293,
+          "encode_samples_ms": [
+            0.418,
+            0.401,
+            0.785,
+            0.402,
+            0.4145,
+            0.4005,
+            0.3965,
+            0.381,
+            0.3805
+          ],
+          "decode_samples_ms": [
+            0.315,
+            0.2975,
+            0.319,
+            0.288,
+            0.293,
+            0.2945,
+            0.288,
+            0.2825,
+            0.282
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "sparse_outliers.bin",
+        "path": "data/initial/sparse_outliers.bin",
+        "size": 4194304,
+        "sha256": "0cd2985d243ce2b046a2fdf506088e2be5fa8e24bdf9eeb0713a8f6d155e7eb2",
+        "category": "v1-regression / synthetic-adversarial",
+        "description": "Mostly zero 32-bit words with 0.5 percent full-width random outliers. Synthetic.",
+        "source": null
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/weather_dev.csv",
+      "input_bytes": 24198,
+      "page_size": 16384,
+      "page_count": 2,
+      "repetitions": 9,
+      "inner_iterations": 347,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261037,
+      "checksum_fnv1a64": "a9eaa4d111ff9fc9",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "raw"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4_raw",
+          "apple_lz4",
+          "apple_lzfse",
+          "raw"
+        ],
+        [
+          "apple_lz4_raw",
+          "raw",
+          "custom_rc",
+          "apple_lz4",
+          "apple_lzfse"
+        ],
+        [
+          "raw",
+          "custom_rc",
+          "apple_lzfse",
+          "apple_lz4",
+          "apple_lz4_raw"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4_raw",
+          "raw",
+          "apple_lz4",
+          "apple_lzfse"
+        ],
+        [
+          "raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "custom_rc",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lz4_raw",
+          "raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "custom_rc"
+        ],
+        [
+          "apple_lz4",
+          "raw",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "raw"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 24198,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 24198,
+          "raw_pages": 2,
+          "compressed_pages": 0,
+          "encode_ms": 0.000231,
+          "decode_ms": 0.000369,
+          "encode_samples_ms": [
+            0.000219,
+            0.000222,
+            0.000251,
+            0.000231,
+            0.000363,
+            0.000222,
+            0.000231,
+            0.000444,
+            0.000231
+          ],
+          "decode_samples_ms": [
+            0.000383,
+            0.000444,
+            0.00049,
+            0.000262,
+            0.000236,
+            0.000481,
+            0.000369,
+            0.000225,
+            0.000354
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 11450,
+          "metadata_bytes": 32,
+          "total_storage_bytes": 11482,
+          "raw_pages": 0,
+          "compressed_pages": 2,
+          "encode_ms": 0.024767,
+          "decode_ms": 0.006182,
+          "encode_samples_ms": [
+            0.025524,
+            0.024767,
+            0.023841,
+            0.024945,
+            0.024991,
+            0.025248,
+            0.023957,
+            0.023784,
+            0.023501
+          ],
+          "decode_samples_ms": [
+            0.006066,
+            0.006412,
+            0.008107,
+            0.006182,
+            0.00634,
+            0.006896,
+            0.006072,
+            0.006078,
+            0.005899
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 11418,
+          "metadata_bytes": 32,
+          "total_storage_bytes": 11450,
+          "raw_pages": 0,
+          "compressed_pages": 2,
+          "encode_ms": 0.025262,
+          "decode_ms": 0.006343,
+          "encode_samples_ms": [
+            0.030599,
+            0.025288,
+            0.034807,
+            0.02489,
+            0.025,
+            0.028213,
+            0.025262,
+            0.024026,
+            0.023859
+          ],
+          "decode_samples_ms": [
+            0.007651,
+            0.006133,
+            0.006576,
+            0.006346,
+            0.006424,
+            0.006184,
+            0.006343,
+            0.006063,
+            0.005957
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 6410,
+          "metadata_bytes": 32,
+          "total_storage_bytes": 6442,
+          "raw_pages": 0,
+          "compressed_pages": 2,
+          "encode_ms": 0.127268,
+          "decode_ms": 0.01453,
+          "encode_samples_ms": [
+            0.130135,
+            0.148991,
+            0.125403,
+            0.130046,
+            0.128594,
+            0.127268,
+            0.122715,
+            0.117032,
+            0.117346
+          ],
+          "decode_samples_ms": [
+            0.01572,
+            0.014421,
+            0.014899,
+            0.014637,
+            0.014614,
+            0.01453,
+            0.014193,
+            0.014012,
+            0.013839
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 24198,
+          "metadata_bytes": 32,
+          "total_storage_bytes": 24230,
+          "raw_pages": 2,
+          "compressed_pages": 0,
+          "encode_ms": 0.005107,
+          "decode_ms": 0.000427,
+          "encode_samples_ms": [
+            0.005415,
+            0.004997,
+            0.005118,
+            0.005568,
+            0.005107,
+            0.010519,
+            0.004951,
+            0.004841,
+            0.00487
+          ],
+          "decode_samples_ms": [
+            0.000427,
+            0.000383,
+            0.000239,
+            0.000262,
+            0.000248,
+            0.000599,
+            0.000579,
+            0.000476,
+            0.000527
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "weather_dev.csv",
+        "path": "data/initial/weather_dev.csv",
+        "size": 24198,
+        "sha256": "d186ddb735e50d2dfae7eb669cff76b3420c836c3360725b7d9738129411c611",
+        "category": "v1-regression / real-dev",
+        "description": "Unrepeated weather CSV rows, preserving all columns; normalized newline serialization.",
+        "source": "https://github.com/vega/vega-datasets/blob/5448e25297c8f705be78e879d5423d55d04dc6f1/data/seattle-weather.csv"
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/weather_dev_i32.bin",
+      "input_bytes": 11696,
+      "page_size": 16384,
+      "page_count": 1,
+      "repetitions": 9,
+      "inner_iterations": 718,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261038,
+      "checksum_fnv1a64": "1c2f7db3ae4d395e",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "custom_rc",
+          "raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "apple_lz4_raw"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4_raw",
+          "raw",
+          "apple_lzfse",
+          "apple_lz4"
+        ],
+        [
+          "apple_lz4_raw",
+          "apple_lz4",
+          "apple_lzfse",
+          "custom_rc",
+          "raw"
+        ],
+        [
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lzfse",
+          "apple_lz4",
+          "raw"
+        ],
+        [
+          "apple_lz4",
+          "raw",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lz4",
+          "raw"
+        ],
+        [
+          "raw",
+          "custom_rc",
+          "apple_lz4_raw",
+          "apple_lz4",
+          "apple_lzfse"
+        ],
+        [
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "apple_lz4",
+          "raw",
+          "custom_rc"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4",
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "raw"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 11696,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 11696,
+          "raw_pages": 1,
+          "compressed_pages": 0,
+          "encode_ms": 0.000114,
+          "decode_ms": 0.000103,
+          "encode_samples_ms": [
+            0.0001,
+            0.000117,
+            0.000113,
+            0.000116,
+            0.000159,
+            0.000106,
+            0.000103,
+            0.000114,
+            0.000114
+          ],
+          "decode_samples_ms": [
+            0.000103,
+            0.000103,
+            0.000107,
+            0.000103,
+            0.000102,
+            0.000103,
+            0.000103,
+            0.000104,
+            0.000103
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 7747,
+          "metadata_bytes": 16,
+          "total_storage_bytes": 7763,
+          "raw_pages": 0,
+          "compressed_pages": 1,
+          "encode_ms": 0.017219,
+          "decode_ms": 0.004359,
+          "encode_samples_ms": [
+            0.01711,
+            0.017145,
+            0.017228,
+            0.017199,
+            0.017334,
+            0.017341,
+            0.017018,
+            0.017219,
+            0.017281
+          ],
+          "decode_samples_ms": [
+            0.004369,
+            0.004408,
+            0.004359,
+            0.004347,
+            0.004352,
+            0.004337,
+            0.004436,
+            0.004396,
+            0.00426
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 7731,
+          "metadata_bytes": 16,
+          "total_storage_bytes": 7747,
+          "raw_pages": 0,
+          "compressed_pages": 1,
+          "encode_ms": 0.017174,
+          "decode_ms": 0.004401,
+          "encode_samples_ms": [
+            0.017127,
+            0.017065,
+            0.017113,
+            0.017174,
+            0.017957,
+            0.017125,
+            0.01733,
+            0.017209,
+            0.017316
+          ],
+          "decode_samples_ms": [
+            0.004351,
+            0.004401,
+            0.004405,
+            0.004366,
+            0.00478,
+            0.004421,
+            0.00445,
+            0.004322,
+            0.004358
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 3476,
+          "metadata_bytes": 16,
+          "total_storage_bytes": 3492,
+          "raw_pages": 0,
+          "compressed_pages": 1,
+          "encode_ms": 0.064607,
+          "decode_ms": 0.007766,
+          "encode_samples_ms": [
+            0.064212,
+            0.064675,
+            0.064235,
+            0.06426,
+            0.066019,
+            0.064607,
+            0.064752,
+            0.064171,
+            0.064701
+          ],
+          "decode_samples_ms": [
+            0.007714,
+            0.007812,
+            0.007762,
+            0.007958,
+            0.008358,
+            0.007713,
+            0.007606,
+            0.007766,
+            0.007829
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 3677,
+          "metadata_bytes": 16,
+          "total_storage_bytes": 3693,
+          "raw_pages": 0,
+          "compressed_pages": 1,
+          "encode_ms": 0.003287,
+          "decode_ms": 0.001326,
+          "encode_samples_ms": [
+            0.00328,
+            0.003259,
+            0.003345,
+            0.003287,
+            0.003673,
+            0.003281,
+            0.00329,
+            0.003347,
+            0.00328
+          ],
+          "decode_samples_ms": [
+            0.001323,
+            0.00135,
+            0.00135,
+            0.001322,
+            0.001538,
+            0.001344,
+            0.001319,
+            0.001322,
+            0.001326
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "weather_dev_i32.bin",
+        "path": "data/initial/weather_dev_i32.bin",
+        "size": 11696,
+        "sha256": "39cf065a3f977cf53edfa8c14137e2253ff60f0151a021e7b611af985d576f20",
+        "category": "v1-regression / real-derived-dev",
+        "description": "Four numerical fields as signed little-endian int32 scaled by10, exact at given precision. Dates and weather labels omitted; NOT a compression of whole CSV. Same binary input for every codec.",
+        "source": "https://github.com/vega/vega-datasets/blob/5448e25297c8f705be78e879d5423d55d04dc6f1/data/seattle-weather.csv"
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/weather_holdout.csv",
+      "input_bytes": 24071,
+      "page_size": 16384,
+      "page_count": 2,
+      "repetitions": 9,
+      "inner_iterations": 349,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261039,
+      "checksum_fnv1a64": "dc659c3194460819",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "custom_rc",
+          "apple_lz4",
+          "apple_lzfse",
+          "raw",
+          "apple_lz4_raw"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4",
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "raw"
+        ],
+        [
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4",
+          "raw"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4",
+          "raw",
+          "apple_lz4_raw",
+          "apple_lzfse"
+        ],
+        [
+          "apple_lzfse",
+          "apple_lz4",
+          "custom_rc",
+          "raw",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "custom_rc",
+          "raw"
+        ],
+        [
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lz4",
+          "raw"
+        ],
+        [
+          "raw",
+          "apple_lz4",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lzfse",
+          "custom_rc",
+          "raw",
+          "apple_lz4",
+          "apple_lz4_raw"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 24071,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 24071,
+          "raw_pages": 2,
+          "compressed_pages": 0,
+          "encode_ms": 0.000218,
+          "decode_ms": 0.000344,
+          "encode_samples_ms": [
+            0.000203,
+            0.000209,
+            0.000218,
+            0.000218,
+            0.000252,
+            0.000252,
+            0.000223,
+            0.000212,
+            0.000711
+          ],
+          "decode_samples_ms": [
+            0.000344,
+            0.000372,
+            0.000358,
+            0.000427,
+            0.000244,
+            0.000221,
+            0.000298,
+            0.000226,
+            0.000662
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 11377,
+          "metadata_bytes": 32,
+          "total_storage_bytes": 11409,
+          "raw_pages": 0,
+          "compressed_pages": 2,
+          "encode_ms": 0.02737,
+          "decode_ms": 0.006212,
+          "encode_samples_ms": [
+            0.023639,
+            0.02333,
+            0.035198,
+            0.028178,
+            0.024146,
+            0.02433,
+            0.02737,
+            0.033003,
+            0.042794
+          ],
+          "decode_samples_ms": [
+            0.00614,
+            0.006066,
+            0.009189,
+            0.006117,
+            0.006115,
+            0.006226,
+            0.006212,
+            0.010057,
+            0.00914
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 11345,
+          "metadata_bytes": 32,
+          "total_storage_bytes": 11377,
+          "raw_pages": 0,
+          "compressed_pages": 2,
+          "encode_ms": 0.023725,
+          "decode_ms": 0.006115,
+          "encode_samples_ms": [
+            0.023415,
+            0.023438,
+            0.023582,
+            0.023791,
+            0.023713,
+            0.023725,
+            0.03902,
+            0.024166,
+            0.023923
+          ],
+          "decode_samples_ms": [
+            0.006011,
+            0.006006,
+            0.010559,
+            0.006115,
+            0.006115,
+            0.006115,
+            0.006229,
+            0.00612,
+            0.00612
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 6344,
+          "metadata_bytes": 32,
+          "total_storage_bytes": 6376,
+          "raw_pages": 0,
+          "compressed_pages": 2,
+          "encode_ms": 0.147587,
+          "decode_ms": 0.01412,
+          "encode_samples_ms": [
+            0.116381,
+            0.117132,
+            0.173625,
+            0.171699,
+            0.130203,
+            0.16855,
+            0.147587,
+            0.139206,
+            0.178186
+          ],
+          "decode_samples_ms": [
+            0.013734,
+            0.013728,
+            0.013883,
+            0.02504,
+            0.015046,
+            0.014092,
+            0.01412,
+            0.027648,
+            0.014249
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 24071,
+          "metadata_bytes": 32,
+          "total_storage_bytes": 24103,
+          "raw_pages": 2,
+          "compressed_pages": 0,
+          "encode_ms": 0.004968,
+          "decode_ms": 0.00033,
+          "encode_samples_ms": [
+            0.004725,
+            0.004814,
+            0.004968,
+            0.004825,
+            0.004854,
+            0.00502,
+            0.005049,
+            0.010702,
+            0.008854
+          ],
+          "decode_samples_ms": [
+            0.000235,
+            0.000398,
+            0.000413,
+            0.00033,
+            0.000324,
+            0.000241,
+            0.000355,
+            0.000252,
+            0.000596
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "weather_holdout.csv",
+        "path": "data/initial/weather_holdout.csv",
+        "size": 24071,
+        "sha256": "c7721423c8304af59d5b81a998a8e775b29ede0498b0d33988c013435cb0f66f",
+        "category": "v1-regression / real-holdout",
+        "description": "Unrepeated weather CSV rows, preserving all columns; normalized newline serialization.",
+        "source": "https://github.com/vega/vega-datasets/blob/5448e25297c8f705be78e879d5423d55d04dc6f1/data/seattle-weather.csv"
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/weather_holdout_i32.bin",
+      "input_bytes": 11680,
+      "page_size": 16384,
+      "page_count": 1,
+      "repetitions": 9,
+      "inner_iterations": 719,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261040,
+      "checksum_fnv1a64": "11eefeda5934aa5e",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "raw",
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "apple_lz4",
+          "custom_rc"
+        ],
+        [
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "raw",
+          "apple_lz4",
+          "custom_rc"
+        ],
+        [
+          "apple_lz4",
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "custom_rc",
+          "raw"
+        ],
+        [
+          "custom_rc",
+          "raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lz4",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lzfse",
+          "raw"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4",
+          "raw",
+          "apple_lzfse",
+          "apple_lz4_raw"
+        ],
+        [
+          "custom_rc",
+          "raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "apple_lz4_raw"
+        ],
+        [
+          "raw",
+          "apple_lz4_raw",
+          "apple_lz4",
+          "custom_rc",
+          "apple_lzfse"
+        ],
+        [
+          "custom_rc",
+          "raw",
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "apple_lz4"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 11680,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 11680,
+          "raw_pages": 1,
+          "compressed_pages": 0,
+          "encode_ms": 0.00014,
+          "decode_ms": 0.000117,
+          "encode_samples_ms": [
+            0.000305,
+            0.000128,
+            0.000146,
+            0.000125,
+            0.000195,
+            0.000317,
+            0.00014,
+            0.000127,
+            0.000111
+          ],
+          "decode_samples_ms": [
+            0.000288,
+            0.000114,
+            0.000117,
+            0.000108,
+            0.000117,
+            0.000318,
+            0.000177,
+            0.000114,
+            0.000128
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 7495,
+          "metadata_bytes": 16,
+          "total_storage_bytes": 7511,
+          "raw_pages": 0,
+          "compressed_pages": 1,
+          "encode_ms": 0.01984,
+          "decode_ms": 0.005448,
+          "encode_samples_ms": [
+            0.017452,
+            0.01849,
+            0.021001,
+            0.01984,
+            0.024128,
+            0.024068,
+            0.017232,
+            0.026503,
+            0.016709
+          ],
+          "decode_samples_ms": [
+            0.008255,
+            0.007688,
+            0.005448,
+            0.004428,
+            0.004328,
+            0.007887,
+            0.006533,
+            0.004434,
+            0.004231
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 7479,
+          "metadata_bytes": 16,
+          "total_storage_bytes": 7495,
+          "raw_pages": 0,
+          "compressed_pages": 1,
+          "encode_ms": 0.017401,
+          "decode_ms": 0.004421,
+          "encode_samples_ms": [
+            0.021099,
+            0.017172,
+            0.020264,
+            0.017401,
+            0.017022,
+            0.01978,
+            0.029908,
+            0.016871,
+            0.017172
+          ],
+          "decode_samples_ms": [
+            0.006602,
+            0.004318,
+            0.004363,
+            0.004421,
+            0.004236,
+            0.007819,
+            0.004424,
+            0.006164,
+            0.004229
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 3470,
+          "metadata_bytes": 16,
+          "total_storage_bytes": 3486,
+          "raw_pages": 0,
+          "compressed_pages": 1,
+          "encode_ms": 0.083075,
+          "decode_ms": 0.008594,
+          "encode_samples_ms": [
+            0.080886,
+            0.09436,
+            0.083075,
+            0.092337,
+            0.070423,
+            0.082088,
+            0.082736,
+            0.094764,
+            0.085541
+          ],
+          "decode_samples_ms": [
+            0.007893,
+            0.007811,
+            0.012971,
+            0.012054,
+            0.008594,
+            0.007773,
+            0.008011,
+            0.009491,
+            0.008641
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 3671,
+          "metadata_bytes": 16,
+          "total_storage_bytes": 3687,
+          "raw_pages": 0,
+          "compressed_pages": 1,
+          "encode_ms": 0.003389,
+          "decode_ms": 0.001414,
+          "encode_samples_ms": [
+            0.008458,
+            0.005387,
+            0.003382,
+            0.00338,
+            0.003246,
+            0.00367,
+            0.003516,
+            0.003389,
+            0.003331
+          ],
+          "decode_samples_ms": [
+            0.002612,
+            0.0017,
+            0.001377,
+            0.001414,
+            0.00143,
+            0.00148,
+            0.001345,
+            0.001412,
+            0.001408
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "weather_holdout_i32.bin",
+        "path": "data/initial/weather_holdout_i32.bin",
+        "size": 11680,
+        "sha256": "a24d30b958315d474288f37b58a4faa5cd83c5ad868283cff91aad0e373db44e",
+        "category": "v1-regression / real-derived-holdout",
+        "description": "Four numerical fields as signed little-endian int32 scaled by10, exact at given precision. Dates and weather labels omitted; NOT a compression of whole CSV. Same binary input for every codec.",
+        "source": "https://github.com/vega/vega-datasets/blob/5448e25297c8f705be78e879d5423d55d04dc6f1/data/seattle-weather.csv"
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/rea_cli_public.js",
+      "input_bytes": 3195569,
+      "page_size": 16384,
+      "page_count": 196,
+      "repetitions": 9,
+      "inner_iterations": 3,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261041,
+      "checksum_fnv1a64": "12f72e1babd411bc",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lz4",
+          "raw",
+          "apple_lzfse"
+        ],
+        [
+          "apple_lz4",
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "raw",
+          "custom_rc"
+        ],
+        [
+          "apple_lz4_raw",
+          "raw",
+          "custom_rc",
+          "apple_lz4",
+          "apple_lzfse"
+        ],
+        [
+          "apple_lzfse",
+          "custom_rc",
+          "raw",
+          "apple_lz4_raw",
+          "apple_lz4"
+        ],
+        [
+          "raw",
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4"
+        ],
+        [
+          "custom_rc",
+          "apple_lzfse",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "raw"
+        ],
+        [
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "raw",
+          "custom_rc",
+          "apple_lz4"
+        ],
+        [
+          "custom_rc",
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "apple_lz4",
+          "raw"
+        ],
+        [
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "raw",
+          "apple_lz4",
+          "custom_rc"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 3195569,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 3195569,
+          "raw_pages": 196,
+          "compressed_pages": 0,
+          "encode_ms": 0.040333,
+          "decode_ms": 0.039667,
+          "encode_samples_ms": [
+            0.042667,
+            0.128,
+            0.040333,
+            0.040333,
+            0.056667,
+            0.039667,
+            0.039667,
+            0.04,
+            0.04
+          ],
+          "decode_samples_ms": [
+            0.041,
+            0.094,
+            0.039333,
+            0.039667,
+            0.039667,
+            0.039,
+            0.039333,
+            0.043333,
+            0.040333
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 1434625,
+          "metadata_bytes": 3136,
+          "total_storage_bytes": 1437761,
+          "raw_pages": 0,
+          "compressed_pages": 196,
+          "encode_ms": 3.935333,
+          "decode_ms": 0.741667,
+          "encode_samples_ms": [
+            5.121,
+            5.021,
+            5.4,
+            4.266333,
+            3.837333,
+            3.822667,
+            3.935333,
+            3.829333,
+            3.817
+          ],
+          "decode_samples_ms": [
+            0.772667,
+            0.989333,
+            0.995667,
+            0.739667,
+            0.741667,
+            0.741667,
+            0.750333,
+            0.740333,
+            0.739333
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 1431489,
+          "metadata_bytes": 3136,
+          "total_storage_bytes": 1434625,
+          "raw_pages": 0,
+          "compressed_pages": 196,
+          "encode_ms": 3.992667,
+          "decode_ms": 0.765333,
+          "encode_samples_ms": [
+            3.992667,
+            4.744667,
+            4.219,
+            5.126333,
+            4.684667,
+            3.794333,
+            3.748667,
+            3.925667,
+            3.847333
+          ],
+          "decode_samples_ms": [
+            0.980667,
+            1.256,
+            0.801333,
+            1.131,
+            0.747333,
+            0.712,
+            0.698,
+            0.740667,
+            0.765333
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 935859,
+          "metadata_bytes": 3136,
+          "total_storage_bytes": 938995,
+          "raw_pages": 0,
+          "compressed_pages": 196,
+          "encode_ms": 25.400333,
+          "decode_ms": 2.245333,
+          "encode_samples_ms": [
+            31.462333,
+            30.624,
+            30.366333,
+            28.030667,
+            25.400333,
+            23.296,
+            23.719,
+            22.571,
+            22.247
+          ],
+          "decode_samples_ms": [
+            2.198,
+            2.607,
+            2.141667,
+            2.265333,
+            2.255667,
+            2.245333,
+            2.256,
+            2.242,
+            2.104667
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 3195569,
+          "metadata_bytes": 3136,
+          "total_storage_bytes": 3198705,
+          "raw_pages": 196,
+          "compressed_pages": 0,
+          "encode_ms": 0.638333,
+          "decode_ms": 0.04,
+          "encode_samples_ms": [
+            0.884667,
+            2.961,
+            0.632667,
+            0.638333,
+            0.680333,
+            0.631667,
+            0.632333,
+            0.641333,
+            0.637667
+          ],
+          "decode_samples_ms": [
+            0.106,
+            0.096667,
+            0.039667,
+            0.039667,
+            0.04,
+            0.039,
+            0.04,
+            0.040333,
+            0.039
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "rea_cli_public.js",
+        "path": "data/initial/rea_cli_public.js",
+        "size": 3195569,
+        "sha256": "710d98719a1a7ce7c65e2a33d3dc4dda1c67074c9ec089d240368deb16c5368e",
+        "category": "v1-regression / real-public-software",
+        "description": "Unmodified JavaScript runtime bundle from published rea-agents6.8.0.",
+        "source": "https://registry.npmjs.org/rea-agents/-/rea-agents-6.8.0.tgz"
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/previous_plot.png",
+      "input_bytes": 144335,
+      "page_size": 16384,
+      "page_count": 9,
+      "repetitions": 9,
+      "inner_iterations": 59,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261042,
+      "checksum_fnv1a64": "5b53efff73b90b9b",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "apple_lz4_raw",
+          "raw",
+          "apple_lz4",
+          "custom_rc",
+          "apple_lzfse"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4_raw",
+          "apple_lz4",
+          "raw",
+          "apple_lzfse"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "raw",
+          "apple_lzfse"
+        ],
+        [
+          "apple_lz4",
+          "raw",
+          "custom_rc",
+          "apple_lz4_raw",
+          "apple_lzfse"
+        ],
+        [
+          "raw",
+          "apple_lz4",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lz4",
+          "raw"
+        ],
+        [
+          "apple_lz4_raw",
+          "raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "custom_rc"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4_raw",
+          "raw",
+          "apple_lzfse",
+          "apple_lz4"
+        ],
+        [
+          "apple_lzfse",
+          "raw",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lz4"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 144335,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 144335,
+          "raw_pages": 9,
+          "compressed_pages": 0,
+          "encode_ms": 0.001559,
+          "decode_ms": 0.001695,
+          "encode_samples_ms": [
+            0.001542,
+            0.001814,
+            0.001424,
+            0.001627,
+            0.00161,
+            0.001559,
+            0.001475,
+            0.001729,
+            0.001407
+          ],
+          "decode_samples_ms": [
+            0.002695,
+            0.001542,
+            0.001763,
+            0.001864,
+            0.001695,
+            0.001831,
+            0.001661,
+            0.001661,
+            0.001678
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 137174,
+          "metadata_bytes": 144,
+          "total_storage_bytes": 137318,
+          "raw_pages": 0,
+          "compressed_pages": 9,
+          "encode_ms": 0.071763,
+          "decode_ms": 0.005424,
+          "encode_samples_ms": [
+            0.071424,
+            0.070034,
+            0.072644,
+            0.072136,
+            0.073559,
+            0.071237,
+            0.071763,
+            0.070288,
+            0.072203
+          ],
+          "decode_samples_ms": [
+            0.005424,
+            0.005254,
+            0.005593,
+            0.005492,
+            0.005458,
+            0.005356,
+            0.005424,
+            0.005322,
+            0.005593
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 137030,
+          "metadata_bytes": 144,
+          "total_storage_bytes": 137174,
+          "raw_pages": 0,
+          "compressed_pages": 9,
+          "encode_ms": 0.07122,
+          "decode_ms": 0.005424,
+          "encode_samples_ms": [
+            0.072136,
+            0.071678,
+            0.072322,
+            0.07078,
+            0.071763,
+            0.071034,
+            0.07122,
+            0.071186,
+            0.070729
+          ],
+          "decode_samples_ms": [
+            0.005576,
+            0.006831,
+            0.005407,
+            0.005373,
+            0.005864,
+            0.005492,
+            0.005271,
+            0.005424,
+            0.005407
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 135952,
+          "metadata_bytes": 144,
+          "total_storage_bytes": 136096,
+          "raw_pages": 0,
+          "compressed_pages": 9,
+          "encode_ms": 0.596068,
+          "decode_ms": 0.130475,
+          "encode_samples_ms": [
+            0.598966,
+            0.594153,
+            0.603915,
+            0.596068,
+            0.599508,
+            0.606966,
+            0.595661,
+            0.596068,
+            0.59539
+          ],
+          "decode_samples_ms": [
+            0.132322,
+            0.13022,
+            0.129475,
+            0.130627,
+            0.128542,
+            0.130475,
+            0.130644,
+            0.130424,
+            0.131356
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 144335,
+          "metadata_bytes": 144,
+          "total_storage_bytes": 144479,
+          "raw_pages": 9,
+          "compressed_pages": 0,
+          "encode_ms": 0.04561,
+          "decode_ms": 0.001627,
+          "encode_samples_ms": [
+            0.041102,
+            0.046831,
+            0.052153,
+            0.043,
+            0.050661,
+            0.04561,
+            0.04561,
+            0.043203,
+            0.036695
+          ],
+          "decode_samples_ms": [
+            0.001576,
+            0.00161,
+            0.001627,
+            0.001746,
+            0.001678,
+            0.001559,
+            0.001576,
+            0.001729,
+            0.002051
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "previous_plot.png",
+        "path": "data/initial/previous_plot.png",
+        "size": 144335,
+        "sha256": "13c5f0e756b38fc5eb01bcc34a209ee61ae2b1d8f1954250090e7d4521141ab6",
+        "category": "v1-regression / real-precompressed-control",
+        "description": "Actual PNG from previous experiment, already compressed. Not a user/private image.",
+        "source": null
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/new_sparse_01pct.bin",
+      "input_bytes": 2097152,
+      "page_size": 16384,
+      "page_count": 128,
+      "repetitions": 9,
+      "inner_iterations": 4,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261043,
+      "checksum_fnv1a64": "11917b652e971dbe",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "custom_rc",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lzfse",
+          "custom_rc",
+          "raw",
+          "apple_lz4",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lz4_raw",
+          "custom_rc",
+          "raw",
+          "apple_lz4",
+          "apple_lzfse"
+        ],
+        [
+          "raw",
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4"
+        ],
+        [
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "raw",
+          "custom_rc"
+        ],
+        [
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "raw",
+          "custom_rc"
+        ],
+        [
+          "custom_rc",
+          "apple_lzfse",
+          "raw",
+          "apple_lz4",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lz4_raw",
+          "raw",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4",
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "raw"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 2097152,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 2097152,
+          "raw_pages": 128,
+          "compressed_pages": 0,
+          "encode_ms": 0.02575,
+          "decode_ms": 0.02525,
+          "encode_samples_ms": [
+            0.03525,
+            0.025,
+            0.025,
+            0.02575,
+            0.03625,
+            0.025,
+            0.026,
+            0.02575,
+            0.0255
+          ],
+          "decode_samples_ms": [
+            0.02525,
+            0.0245,
+            0.02525,
+            0.025,
+            0.02625,
+            0.025,
+            0.0255,
+            0.025,
+            0.02625
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 32595,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 34643,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 0.172,
+          "decode_ms": 0.14375,
+          "encode_samples_ms": [
+            0.1775,
+            0.16625,
+            0.1685,
+            0.169,
+            0.178,
+            0.17475,
+            0.16725,
+            0.17475,
+            0.172
+          ],
+          "decode_samples_ms": [
+            0.14375,
+            0.139,
+            0.1455,
+            0.14125,
+            0.149,
+            0.1455,
+            0.14025,
+            0.14575,
+            0.1405
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 30547,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 32595,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 0.172,
+          "decode_ms": 0.149,
+          "encode_samples_ms": [
+            0.172,
+            0.1705,
+            0.17825,
+            0.17625,
+            0.16825,
+            0.1735,
+            0.1695,
+            0.16925,
+            0.17475
+          ],
+          "decode_samples_ms": [
+            0.14325,
+            0.1425,
+            0.1505,
+            0.149,
+            0.15075,
+            0.1505,
+            0.145,
+            0.14025,
+            0.16225
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 27535,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 29583,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 5.2095,
+          "decode_ms": 0.3795,
+          "encode_samples_ms": [
+            5.2115,
+            5.2095,
+            5.24975,
+            5.20225,
+            5.249,
+            5.1455,
+            5.18525,
+            5.2205,
+            5.16775
+          ],
+          "decode_samples_ms": [
+            0.38925,
+            0.3795,
+            0.38375,
+            0.383,
+            0.3855,
+            0.37875,
+            0.373,
+            0.369,
+            0.37925
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 4208,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 6256,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 0.18425,
+          "decode_ms": 0.13975,
+          "encode_samples_ms": [
+            0.1865,
+            0.18225,
+            0.1825,
+            0.17925,
+            0.205,
+            0.18425,
+            0.19,
+            0.19075,
+            0.1795
+          ],
+          "decode_samples_ms": [
+            0.14275,
+            0.141,
+            0.13975,
+            0.1365,
+            0.135,
+            0.13975,
+            0.14025,
+            0.14125,
+            0.138
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "new_sparse_01pct.bin",
+        "path": "data/initial/new_sparse_01pct.bin",
+        "size": 2097152,
+        "sha256": "856f3a95bfb52d257cbce619df59c1101622b50b863edc1d3bcc8655945ee4d3",
+        "category": "v2-fresh-validation",
+        "description": "Nonzero uint32 background 0x13579bdf, random full-width exceptions at 0.1 percent; unseen seed.",
+        "source": "Deterministic synthetic buffer; generator included."
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/new_sparse_5pct.bin",
+      "input_bytes": 2097152,
+      "page_size": 16384,
+      "page_count": 128,
+      "repetitions": 9,
+      "inner_iterations": 4,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261044,
+      "checksum_fnv1a64": "8f2a2036fe884fc0",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4",
+          "raw",
+          "apple_lz4_raw"
+        ],
+        [
+          "custom_rc",
+          "raw",
+          "apple_lz4_raw",
+          "apple_lz4",
+          "apple_lzfse"
+        ],
+        [
+          "custom_rc",
+          "raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4_raw",
+          "apple_lz4",
+          "raw"
+        ],
+        [
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "raw",
+          "custom_rc"
+        ],
+        [
+          "apple_lz4_raw",
+          "raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "custom_rc"
+        ],
+        [
+          "apple_lz4",
+          "apple_lz4_raw",
+          "raw",
+          "custom_rc",
+          "apple_lzfse"
+        ],
+        [
+          "apple_lz4",
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "raw",
+          "custom_rc"
+        ],
+        [
+          "raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "custom_rc"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 2097152,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 2097152,
+          "raw_pages": 128,
+          "compressed_pages": 0,
+          "encode_ms": 0.0265,
+          "decode_ms": 0.02625,
+          "encode_samples_ms": [
+            0.05225,
+            0.0265,
+            0.02525,
+            0.10975,
+            0.062,
+            0.028,
+            0.02575,
+            0.02575,
+            0.026
+          ],
+          "decode_samples_ms": [
+            0.026,
+            0.02575,
+            0.025,
+            0.06675,
+            0.06075,
+            0.02625,
+            0.0255,
+            0.02625,
+            0.02625
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 254819,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 256867,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 0.9,
+          "decode_ms": 0.2295,
+          "encode_samples_ms": [
+            0.529,
+            0.5315,
+            0.5425,
+            0.94925,
+            0.5405,
+            0.9955,
+            0.96,
+            0.9,
+            1.11375
+          ],
+          "decode_samples_ms": [
+            0.2295,
+            0.2125,
+            0.225,
+            0.46225,
+            0.4535,
+            0.41775,
+            0.2115,
+            0.21075,
+            0.43475
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 252771,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 254819,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 0.5645,
+          "decode_ms": 0.221,
+          "encode_samples_ms": [
+            0.52675,
+            0.48125,
+            0.4875,
+            1.02825,
+            1.0555,
+            0.7815,
+            0.5125,
+            0.5645,
+            1.101
+          ],
+          "decode_samples_ms": [
+            0.22775,
+            0.24025,
+            0.1625,
+            0.208,
+            0.422,
+            0.21575,
+            0.14575,
+            0.221,
+            0.52475
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 198751,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 200799,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 8.5225,
+          "decode_ms": 0.8705,
+          "encode_samples_ms": [
+            7.4605,
+            7.1845,
+            7.0995,
+            11.59825,
+            9.3985,
+            7.05825,
+            8.5225,
+            9.619,
+            14.91175
+          ],
+          "decode_samples_ms": [
+            0.91675,
+            0.8365,
+            0.8705,
+            1.75325,
+            0.8415,
+            0.8605,
+            1.35625,
+            0.86925,
+            0.88725
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 186890,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 188938,
+          "raw_pages": 2,
+          "compressed_pages": 126,
+          "encode_ms": 0.73425,
+          "decode_ms": 0.16425,
+          "encode_samples_ms": [
+            0.7135,
+            0.7335,
+            0.697,
+            0.7735,
+            1.33825,
+            0.77425,
+            0.72825,
+            0.73425,
+            0.73725
+          ],
+          "decode_samples_ms": [
+            0.1615,
+            0.16125,
+            0.157,
+            0.161,
+            0.284,
+            0.16425,
+            0.16425,
+            0.16425,
+            0.17125
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "new_sparse_5pct.bin",
+        "path": "data/initial/new_sparse_5pct.bin",
+        "size": 2097152,
+        "sha256": "2e23988fb64d1bb72773dec882b0c3aa641cb3cd1df7361cf48b9aa3f81232d0",
+        "category": "v2-fresh-validation",
+        "description": "Nonzero uint32 background 0x13579bdf, random full-width exceptions at 5 percent; unseen seed.",
+        "source": "Deterministic synthetic buffer; generator included."
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/new_sparse_20pct.bin",
+      "input_bytes": 2097152,
+      "page_size": 16384,
+      "page_count": 128,
+      "repetitions": 9,
+      "inner_iterations": 4,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261045,
+      "checksum_fnv1a64": "2f0954d8eb9cdf9d",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "apple_lzfse",
+          "raw",
+          "custom_rc",
+          "apple_lz4",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lzfse",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "raw",
+          "custom_rc"
+        ],
+        [
+          "apple_lz4",
+          "apple_lz4_raw",
+          "custom_rc",
+          "raw",
+          "apple_lzfse"
+        ],
+        [
+          "raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "custom_rc",
+          "apple_lz4_raw"
+        ],
+        [
+          "custom_rc",
+          "apple_lzfse",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "raw"
+        ],
+        [
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "raw",
+          "custom_rc"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4_raw",
+          "apple_lz4",
+          "apple_lzfse",
+          "raw"
+        ],
+        [
+          "apple_lz4",
+          "apple_lzfse",
+          "raw",
+          "custom_rc",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lzfse",
+          "raw",
+          "apple_lz4_raw",
+          "apple_lz4",
+          "custom_rc"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 2097152,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 2097152,
+          "raw_pages": 128,
+          "compressed_pages": 0,
+          "encode_ms": 0.03825,
+          "decode_ms": 0.02675,
+          "encode_samples_ms": [
+            0.06875,
+            0.03825,
+            0.02625,
+            0.12775,
+            0.07025,
+            0.02675,
+            0.07125,
+            0.026,
+            0.0275
+          ],
+          "decode_samples_ms": [
+            0.0615,
+            0.02625,
+            0.0265,
+            0.135,
+            0.0735,
+            0.02625,
+            0.0605,
+            0.026,
+            0.02675
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 786454,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 788502,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 2.60075,
+          "decode_ms": 0.56425,
+          "encode_samples_ms": [
+            2.7235,
+            2.8855,
+            1.83775,
+            2.60075,
+            2.8825,
+            2.93675,
+            1.8,
+            1.87975,
+            2.312
+          ],
+          "decode_samples_ms": [
+            1.17125,
+            0.55325,
+            0.56125,
+            1.006,
+            0.56425,
+            0.55025,
+            0.4965,
+            0.572,
+            0.57275
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 784406,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 786454,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 1.86175,
+          "decode_ms": 0.681,
+          "encode_samples_ms": [
+            1.86175,
+            1.816,
+            1.761,
+            1.83175,
+            3.5385,
+            1.86375,
+            3.937,
+            1.84075,
+            2.98275
+          ],
+          "decode_samples_ms": [
+            1.03175,
+            0.51075,
+            0.5405,
+            0.58575,
+            1.0255,
+            0.681,
+            0.57025,
+            0.76675,
+            2.09825
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 629628,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 631676,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 14.67775,
+          "decode_ms": 1.966,
+          "encode_samples_ms": [
+            13.855,
+            16.6665,
+            17.6585,
+            15.959,
+            13.5095,
+            19.943,
+            12.6195,
+            12.6685,
+            14.67775
+          ],
+          "decode_samples_ms": [
+            2.91425,
+            1.47275,
+            3.628,
+            1.4535,
+            1.966,
+            2.49625,
+            2.3005,
+            1.503,
+            1.46825
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 927398,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 929446,
+          "raw_pages": 26,
+          "compressed_pages": 102,
+          "encode_ms": 1.1815,
+          "decode_ms": 0.1885,
+          "encode_samples_ms": [
+            1.63725,
+            1.15325,
+            2.1615,
+            1.1815,
+            1.11725,
+            1.156,
+            1.121,
+            1.64625,
+            1.18325
+          ],
+          "decode_samples_ms": [
+            0.20025,
+            0.191,
+            0.1885,
+            0.1895,
+            0.18425,
+            0.1805,
+            0.18025,
+            0.3485,
+            0.184
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "new_sparse_20pct.bin",
+        "path": "data/initial/new_sparse_20pct.bin",
+        "size": 2097152,
+        "sha256": "c986ae32b585af7f76655d7fe9ff1757207740bf62a34ee1ac520020767f6240",
+        "category": "v2-fresh-validation",
+        "description": "Nonzero uint32 background 0x13579bdf, random full-width exceptions at 20 percent; unseen seed.",
+        "source": "Deterministic synthetic buffer; generator included."
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/new_sparse_50pct.bin",
+      "input_bytes": 2097152,
+      "page_size": 16384,
+      "page_count": 128,
+      "repetitions": 9,
+      "inner_iterations": 4,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261046,
+      "checksum_fnv1a64": "4490dabfe9f907ca",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "custom_rc",
+          "apple_lzfse",
+          "raw",
+          "apple_lz4_raw",
+          "apple_lz4"
+        ],
+        [
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "custom_rc",
+          "raw",
+          "apple_lz4"
+        ],
+        [
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4",
+          "raw"
+        ],
+        [
+          "apple_lz4",
+          "apple_lzfse",
+          "raw",
+          "apple_lz4_raw",
+          "custom_rc"
+        ],
+        [
+          "raw",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lz4",
+          "apple_lzfse"
+        ],
+        [
+          "raw",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "custom_rc"
+        ],
+        [
+          "apple_lz4",
+          "raw",
+          "custom_rc",
+          "apple_lzfse",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "custom_rc",
+          "raw",
+          "apple_lz4"
+        ],
+        [
+          "raw",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lz4",
+          "apple_lzfse"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 2097152,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 2097152,
+          "raw_pages": 128,
+          "compressed_pages": 0,
+          "encode_ms": 0.027,
+          "decode_ms": 0.02775,
+          "encode_samples_ms": [
+            0.0275,
+            0.0265,
+            0.065,
+            0.027,
+            0.028,
+            0.026,
+            0.0265,
+            0.02675,
+            0.06075
+          ],
+          "decode_samples_ms": [
+            0.02775,
+            0.02625,
+            0.0615,
+            0.02675,
+            0.02775,
+            0.0285,
+            0.02675,
+            0.0255,
+            0.062
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 1534454,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 1536502,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 3.236,
+          "decode_ms": 0.78325,
+          "encode_samples_ms": [
+            3.3895,
+            3.236,
+            6.34525,
+            5.41,
+            3.3085,
+            2.54075,
+            2.806,
+            2.52625,
+            2.628
+          ],
+          "decode_samples_ms": [
+            1.635,
+            1.35375,
+            1.279,
+            0.73975,
+            0.77025,
+            0.751,
+            0.7675,
+            0.78325,
+            1.147
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 1532406,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 1534454,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 2.58625,
+          "decode_ms": 0.78825,
+          "encode_samples_ms": [
+            4.383,
+            3.5235,
+            2.4675,
+            2.55,
+            3.36325,
+            2.47625,
+            2.8215,
+            2.58625,
+            2.501
+          ],
+          "decode_samples_ms": [
+            1.3685,
+            1.64125,
+            0.774,
+            1.10975,
+            1.23725,
+            0.73525,
+            0.78375,
+            0.78825,
+            0.786
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 1307744,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 1309792,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 15.18775,
+          "decode_ms": 1.94675,
+          "encode_samples_ms": [
+            16.61575,
+            21.466,
+            47.98675,
+            26.5585,
+            13.838,
+            14.0855,
+            15.18775,
+            15.017,
+            14.99775
+          ],
+          "decode_samples_ms": [
+            1.89775,
+            1.92175,
+            8.1115,
+            3.273,
+            1.94675,
+            2.003,
+            2.0905,
+            1.91575,
+            1.911
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 2097152,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 2099200,
+          "raw_pages": 128,
+          "compressed_pages": 0,
+          "encode_ms": 1.19675,
+          "decode_ms": 0.02825,
+          "encode_samples_ms": [
+            0.95625,
+            2.0465,
+            2.031,
+            1.46025,
+            1.36875,
+            1.19675,
+            1.174,
+            0.98275,
+            0.95475
+          ],
+          "decode_samples_ms": [
+            0.026,
+            0.102,
+            0.09325,
+            0.02825,
+            0.06375,
+            0.09025,
+            0.0265,
+            0.02675,
+            0.02575
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "new_sparse_50pct.bin",
+        "path": "data/initial/new_sparse_50pct.bin",
+        "size": 2097152,
+        "sha256": "0c4fb90c6f7e90b2165f991bdfe89ec630c1c40d675954ab23752f54b210f15b",
+        "category": "v2-fresh-validation",
+        "description": "Nonzero uint32 background 0x13579bdf, random full-width exceptions at 50 percent; unseen seed.",
+        "source": "Deterministic synthetic buffer; generator included."
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/new_sparse_1pct_first_outlier.bin",
+      "input_bytes": 2097152,
+      "page_size": 16384,
+      "page_count": 128,
+      "repetitions": 9,
+      "inner_iterations": 4,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261047,
+      "checksum_fnv1a64": "d8fb9837ccda8bf9",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "raw",
+          "apple_lz4",
+          "custom_rc",
+          "apple_lzfse",
+          "apple_lz4_raw"
+        ],
+        [
+          "raw",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lz4",
+          "apple_lzfse"
+        ],
+        [
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4",
+          "raw",
+          "apple_lz4_raw"
+        ],
+        [
+          "raw",
+          "custom_rc",
+          "apple_lz4_raw",
+          "apple_lz4",
+          "apple_lzfse"
+        ],
+        [
+          "apple_lz4",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lzfse",
+          "raw"
+        ],
+        [
+          "raw",
+          "apple_lz4",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lz4_raw",
+          "apple_lz4",
+          "raw",
+          "custom_rc",
+          "apple_lzfse"
+        ],
+        [
+          "raw",
+          "apple_lz4",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lz4",
+          "raw",
+          "custom_rc",
+          "apple_lz4_raw",
+          "apple_lzfse"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 2097152,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 2097152,
+          "raw_pages": 128,
+          "compressed_pages": 0,
+          "encode_ms": 0.0255,
+          "decode_ms": 0.0265,
+          "encode_samples_ms": [
+            0.0385,
+            0.0255,
+            0.026,
+            0.02675,
+            0.0255,
+            0.02575,
+            0.02475,
+            0.0255,
+            0.0255
+          ],
+          "decode_samples_ms": [
+            0.028,
+            0.02575,
+            0.0295,
+            0.0265,
+            0.0265,
+            0.0255,
+            0.025,
+            0.02525,
+            0.02725
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 76499,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 78547,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 0.244,
+          "decode_ms": 0.09525,
+          "encode_samples_ms": [
+            0.25625,
+            0.252,
+            0.2425,
+            0.25025,
+            0.24025,
+            0.253,
+            0.23075,
+            0.23725,
+            0.244
+          ],
+          "decode_samples_ms": [
+            0.10575,
+            0.08625,
+            0.09575,
+            0.09625,
+            0.0965,
+            0.0875,
+            0.08525,
+            0.095,
+            0.09525
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 74451,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 76499,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 0.2295,
+          "decode_ms": 0.08625,
+          "encode_samples_ms": [
+            0.24275,
+            0.23875,
+            0.234,
+            0.228,
+            0.23575,
+            0.2235,
+            0.21875,
+            0.2285,
+            0.2295
+          ],
+          "decode_samples_ms": [
+            0.0975,
+            0.08525,
+            0.09575,
+            0.08475,
+            0.09875,
+            0.08625,
+            0.0805,
+            0.094,
+            0.08175
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 62460,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 64508,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 5.82775,
+          "decode_ms": 0.51675,
+          "encode_samples_ms": [
+            5.95975,
+            5.95275,
+            5.78225,
+            5.8585,
+            5.82775,
+            5.6665,
+            5.82825,
+            5.73825,
+            5.712
+          ],
+          "decode_samples_ms": [
+            0.51675,
+            0.50425,
+            0.5095,
+            0.5265,
+            0.561,
+            0.553,
+            0.549,
+            0.501,
+            0.49025
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 66158,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 68206,
+          "raw_pages": 2,
+          "compressed_pages": 126,
+          "encode_ms": 0.206,
+          "decode_ms": 0.141,
+          "encode_samples_ms": [
+            0.208,
+            0.20625,
+            0.205,
+            0.2055,
+            0.206,
+            0.20725,
+            0.2035,
+            0.201,
+            0.20775
+          ],
+          "decode_samples_ms": [
+            0.14175,
+            0.14075,
+            0.139,
+            0.14225,
+            0.14125,
+            0.141,
+            0.139,
+            0.13975,
+            0.1415
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "new_sparse_1pct_first_outlier.bin",
+        "path": "data/initial/new_sparse_1pct_first_outlier.bin",
+        "size": 2097152,
+        "sha256": "3655adb3d24cc3a941e4f72c8e18e902064b470d5fbb6dddd86fa0ada45224fa",
+        "category": "v2-fresh-validation",
+        "description": "1 percent random exceptions; first and last uint32 of every page forced to an outlier. Nonzero background.",
+        "source": "Deterministic synthetic buffer; generator included."
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/new_sparse_shifted_tail.bin",
+      "input_bytes": 2097167,
+      "page_size": 16384,
+      "page_count": 129,
+      "repetitions": 9,
+      "inner_iterations": 4,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261048,
+      "checksum_fnv1a64": "332e11be41593f97",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "custom_rc",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "raw"
+        ],
+        [
+          "apple_lzfse",
+          "raw",
+          "custom_rc",
+          "apple_lz4",
+          "apple_lz4_raw"
+        ],
+        [
+          "raw",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lzfse"
+        ],
+        [
+          "raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "custom_rc",
+          "apple_lz4_raw"
+        ],
+        [
+          "raw",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lzfse",
+          "apple_lz4"
+        ],
+        [
+          "apple_lz4",
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "custom_rc",
+          "raw"
+        ],
+        [
+          "raw",
+          "apple_lz4",
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "custom_rc"
+        ],
+        [
+          "apple_lz4_raw",
+          "apple_lz4",
+          "custom_rc",
+          "apple_lzfse",
+          "raw"
+        ],
+        [
+          "apple_lz4_raw",
+          "raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "custom_rc"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 2097167,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 2097167,
+          "raw_pages": 129,
+          "compressed_pages": 0,
+          "encode_ms": 0.026,
+          "decode_ms": 0.0255,
+          "encode_samples_ms": [
+            0.0465,
+            0.025,
+            0.02625,
+            0.025,
+            0.026,
+            0.0255,
+            0.026,
+            0.026,
+            0.025
+          ],
+          "decode_samples_ms": [
+            0.025,
+            0.025,
+            0.0255,
+            0.02475,
+            0.027,
+            0.0255,
+            0.04225,
+            0.027,
+            0.0265
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 75538,
+          "metadata_bytes": 2064,
+          "total_storage_bytes": 77602,
+          "raw_pages": 1,
+          "compressed_pages": 128,
+          "encode_ms": 0.23975,
+          "decode_ms": 0.0945,
+          "encode_samples_ms": [
+            0.24425,
+            0.24625,
+            0.251,
+            0.23775,
+            0.23975,
+            0.24275,
+            0.227,
+            0.23925,
+            0.238
+          ],
+          "decode_samples_ms": [
+            0.0945,
+            0.08825,
+            0.0975,
+            0.09475,
+            0.0925,
+            0.09775,
+            0.08225,
+            0.0955,
+            0.09325
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 73490,
+          "metadata_bytes": 2064,
+          "total_storage_bytes": 75554,
+          "raw_pages": 1,
+          "compressed_pages": 128,
+          "encode_ms": 0.23125,
+          "decode_ms": 0.08475,
+          "encode_samples_ms": [
+            0.2305,
+            0.22525,
+            0.236,
+            0.2255,
+            0.234,
+            0.23675,
+            0.247,
+            0.22475,
+            0.23125
+          ],
+          "decode_samples_ms": [
+            0.083,
+            0.08475,
+            0.08525,
+            0.081,
+            0.08475,
+            0.09325,
+            0.093,
+            0.08125,
+            0.095
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 61339,
+          "metadata_bytes": 2064,
+          "total_storage_bytes": 63403,
+          "raw_pages": 1,
+          "compressed_pages": 128,
+          "encode_ms": 5.776,
+          "decode_ms": 0.514,
+          "encode_samples_ms": [
+            5.75125,
+            5.824,
+            5.85525,
+            5.808,
+            5.7695,
+            5.8055,
+            5.776,
+            5.6685,
+            5.75475
+          ],
+          "decode_samples_ms": [
+            0.53925,
+            0.53525,
+            0.514,
+            0.496,
+            0.5,
+            0.51725,
+            0.4935,
+            0.542,
+            0.49075
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 79142,
+          "metadata_bytes": 2064,
+          "total_storage_bytes": 81206,
+          "raw_pages": 2,
+          "compressed_pages": 127,
+          "encode_ms": 0.2175,
+          "decode_ms": 0.1445,
+          "encode_samples_ms": [
+            0.22,
+            0.21775,
+            0.214,
+            0.2105,
+            0.21225,
+            0.216,
+            0.2175,
+            0.22325,
+            0.2185
+          ],
+          "decode_samples_ms": [
+            0.147,
+            0.14775,
+            0.14275,
+            0.14275,
+            0.14375,
+            0.1445,
+            0.14325,
+            0.14625,
+            0.146
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "new_sparse_shifted_tail.bin",
+        "path": "data/initial/new_sparse_shifted_tail.bin",
+        "size": 2097167,
+        "sha256": "c64f5c0df5dc87d7f276828d537e51c0c6ccbc6f67815703a35a0d341e8452bd",
+        "category": "v2-fresh-validation",
+        "description": "1 percent exceptions; one-byte alignment shift and15-byte final partial page. Nonzero multibyte background.",
+        "source": "Deterministic synthetic buffer; generator included."
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/new_alternating_sparse_dense.bin",
+      "input_bytes": 2097152,
+      "page_size": 16384,
+      "page_count": 128,
+      "repetitions": 9,
+      "inner_iterations": 4,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261049,
+      "checksum_fnv1a64": "836615f150e07039",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "apple_lz4",
+          "apple_lzfse",
+          "raw",
+          "apple_lz4_raw",
+          "custom_rc"
+        ],
+        [
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "custom_rc",
+          "raw",
+          "apple_lz4"
+        ],
+        [
+          "custom_rc",
+          "apple_lzfse",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "raw"
+        ],
+        [
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "raw",
+          "apple_lz4",
+          "custom_rc"
+        ],
+        [
+          "apple_lzfse",
+          "raw",
+          "custom_rc",
+          "apple_lz4",
+          "apple_lz4_raw"
+        ],
+        [
+          "custom_rc",
+          "apple_lz4_raw",
+          "raw",
+          "apple_lz4",
+          "apple_lzfse"
+        ],
+        [
+          "apple_lz4",
+          "raw",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4_raw"
+        ],
+        [
+          "raw",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lz4",
+          "apple_lzfse"
+        ],
+        [
+          "raw",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4_raw",
+          "apple_lz4"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 2097152,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 2097152,
+          "raw_pages": 128,
+          "compressed_pages": 0,
+          "encode_ms": 0.02675,
+          "decode_ms": 0.026,
+          "encode_samples_ms": [
+            0.0395,
+            0.02675,
+            0.0255,
+            0.02675,
+            0.02625,
+            0.0265,
+            0.02725,
+            0.02625,
+            0.02775
+          ],
+          "decode_samples_ms": [
+            0.0265,
+            0.0265,
+            0.02525,
+            0.026,
+            0.0255,
+            0.0255,
+            0.02725,
+            0.026,
+            0.02625
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 806995,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 809043,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 1.3295,
+          "decode_ms": 0.409,
+          "encode_samples_ms": [
+            1.3005,
+            1.30225,
+            1.35125,
+            1.28675,
+            1.3485,
+            1.3295,
+            1.332,
+            1.24625,
+            2.27425
+          ],
+          "decode_samples_ms": [
+            0.39125,
+            0.396,
+            0.40425,
+            0.441,
+            0.4305,
+            0.409,
+            0.41675,
+            0.364,
+            0.43825
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 804947,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 806995,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 1.3145,
+          "decode_ms": 0.4055,
+          "encode_samples_ms": [
+            1.31075,
+            1.27025,
+            1.331,
+            1.28525,
+            1.32925,
+            1.35625,
+            1.3145,
+            1.25625,
+            2.16575
+          ],
+          "decode_samples_ms": [
+            0.40925,
+            0.40075,
+            0.40375,
+            0.40625,
+            0.39125,
+            0.415,
+            0.40725,
+            0.3695,
+            0.4055
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 686479,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 688527,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 9.785,
+          "decode_ms": 1.1965,
+          "encode_samples_ms": [
+            9.76225,
+            9.61775,
+            9.55975,
+            9.644,
+            9.785,
+            9.8175,
+            12.06625,
+            11.42375,
+            14.642
+          ],
+          "decode_samples_ms": [
+            1.25225,
+            1.17925,
+            1.20375,
+            1.1965,
+            1.2565,
+            1.18825,
+            1.1675,
+            1.19775,
+            1.15325
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 1065080,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 1067128,
+          "raw_pages": 64,
+          "compressed_pages": 64,
+          "encode_ms": 0.57925,
+          "decode_ms": 0.085,
+          "encode_samples_ms": [
+            0.56625,
+            0.57775,
+            0.56575,
+            0.57775,
+            0.591,
+            0.58225,
+            0.58775,
+            0.57925,
+            0.5875
+          ],
+          "decode_samples_ms": [
+            0.08325,
+            0.0865,
+            0.08325,
+            0.08525,
+            0.08575,
+            0.08575,
+            0.0845,
+            0.0845,
+            0.085
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "new_alternating_sparse_dense.bin",
+        "path": "data/initial/new_alternating_sparse_dense.bin",
+        "size": 2097152,
+        "sha256": "c0af55ea7b0273f4d6af480c8c77cffd7eb1272eaab5a31f1ef744219053f5b7",
+        "category": "v2-fresh-validation",
+        "description": "Alternating16KiB pages with1percent and50percent full-width exceptions. Nonzero background.",
+        "source": "Deterministic synthetic buffer; generator included."
+      }
+    },
+    {
+      "schema_version": 1,
+      "input_path": "data/initial/new_misleading_prefix.bin",
+      "input_bytes": 2097152,
+      "page_size": 16384,
+      "page_count": 128,
+      "repetitions": 9,
+      "inner_iterations": 4,
+      "warmup_rounds_per_method": 1,
+      "shuffle_seed": 20261050,
+      "checksum_fnv1a64": "ae7172146376613b",
+      "timing_scope": "single-thread warm-buffer materialization; encode batch then decode batch; per-buffer times divide batch duration by inner_iterations; fixed batching=min(1024,max(1,ceil(8MiB/input_bytes))); allocation, IO and validation excluded; copies and decisions included; validation after each batch",
+      "storage_scope": "payload plus 16-byte page table for compressed methods; source, output, unused reserved capacity, scratch, allocator and OS overhead excluded; not measured RSS",
+      "apple_selection": "keep compressed only if payload is strictly smaller than original page",
+      "custom_selection": "keep custom output including its headers only if smaller than original page",
+      "trial_order": [
+        [
+          "apple_lzfse",
+          "custom_rc",
+          "raw",
+          "apple_lz4",
+          "apple_lz4_raw"
+        ],
+        [
+          "apple_lz4",
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "custom_rc",
+          "raw"
+        ],
+        [
+          "apple_lz4",
+          "raw",
+          "apple_lz4_raw",
+          "custom_rc",
+          "apple_lzfse"
+        ],
+        [
+          "raw",
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "custom_rc",
+          "apple_lz4"
+        ],
+        [
+          "custom_rc",
+          "raw",
+          "apple_lzfse",
+          "apple_lz4_raw",
+          "apple_lz4"
+        ],
+        [
+          "custom_rc",
+          "apple_lzfse",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "raw"
+        ],
+        [
+          "raw",
+          "apple_lzfse",
+          "apple_lz4",
+          "apple_lz4_raw",
+          "custom_rc"
+        ],
+        [
+          "apple_lz4",
+          "raw",
+          "apple_lz4_raw",
+          "apple_lzfse",
+          "custom_rc"
+        ],
+        [
+          "custom_rc",
+          "apple_lzfse",
+          "raw",
+          "apple_lz4_raw",
+          "apple_lz4"
+        ]
+      ],
+      "results": [
+        {
+          "method": "raw",
+          "payload_bytes": 2097152,
+          "metadata_bytes": 0,
+          "total_storage_bytes": 2097152,
+          "raw_pages": 128,
+          "compressed_pages": 0,
+          "encode_ms": 0.02675,
+          "decode_ms": 0.026,
+          "encode_samples_ms": [
+            0.04025,
+            0.026,
+            0.0255,
+            0.02675,
+            0.06725,
+            0.0265,
+            0.02625,
+            0.027,
+            0.028
+          ],
+          "decode_samples_ms": [
+            0.03575,
+            0.0265,
+            0.0255,
+            0.026,
+            0.0675,
+            0.02625,
+            0.026,
+            0.0255,
+            0.026
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4",
+          "payload_bytes": 77620,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 79668,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 0.26675,
+          "decode_ms": 0.10175,
+          "encode_samples_ms": [
+            0.2425,
+            0.4565,
+            0.2395,
+            0.26675,
+            0.48025,
+            0.247,
+            0.44675,
+            0.294,
+            0.2255
+          ],
+          "decode_samples_ms": [
+            0.10125,
+            0.21125,
+            0.09925,
+            0.10175,
+            0.1965,
+            0.10125,
+            0.195,
+            0.18525,
+            0.08375
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lz4_raw",
+          "payload_bytes": 75572,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 77620,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 0.24725,
+          "decode_ms": 0.098,
+          "encode_samples_ms": [
+            0.2425,
+            0.433,
+            0.22675,
+            0.24725,
+            0.5085,
+            0.23075,
+            0.4695,
+            0.24725,
+            0.2345
+          ],
+          "decode_samples_ms": [
+            0.088,
+            0.18375,
+            0.08525,
+            0.09925,
+            0.18875,
+            0.0865,
+            0.1815,
+            0.098,
+            0.09125
+          ],
+          "verified": true
+        },
+        {
+          "method": "apple_lzfse",
+          "payload_bytes": 63251,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 65299,
+          "raw_pages": 0,
+          "compressed_pages": 128,
+          "encode_ms": 8.315,
+          "decode_ms": 0.5885,
+          "encode_samples_ms": [
+            8.11275,
+            6.69075,
+            5.81875,
+            5.79775,
+            9.64975,
+            8.6745,
+            8.373,
+            8.315,
+            10.46675
+          ],
+          "decode_samples_ms": [
+            0.648,
+            0.5475,
+            0.535,
+            0.51425,
+            1.3165,
+            1.237,
+            0.5355,
+            1.05625,
+            0.5885
+          ],
+          "verified": true
+        },
+        {
+          "method": "custom_rc",
+          "payload_bytes": 2097152,
+          "metadata_bytes": 2048,
+          "total_storage_bytes": 2099200,
+          "raw_pages": 128,
+          "compressed_pages": 0,
+          "encode_ms": 0.43875,
+          "decode_ms": 0.02675,
+          "encode_samples_ms": [
+            1.087,
+            0.427,
+            0.41925,
+            1.08925,
+            0.51825,
+            0.43875,
+            0.4275,
+            0.6065,
+            0.4305
+          ],
+          "decode_samples_ms": [
+            0.08075,
+            0.02625,
+            0.02675,
+            0.06275,
+            0.08025,
+            0.02725,
+            0.02675,
+            0.02675,
+            0.02675
+          ],
+          "verified": true
+        }
+      ],
+      "dataset": {
+        "name": "new_misleading_prefix.bin",
+        "path": "data/initial/new_misleading_prefix.bin",
+        "size": 2097152,
+        "sha256": "e74e26ec639a0bfa8f058e43bd083c56b879e4ad901670124babf7f8275c62af",
+        "category": "v2-fresh-validation",
+        "description": "Adversarial1percent exceptions with first3words of everypage replaced: defeats a naive initial background guess.",
+        "source": "Deterministic synthetic buffer; generator included."
+      }
+    }
+  ],
+  "after_vm_stat": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                               48129.\nPages active:                            354371.\nPages inactive:                          351995.\nPages speculative:                         1765.\nPages throttled:                              0.\nPages wired down:                        267503.\nPages purgeable:                          10592.\n\"Translation faults\":                2775518911.\nPages copy-on-write:                  115333553.\nPages zero filled:                    884215675.\nPages reactivated:                    872168184.\nPages purged:                          65126955.\nFile-backed pages:                       173248.\nAnonymous pages:                         534883.\nPages stored in compressor:             1704432.\nPages occupied by compressor:            507818.\nDecompressions:                       826041017.\nCompressions:                         905790625.\nPageins:                               44908587.\nPageouts:                                912451.\nSwapins:                               15160993.\nSwapouts:                              18406468.",
+  "after_swap": "vm.swapusage: total = 7168.00M  used = 5966.81M  free = 1201.19M  (encrypted)"
+}

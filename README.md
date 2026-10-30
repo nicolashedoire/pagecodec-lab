@@ -1,0 +1,96 @@
+![pagecodec-lab — Lossless compression. Measured trade-offs.](assets/banner.png)
+
+[![Correctness](https://github.com/nicolashedoire/pagecodec-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/nicolashedoire/pagecodec-lab/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/code-MIT-16324f.svg)](LICENSE)
+
+# pagecodec-lab
+
+An experimental C codec for lossless compression of memory pages, with a reproducible benchmark against Apple's **LZ4, LZ4_RAW and LZFSE** implementations. The codec combines repeated values, fixed-width residuals and sparse exceptions. It uses no Apple compression calls internally.
+
+**The useful result:** on a 63.33 MiB column-oriented representation of real household electricity readings, V2 used **20.12% less storage than Apple LZ4_RAW**, encoded **2.34× faster**, and decoded **1.98× faster** in this run. **Apple LZFSE produced smaller output.** On the same values in row order, our codec used more storage than either LZ4 reference. It barely compressed the original text.
+
+This is a software experiment on caller-owned buffers. It does not redesign DRAM, replace the macOS memory compressor, or demonstrate that an operating system uses less RAM. These are measurements of representation size and hot-buffer codec time on one machine.
+
+## Real numerical corpus
+
+The [UCI Individual Household Electric Power Consumption dataset](https://archive.ics.uci.edu/dataset/235/individual+household+electric+power+consumption) contains **2,075,259 original minute records**. Every record is retained exactly once per representation. No synthetic repetition, padding, filtering or rounding is used.
+
+- **63.33 MiB per numeric layout:** timestamp plus seven measurements, represented exactly as eight little-endian fixed-point int32 values per record.
+- **126.80 MiB of original text:** split at row boundaries into two inputs because the comparator accepts at most 64 MiB per input.
+- **One source corpus:** the two numeric layouts and two text chunks are representations/partitions of the same data, not four independent datasets.
+
+All methods receive identical bytes within each comparison. Conversion and layout changes happen before timing. The source archive and every derived file are pinned by SHA-256. [Data specification and conversion](docs/DATASETS.md) · [manifest](manifests/household.json) · [attribution and licenses](DATA_LICENSES.md).
+
+## Measured trade-offs
+
+Column-major numeric input: **66,408,288 bytes**, 16 KiB pages, one warmup and nine timed trials. Times below are medians in milliseconds; smaller is better for every column.
+
+| Method | Stored / original | Encode | Decode |
+|---|---:|---:|---:|
+| Raw copy | 100.00% | 1.01 ms | 1.01 ms |
+| Apple LZ4 | 44.47% | 64.37 ms | 18.84 ms |
+| Apple LZ4_RAW | 44.38% | 62.06 ms | 18.95 ms |
+| Apple LZFSE | **23.58%** | 452.13 ms | 53.65 ms |
+| Custom V2 | 35.45% | 26.48 ms | 9.58 ms |
+
+![Measured numeric results for both layouts, including all five methods](assets/numeric-results.png)
+
+The predeclared strict criterion requires output no larger than a reference **and** at least 10% lower median encoding **and** decoding time. V2 meets it against both LZ4 references on the column layout. **It meets it against all three Apple references on none of the four new inputs.** Faster copying of mostly uncompressed text is not a useful compression win.
+
+![Measured original-text results, showing the custom codec's poor compression](assets/text-results.png)
+
+Measured on **Apple M4 Pro, 24 GiB RAM, macOS 15.1.1**, with Apple clang 16 and `-O3`. This was a single run on a working desktop, not an isolated performance host; timing samples and VM/swap context are published. No confidence interval, cross-machine generalization, energy result or application latency claim is implied.
+
+[Full results and criterion checks](docs/HOUSEHOLD_RESULTS.md) · [CSV](results/household-2026-10-30/all-results.csv) · [JSON with all timing samples](results/household-2026-10-30/all-results.json) · [frozen configuration](results/household-2026-10-30/frozen-config.json) · [methodology](docs/METHODOLOGY.md).
+
+## Reproduce
+
+Codec correctness requires a C11 compiler and `make`. The comparison requires **macOS with Command Line Tools**, Python 3.9+ and `curl`. Downloading and preparing the full corpus uses a few hundred MiB of local disk; generated data and binaries are excluded from Git.
+
+```sh
+git clone https://github.com/nicolashedoire/pagecodec-lab.git
+cd pagecodec-lab
+
+# Portable codec tests; sanitizer support is required for the second target.
+make test sanitize CC=clang
+
+# macOS: verify the comparator on tiny fixtures.
+make smoke CC=clang
+
+# Download the official archive; reconstruct and verify the published inputs.
+python3 scripts/prepare_household.py
+
+# Run all five methods, retaining all nine samples and exact round-trip checks.
+python3 scripts/benchmark.py --output measurements/my-household-run
+```
+
+The runner rejects a nonempty output directory and changed input hashes. Published results remain untouched. To regenerate the figures from the published JSON, use **Python 3.11 or newer** (required by the pinned Matplotlib version):
+
+```sh
+python3.11 -m venv .venv
+.venv/bin/python -m pip install -r requirements-figures.txt
+.venv/bin/python scripts/plot_results.py
+```
+
+The core C codec, corpus preparation and benchmark runner have no third-party Python dependencies. Matplotlib is needed only for the figures. GitHub Actions runs portable correctness/sanitizer checks and a macOS comparator smoke test; shared-runner timing is not treated as performance evidence.
+
+## Implementation and experiment history
+
+The six modes are raw, a uniform byte, a repeated 64-bit word, byte residuals, four interleaved int32 lanes, and sparse int32 exceptions. The benchmark falls back to raw storage whenever a compressed frame is not smaller, and includes a common **16-byte table entry per page** for every compressed method. The raw-copy baseline has no page table.
+
+[Format and API](docs/FORMAT.md) · [codec source](codec.c) · [comparison harness](compare.c) · [correctness suite](codec_test.c).
+
+Earlier V1/V2 experiments included synthetic arrays, weather data, JavaScript, random bytes and an already-compressed image. Both wins and failures are retained. The two strict wins over all three references came from one synthetic event-record family; **none of eight fresh V2 validation cases won against all three**. The larger UCI corpus was added after V2 was frozen, without retuning the codec.
+
+[Historical results](docs/INITIAL_EXPERIMENTS.md) can be reproduced with:
+
+```sh
+python3 scripts/prepare_initial.py
+python3 scripts/benchmark.py --manifest manifests/initial-v2.json --output measurements/my-initial-v2-run
+```
+
+The algorithms build on established compression ideas. This repository makes no claim to invent base-delta packing, sparse encoding, or memory compression. Next useful experiments would compare dedicated numerical codecs, multiple independent real corpora, end-to-end conversion costs, and page access/update workloads under actual memory pressure.
+
+## License and artwork
+
+Code: [MIT](LICENSE). Dataset rights and notices: [DATA_LICENSES.md](DATA_LICENSES.md). The illustrative banner was AI-generated; its [complete prompt and generation mode](assets/imagegen-prompt.txt) are recorded. Every chart is generated from the committed measurement JSON, not from an image-generation model.

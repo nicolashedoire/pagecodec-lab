@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "source": {
+    "name": "Individual Household Electric Power Consumption",
+    "authors": [
+      "Georges Hebrail",
+      "Alice Berard"
+    ],
+    "doi": "https://doi.org/10.24432/C58K54",
+    "url": "https://archive.ics.uci.edu/static/public/235/individual%2Bhousehold%2Belectric%2Bpower%2Bconsumption.zip",
+    "license": "CC-BY-4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "archive_sha256": "9f84b46ade8a2d8e1286ec4b2b6c2987a45a755c59f263be3b3b3d10dfbda3ff",
+    "source_sha256": "4259c9d7ece5dbee9ab8d53682baac68d791c864f0f64a52b4043cb3b90894b7",
+    "source_bytes": 132960755
+  },
+  "conversion": {
+    "rows": 2075259,
+    "first_timestamp": "2006-12-16T17:24:00",
+    "last_timestamp": "2010-11-26T21:02:00",
+    "fields": [
+      "relative_calendar_minutes",
+      "Global_active_power",
+      "Global_reactive_power",
+      "Voltage",
+      "Global_intensity",
+      "Sub_metering_1",
+      "Sub_metering_2",
+      "Sub_metering_3"
+    ],
+    "scales": [
+      1,
+      1000,
+      1000,
+      100,
+      10,
+      1,
+      1,
+      1
+    ],
+    "byte_order": "little",
+    "value_type": "signed int32",
+    "missing_sentinel": -2147483648,
+    "missing_per_field": {
+      "Global_active_power": 25979,
+      "Global_reactive_power": 25979,
+      "Voltage": 25979,
+      "Global_intensity": 25979,
+      "Sub_metering_1": 25979,
+      "Sub_metering_2": 25979,
+      "Sub_metering_3": 25979
+    },
+    "losslessness": "Exact numeric values, timestamp values and missingness; not original text spelling. Text chunks preserve original bytes.",
+    "filtering": "None. Every original row retained once in each representation. No repeated padding.",
+    "layout": "Row: eight values per record. Column: eight complete contiguous arrays, same values and order within each array.",
+    "independence": "Four benchmark files are representations/partitions of ONE source corpus, not four independent datasets."
+  },
+  "protocol": {
+    "page_bytes": 16384,
+    "repetitions": 9,
+    "warmups": 1,
+    "codec": "frozen V2",
+    "strict_win": "size <= reference AND encode <=0.90*reference AND decode <=0.90*reference"
+  },
+  "datasets": [
+    {
+      "name": "household-row-i32.bin",
+      "path": "data/household/household-row-i32.bin",
+      "size": 66408288,
+      "sha256": "46d42e3a182b035c397b786974e2c4e75e979fdc5f4f1e631f5a7e668dab75f7",
+      "category": "real-household-power",
+      "representation": "row-major fixed-point int32",
+      "source_corpus": "uci-household-power-235"
+    },
+    {
+      "name": "household-column-i32.bin",
+      "path": "data/household/household-column-i32.bin",
+      "size": 66408288,
+      "sha256": "910ab4ec9d1fe12a892bf841c7e95586f02adc5e158934b2d721d8cdb919249d",
+      "category": "real-household-power",
+      "representation": "column-major fixed-point int32",
+      "source_corpus": "uci-household-power-235"
+    },
+    {
+      "name": "household-text-part-01.txt",
+      "path": "data/household/household-text-part-01.txt",
+      "size": 67108839,
+      "sha256": "a59981b49107dca78d200965b906f119e8ee8019db2ecd7058d1b8a0bcff744b",
+      "category": "real-household-power",
+      "representation": "original text chunk",
+      "source_corpus": "uci-household-power-235"
+    },
+    {
+      "name": "household-text-part-02.txt",
+      "path": "data/household/household-text-part-02.txt",
+      "size": 65851916,
+      "sha256": "b3fd2b68492dd5f353221eac68b057bf25bb06a12e46cdfd6bfcbec55df9b04b",
+      "category": "real-household-power",
+      "representation": "original text chunk",
+      "source_corpus": "uci-household-power-235"
+    }
+  ]
+}

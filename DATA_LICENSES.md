@@ -1,0 +1,102 @@
+# Data sources and licenses
+
+The original implementation, scripts and documentation in this repository use
+the [MIT license](LICENSE). That license does not replace the licenses or
+attribution requirements of downloaded benchmark inputs. The preparation
+scripts and manifests record how to reproduce those inputs.
+
+## UCI household electric power consumption
+
+**Attribution:** Hebrail, G. & Berard, A. (2006). *Individual Household Electric
+Power Consumption* [Dataset]. UCI Machine Learning Repository.
+[https://doi.org/10.24432/C58K54](https://doi.org/10.24432/C58K54).
+Creators: Georges Hebrail and Alice Berard.
+
+The [official UCI dataset page](https://archive.ics.uci.edu/dataset/235/individual+household+electric+power+consumption)
+publishes this dataset under
+[Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
+The script downloads the
+[official archive](https://archive.ics.uci.edu/static/public/235/individual%2Bhousehold%2Belectric%2Bpower%2Bconsumption.zip)
+and verifies its pinned SHA-256 before conversion.
+
+Changes made here: every source row is retained, dates and times become naive
+calendar-minute offsets, and seven measurements become exact scaled signed
+32-bit integers. Empty and `?` measurement fields become a missing-value
+sentinel. Both row-major and column-major layouts are produced. Decimal scales
+and round trips are checked, with no rounding, imputation or synthetic padding.
+These transformations preserve values and missingness, not original text
+formatting or the distinction between missing-value spellings. Original text
+is also partitioned at line boundaries; concatenating the partitions reproduces
+the source bytes exactly. The manifest identifies the scales, counts and
+hashes. The authors and UCI do not endorse this experiment.
+
+## Seattle weather: NOAA via Vega Datasets
+
+The initial corpus uses `seattle-weather.csv` from Vega Datasets at immutable
+commit `5448e25297c8f705be78e879d5423d55d04dc6f1`:
+
+- [Pinned CSV](https://raw.githubusercontent.com/vega/vega-datasets/5448e25297c8f705be78e879d5423d55d04dc6f1/data/seattle-weather.csv).
+- [Pinned provenance and license metadata](https://github.com/vega/vega-datasets/blob/5448e25297c8f705be78e879d5423d55d04dc6f1/datapackage.json), resource `seattle_weather`.
+
+That metadata credits the NOAA National Climatic Data Center and classifies
+the data as `other-pd`, titled “U.S. Government Dataset.” It also records that
+Vega transformed the source into metric daily weather data and synthesized the
+categorical `weather` field. This attribution concerns the dataset; Vega's
+repository-code license is not being asserted as the dataset license.
+
+Changes made here: chronological splits for 2012–2013 and 2014–2015; CSV
+reserialization; and a separate numeric projection of precipitation, maximum
+temperature, minimum temperature and wind, each multiplied exactly by ten and
+stored as little-endian int32. That projection omits dates and weather labels
+and therefore is not a lossless encoding of the whole CSV. NOAA and Vega
+Datasets are credited as sources, without implying endorsement.
+
+## REA source text, version 6.8.0
+
+The initial corpus reads `package/dist/cli-runtime/cli.js` from the pinned
+[`rea-agents` 6.8.0 npm archive](https://registry.npmjs.org/rea-agents/-/rea-agents-6.8.0.tgz).
+Upstream project: [morluto/rea](https://github.com/morluto/rea).
+Its package metadata declares MIT, and the archive includes the notice below.
+The script reads the selected member as bytes and verifies its published
+manifest hash. It does not install or execute REA. In this benchmark REA is a
+JavaScript text input, not a tool used to inspect physical memory.
+
+The archive's `package/LICENSE` notice is retained verbatim:
+
+```text
+MIT License
+
+Copyright (c) 2026 morluto
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## Generated inputs and illustrations
+
+The event, zero, random, palette, sparse and adversarial binary fixtures are
+generated by this project's scripts, not measurements collected from hardware
+or real users. Their generators are covered by the repository MIT license.
+
+`fixtures/previous_plot.png` is an internally generated plot retained as an
+already-compressed PNG input. Its role is to test codec behavior on such bytes;
+its visual content is not evidence for the current benchmark.
+
+`assets/banner.png` is an AI-generated illustrative hero, produced with the
+built-in image generation tool. Its prompt and generation mode are recorded in
+`assets/imagegen-prompt.txt`. It is not a measured chart or a technical diagram.
