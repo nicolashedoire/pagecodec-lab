@@ -1,5 +1,20 @@
 # Corpus specification
 
+## Complete report application inputs
+
+The [end-to-end manifest](../manifests/end-to-end-v1.json) pins the unchanged
+original household text, decompressed original Covertype CSV and original Bike
+`hour.csv`, plus twelve unique query plans and independent expected answers.
+`python3 scripts/prepare_end_to_end.py` reconstructs these inputs from the same
+licensed sources below. The application reads all source records but evaluates
+only the final 80%, converting only the same two selected columns.
+
+This follow-up uses 31 distinct calibration-quantile thresholds and a fixed
+sequence of unique requests; report sizes are prefixes of 1, 32, 512 and 4096.
+Request generation and source extraction are excluded preparation, while the
+application's raw-text reading and parsing are measured. No data rows are
+duplicated to enlarge the source. See [the complete protocol](END_TO_END.md).
+
 ## Operation-level evaluation corpora
 
 The [operations manifest](../manifests/operations-v1.json) pins additional sources

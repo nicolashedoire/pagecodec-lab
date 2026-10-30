@@ -1,0 +1,389 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "household",
+      "format": "household",
+      "source": {
+        "path": "data/end-to-end/household.txt",
+        "bytes": 132960755,
+        "sha256": "4259c9d7ece5dbee9ab8d53682baac68d791c864f0f64a52b4043cb3b90894b7"
+      },
+      "source_rows": 2075259,
+      "skip_rows": 415051,
+      "rows": 1660208,
+      "thresholds": [
+        118,
+        162,
+        192,
+        206,
+        216,
+        222,
+        236,
+        260,
+        282,
+        294,
+        308,
+        320,
+        342,
+        376,
+        402,
+        462,
+        572,
+        786,
+        1132,
+        1256,
+        1312,
+        1368,
+        1430,
+        1518,
+        1658,
+        1858,
+        2160,
+        2422,
+        2734,
+        3328,
+        3926
+      ],
+      "window_lengths": [
+        1452682,
+        830104,
+        65536,
+        1024
+      ],
+      "seed": 20261031,
+      "projected_fnv1a64": "13174137606891873933",
+      "plans": [
+        {
+          "query_count": 1,
+          "queries": {
+            "path": "data/end-to-end/household-1.tsv",
+            "bytes": 14,
+            "sha256": "cc054cc53ccbd33e592486585ecc294d4517af6b446ebf0df0d656bf0692b468"
+          },
+          "expected": {
+            "path": "data/end-to-end/household-1-expected.json",
+            "bytes": 35,
+            "sha256": "55f984434331109ae630f3f5d00ede61d36adc0a3b9d824e135a3ace7ea8f2cd"
+          },
+          "row_visits": 1660208,
+          "distinct_thresholds": 1,
+          "unique_queries": 1
+        },
+        {
+          "query_count": 32,
+          "queries": {
+            "path": "data/end-to-end/household-32.tsv",
+            "bytes": 598,
+            "sha256": "e6b6251586818272d47fe6ff6449f344a83afe6bc52c8aaf81f9ea54605e4127"
+          },
+          "expected": {
+            "path": "data/end-to-end/household-32-expected.json",
+            "bytes": 984,
+            "sha256": "11a41a99abdaea19076b990d7f3171a30f40f311d08d3bc8f170d2706c1a7352"
+          },
+          "row_visits": 20453952,
+          "distinct_thresholds": 17,
+          "unique_queries": 32
+        },
+        {
+          "query_count": 512,
+          "queries": {
+            "path": "data/end-to-end/household-512.tsv",
+            "bytes": 9782,
+            "sha256": "ef15700537724edd909c61828cf17c90726d0f6abe7a5540373a2ec7022a047c"
+          },
+          "expected": {
+            "path": "data/end-to-end/household-512-expected.json",
+            "bytes": 15430,
+            "sha256": "2efdcc3a43338bc322eea032a9e2c20a3159f8b71c532078febca265b1945edc"
+          },
+          "row_visits": 302375472,
+          "distinct_thresholds": 31,
+          "unique_queries": 512
+        },
+        {
+          "query_count": 4096,
+          "queries": {
+            "path": "data/end-to-end/household-4096.tsv",
+            "bytes": 78033,
+            "sha256": "cc4df2867dfd50cbe83b1fa4472914426e4025de493def4cafe2bc231772cd6b"
+          },
+          "expected": {
+            "path": "data/end-to-end/household-4096-expected.json",
+            "bytes": 123554,
+            "sha256": "0916d280c6d344768ef5f7e0a574f14428aba3e663f364782f52bca20ae0798e"
+          },
+          "row_visits": 2407389488,
+          "distinct_thresholds": 31,
+          "unique_queries": 4096
+        }
+      ]
+    },
+    {
+      "name": "covertype",
+      "format": "covertype",
+      "source": {
+        "path": "data/end-to-end/covertype.csv",
+        "bytes": 75169317,
+        "sha256": "0a9371cef7c964b5475d6053cc3e0894a5aa6f65ad1ed3ecb01c45aa96217945"
+      },
+      "source_rows": 581012,
+      "skip_rows": 116202,
+      "rows": 464810,
+      "thresholds": [
+        2363,
+        2539,
+        2591,
+        2625,
+        2658,
+        2687,
+        2709,
+        2729,
+        2751,
+        2772,
+        2794,
+        2815,
+        2837,
+        2859,
+        2882,
+        2903,
+        2919,
+        2931,
+        2942,
+        2955,
+        2965,
+        2978,
+        2988,
+        3001,
+        3014,
+        3034,
+        3054,
+        3086,
+        3132,
+        3175,
+        3231
+      ],
+      "window_lengths": [
+        406708,
+        232405,
+        65536,
+        1024
+      ],
+      "seed": 20261032,
+      "projected_fnv1a64": "13422432735847835339",
+      "plans": [
+        {
+          "query_count": 1,
+          "queries": {
+            "path": "data/end-to-end/covertype-1.tsv",
+            "bytes": 14,
+            "sha256": "b2be71aefc38113332845d2669b34da37221017230c82179b625ef7eb3b96ba1"
+          },
+          "expected": {
+            "path": "data/end-to-end/covertype-1-expected.json",
+            "bytes": 35,
+            "sha256": "4d7ba675acccbe769695214c26c25a9bb272139536534156de9e3f3a5e408292"
+          },
+          "row_visits": 464810,
+          "distinct_thresholds": 1,
+          "unique_queries": 1
+        },
+        {
+          "query_count": 32,
+          "queries": {
+            "path": "data/end-to-end/covertype-32.tsv",
+            "bytes": 582,
+            "sha256": "186c85cb5c8f31ad54c3fa7522b7d94b820cdebce0c7dab027d705d3d8247bf4"
+          },
+          "expected": {
+            "path": "data/end-to-end/covertype-32-expected.json",
+            "bytes": 1010,
+            "sha256": "9748980f0e57c898ebbb3fb7974ed317296dda015dd4a92388a4b9e67167c1d6"
+          },
+          "row_visits": 6109170,
+          "distinct_thresholds": 20,
+          "unique_queries": 32
+        },
+        {
+          "query_count": 512,
+          "queries": {
+            "path": "data/end-to-end/covertype-512.tsv",
+            "bytes": 9404,
+            "sha256": "be1ae34038cbbe83a853f1f12ecaab4af2f8670cc62f8b4ea0e411c7d1316b91"
+          },
+          "expected": {
+            "path": "data/end-to-end/covertype-512-expected.json",
+            "bytes": 15989,
+            "sha256": "1c6d1b4e6f294e47a58df353d7c642f9e9c52725995893c6558c13255f0a83cd"
+          },
+          "row_visits": 90789930,
+          "distinct_thresholds": 31,
+          "unique_queries": 512
+        },
+        {
+          "query_count": 4096,
+          "queries": {
+            "path": "data/end-to-end/covertype-4096.tsv",
+            "bytes": 75231,
+            "sha256": "a804a24347c53aed6bc231a8ce985aaac95814c1aeee1f2c145e4aa1ac3bd13e"
+          },
+          "expected": {
+            "path": "data/end-to-end/covertype-4096-expected.json",
+            "bytes": 128029,
+            "sha256": "256f5752463d0368d6fce18d3c135b37e3532768570c368dc86a46c02f06eaac"
+          },
+          "row_visits": 723072938,
+          "distinct_thresholds": 31,
+          "unique_queries": 4096
+        }
+      ]
+    },
+    {
+      "name": "bike",
+      "format": "bike",
+      "source": {
+        "path": "data/end-to-end/bike.csv",
+        "bytes": 1156736,
+        "sha256": "e03de4ee4ef4dc376ac6e04bf829673c6269e8eba5c60fa121640fa2f829504f"
+      },
+      "source_rows": 17379,
+      "skip_rows": 3475,
+      "rows": 13904,
+      "thresholds": [
+        2,
+        3,
+        5,
+        7,
+        10,
+        14,
+        18,
+        24,
+        30,
+        35,
+        42,
+        48,
+        54,
+        60,
+        66,
+        73,
+        80,
+        87,
+        95,
+        104,
+        115,
+        126,
+        140,
+        154,
+        169,
+        185,
+        204,
+        228,
+        268,
+        312,
+        392
+      ],
+      "window_lengths": [
+        12166,
+        6952,
+        3476,
+        869
+      ],
+      "seed": 20261033,
+      "projected_fnv1a64": "2990418601557836128",
+      "plans": [
+        {
+          "query_count": 1,
+          "queries": {
+            "path": "data/end-to-end/bike-1.tsv",
+            "bytes": 11,
+            "sha256": "cf734b0377bc226c2f2a56753a3df60e7e6119883015f7c7babb723fdf46ba3f"
+          },
+          "expected": {
+            "path": "data/end-to-end/bike-1-expected.json",
+            "bytes": 31,
+            "sha256": "34d82c9bcf1529510a20ebb25e30ab8b760d16bcd914d0b788a06476a32ffe93"
+          },
+          "row_visits": 13904,
+          "distinct_thresholds": 1,
+          "unique_queries": 1
+        },
+        {
+          "query_count": 32,
+          "queries": {
+            "path": "data/end-to-end/bike-32.tsv",
+            "bytes": 437,
+            "sha256": "d9e7539ce611b32a18ac8d7e6310338a8898144e0bfa2c0c928122f64a200f7d"
+          },
+          "expected": {
+            "path": "data/end-to-end/bike-32-expected.json",
+            "bytes": 899,
+            "sha256": "44b0c7e4323a055c3472c41403fd8a22cd0d7e9c52967ea6df4a0193044fe0cc"
+          },
+          "row_visits": 200739,
+          "distinct_thresholds": 22,
+          "unique_queries": 32
+        },
+        {
+          "query_count": 512,
+          "queries": {
+            "path": "data/end-to-end/bike-512.tsv",
+            "bytes": 6987,
+            "sha256": "decd575e010e0dfee8e190069239d203570d87eb6528342f525d68cf5c2b3691"
+          },
+          "expected": {
+            "path": "data/end-to-end/bike-512-expected.json",
+            "bytes": 14408,
+            "sha256": "70e53cd09553d330c654cffd87908f77a2430b4fae5782bae4855ae1d2f048ed"
+          },
+          "row_visits": 3016299,
+          "distinct_thresholds": 31,
+          "unique_queries": 512
+        },
+        {
+          "query_count": 4096,
+          "queries": {
+            "path": "data/end-to-end/bike-4096.tsv",
+            "bytes": 55778,
+            "sha256": "14b7cc4d88db34952dd30da9ba5ef41dd914b219d1e38789e6a204ebe3d904de"
+          },
+          "expected": {
+            "path": "data/end-to-end/bike-4096-expected.json",
+            "bytes": 115186,
+            "sha256": "6cf62ea2967e49749be7780e511f2e594c2235b3359c99f0d4f9bc96b197f9ff"
+          },
+          "row_visits": 24039147,
+          "distinct_thresholds": 31,
+          "unique_queries": 4096
+        }
+      ]
+    }
+  ],
+  "protocol": {
+    "methods": [
+      "raw",
+      "bitplane",
+      "bitplane_adaptive",
+      "sorted_blocks",
+      "stream_sweep"
+    ],
+    "repetitions": 9,
+    "query_counts": [
+      1,
+      32,
+      512,
+      4096
+    ],
+    "order_seed": 20261031,
+    "block_rows": 1024,
+    "task": "Offline exact count and masked-sum report; all unique requests supplied before reading source text",
+    "primary_time": "Parent perf_counter around fresh /usr/bin/time child process, launch through output and exit",
+    "primary_memory": "Fresh child process maximum resident set size from /usr/bin/time -l on macOS",
+    "included": "Query-plan reading, complete source text reading, parsing, calibration-row skipping, construction, queries, answer serialization and exit",
+    "excluded": "Download/archive extraction, calibration and query-plan preparation, independent oracle, input hash verification",
+    "file_cache": "OS file cache is not flushed; pre-run hashing warms source files",
+    "success_rule": "At least 10% lower median external elapsed AND at least 10% lower median peak RSS than raw, on two independent sources at 4096 unique queries; disclose all other methods and load levels",
+    "scope": "A standalone reporting application prototype with generated query plans, not a deployed service or interactive trace",
+    "no_tuning_after_measurement": true
+  }
+}

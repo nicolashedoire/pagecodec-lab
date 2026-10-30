@@ -1,5 +1,11 @@
 # Beyond whole-page compression: three measured experiments
 
+**Follow-up:** the [complete report application](END_TO_END.md) now measures
+source reading, parsing, construction, output and actual peak RSS. It adds
+stronger raw/sorted controls and an offline streaming sweep. The latter meets
+the full-task time-and-memory criterion on two sources; the bitplane variants
+do not. The measurements below remain the original warm-operation experiment.
+
 This follow-up implements three hypotheses from the [research review](RESEARCH.md):
 query exact compressed values directly, retain deterministic recipes instead of
 derived arrays, and share overlapping immutable strings. All are application

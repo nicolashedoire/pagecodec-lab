@@ -1,0 +1,35 @@
+{
+  "rule": "At least 10% lower median external elapsed AND at least 10% lower median peak RSS than raw, on two independent sources at 4096 unique queries; disclose all other methods and load levels",
+  "measurement_count": 540,
+  "comparisons": 60,
+  "verdicts": [
+    {
+      "method": "raw",
+      "passing_sources_at_4096": [],
+      "passes_predeclared_two_source_rule": false
+    },
+    {
+      "method": "bitplane",
+      "passing_sources_at_4096": [],
+      "passes_predeclared_two_source_rule": false
+    },
+    {
+      "method": "bitplane_adaptive",
+      "passing_sources_at_4096": [],
+      "passes_predeclared_two_source_rule": false
+    },
+    {
+      "method": "sorted_blocks",
+      "passing_sources_at_4096": [],
+      "passes_predeclared_two_source_rule": false
+    },
+    {
+      "method": "stream_sweep",
+      "passing_sources_at_4096": [
+        "household",
+        "covertype"
+      ],
+      "passes_predeclared_two_source_rule": true
+    }
+  ]
+}

@@ -9,7 +9,42 @@ Experiments in exact, compact data representations: a C page codec benchmarked a
 
 This is application-level research on caller-owned data. It does not redesign DRAM, replace the macOS memory compressor, or establish general superiority to Apple.
 
-## New: three operation-level experiments
+## New: a complete application, including construction and peak RSS
+
+**An offline analytical report can finish faster and use less peak memory by
+answering its known questions during one source pass.** We implemented five
+strategies and measured 540 fresh processes, from original source text and a
+supplied query plan through complete JSON answers. Parsing, construction,
+projection verification, queries, writing and process startup/exit all count.
+
+At 4096 unique questions, the streaming endpoint sweep versus raw NEON with
+block aggregates gives:
+
+| Source | Complete elapsed time | Whole-process peak RSS |
+|---|---:|---:|
+| Household electricity | 1048.95 → **585.73 ms** (−44.16%) | 14.094 → **1.703 MiB** (−87.92%) |
+| Covertype forest observations | 665.29 → **510.35 ms** (−23.29%) | 4.922 → **1.594 MiB** (−67.62%) |
+
+These are nine-trial medians. Both gains exceed 10% in all nine paired rounds
+on each source. The sweep also has the best measured elapsed median and RSS
+among all five strategies on those two large reports. Against the faster
+sorted-block control, its time advantage is 15.45% and 8.49%, respectively.
+
+![Complete report elapsed time and actual peak resident memory](assets/end-to-end-results.png)
+
+**Limits and negative results:** every report question is known before reading;
+this is not an interactive store. At low query counts, parsing dominates and the
+sweep can be slower. It uses 4.21% more peak RSS than raw on the small Bike report.
+The bitplane variants save memory but **do not meet the predeclared two-source
+end-to-end speed-and-memory criterion**. Queries are generated plans over real
+data, measured in one warm-file-cache desktop session, not production traffic.
+
+[Full results, all controls and reproduction](docs/END_TO_END.md) ·
+[Runnable report application](experiments/end_to_end/README.md) ·
+[540 process samples](results/end-to-end-2026-10-30/process-samples.csv) ·
+[Actual report answers](results/end-to-end-2026-10-30/reports).
+
+## Earlier: three operation-level experiments
 
 **The most promising result is querying exact compressed values without reconstructing entire arrays.** On Covertype forest observations, progressive bitplanes use **55.49% less accounted working capacity** and achieve **1.18–2.00× ratios of median query times** against a native ARM NEON raw baseline, across all nine tested threshold/window scenarios. Construction costs extra, and the isolated process peak RSS is higher during construction and validation. This is a compact representation and repeated-query result, not a measured 55% reduction in application RAM.
 

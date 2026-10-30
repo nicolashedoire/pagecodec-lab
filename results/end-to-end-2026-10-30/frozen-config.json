@@ -1,0 +1,46 @@
+{
+  "frozen_utc": "2026-10-30T15:40:49.827816+00:00",
+  "sources_sha256": {
+    "Makefile": "a9a2ff6bb2d11b7c40e98a782de92591573534af59cc5e74873e9cfa79bb524f",
+    "experiments/end_to_end/report_bench.cpp": "3b4a07146f9a843628d9702b47976e081ea05de1d836ad8290c6b6121fce71ea",
+    "tests/test_end_to_end.py": "4e45788d305bd1c261d0fcfe754368ecfe23229e6883e0b9ab694bebd36b4861",
+    "scripts/prepare_end_to_end.py": "c4f600fb784bd44a6c2d0fdf3b72f146f6b0e239f4f92c57bd13581801bb7cf5",
+    "scripts/run_end_to_end.py": "157e92ff3d1a2d57d0e8e89d16293e5ec9e54972ed2c4756a7f42be1123ead7d",
+    "manifests/end-to-end-v1.json": "c35de9244f94ab001a95684e779cf99e9bb5a41e1101666093fa1fff351cc199"
+  },
+  "binary_sha256": "419c133c3f9f0e6f7ebe00485012d3ea0be7a3a2b765b39e263f131d4b90eba6",
+  "protocol": {
+    "methods": [
+      "raw",
+      "bitplane",
+      "bitplane_adaptive",
+      "sorted_blocks",
+      "stream_sweep"
+    ],
+    "repetitions": 9,
+    "query_counts": [
+      1,
+      32,
+      512,
+      4096
+    ],
+    "order_seed": 20261031,
+    "block_rows": 1024,
+    "task": "Offline exact count and masked-sum report; all unique requests supplied before reading source text",
+    "primary_time": "Parent perf_counter around fresh /usr/bin/time child process, launch through output and exit",
+    "primary_memory": "Fresh child process maximum resident set size from /usr/bin/time -l on macOS",
+    "included": "Query-plan reading, complete source text reading, parsing, calibration-row skipping, construction, queries, answer serialization and exit",
+    "excluded": "Download/archive extraction, calibration and query-plan preparation, independent oracle, input hash verification",
+    "file_cache": "OS file cache is not flushed; pre-run hashing warms source files",
+    "success_rule": "At least 10% lower median external elapsed AND at least 10% lower median peak RSS than raw, on two independent sources at 4096 unique queries; disclose all other methods and load levels",
+    "scope": "A standalone reporting application prototype with generated query plans, not a deployed service or interactive trace",
+    "no_tuning_after_measurement": true
+  },
+  "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin24.1.0\nThread model: posix",
+  "platform": "Darwin 24.1.0 arm64",
+  "parent_clock": "mach_absolute_time()",
+  "machine": "hw.memsize: 25769803776\nhw.model: Mac16,8\nmachdep.cpu.brand_string: Apple M4 Pro",
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t15.1.1\nBuildVersion:\t\t24B2091",
+  "before_vm_stat": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                               12732.\nPages active:                            414070.\nPages inactive:                          422732.\nPages speculative:                         1382.\nPages throttled:                              0.\nPages wired down:                        258603.\nPages purgeable:                          16396.\n\"Translation faults\":                2824686130.\nPages copy-on-write:                  118175819.\nPages zero filled:                    905778287.\nPages reactivated:                    879694052.\nPages purged:                          67020902.\nFile-backed pages:                       180348.\nAnonymous pages:                         657836.\nPages stored in compressor:             1567007.\nPages occupied by compressor:            422069.\nDecompressions:                       831976833.\nCompressions:                         912893903.\nPageins:                               46087649.\nPageouts:                                920406.\nSwapins:                               15202838.\nSwapouts:                              18492188.",
+  "before_swap": "vm.swapusage: total = 8192.00M  used = 6642.06M  free = 1549.94M  (encrypted)"
+}
