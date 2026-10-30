@@ -43,16 +43,25 @@ the research Mac with QEMU TCG and retained its full
 [synthetic QMP and MCP evidence](evidence/reproducible-vm-run.json). It
 first verified that an out-of-bounds MCP move to `(399, 260)` was rejected
 with `isError: true` and that the guest reported unchanged positions. It then
-injected a synthetic human VirtIO tablet event and captured the QMP success
-response. The client negotiated MCP, discovered the two tools and moved the
+injected a synthetic tablet x=32767 event and observed the guest report
+human x=390, then injected the standard synthetic human VirtIO tablet event
+and captured the QMP responses. The client negotiated MCP, discovered the two tools and moved the
 assistant cursor. The guest reported human pointer `(223, 390)` and
 assistant pointer `(560, 330)` before the MCP call; afterward it reported
 `(223, 390)` and `(650, 260)` respectively. The client checked the move reply
-and post-move state. The runner also recorded guest/client image hashes and
+and post-move state. This run uses the guest connected to the `dual_input`
+router: both pointer movement paths update its separate workspace cursor
+states, which are read back by the display and `pointer_state`. The human
+click indicator is a visual effect and is not a routed click or focus. Guest
+grants are locally constructed and forgeable; they provide no authentication
+or security isolation. The runner also recorded guest/client image hashes and
 before/after framebuffer hashes. Different hashes establish a framebuffer
 change, not the geometry or cause of that change; the generated raw
 framebuffers themselves are not stored in this repository.
 
+The JSON also preserves the previous automated run under
+`previous_automated_evidence`; older evidence, including the pre-router run,
+is retained in its nested records.
 An earlier [synthetic exchange](evidence/mcp-smoke.json) used an earlier image.
 The [manual exchange on the polished image](evidence/mcp-polished-smoke.json)
 includes an operator-reported QMP acknowledgement and a hash taken after

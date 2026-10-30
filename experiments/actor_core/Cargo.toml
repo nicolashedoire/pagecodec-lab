@@ -1,0 +1,21 @@
+[package]
+name = "actor-core-sketch"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[features]
+qemu-demo = []
+
+[[bin]]
+name = "actor-core-demo"
+path = "src/bin/qemu.rs"
+required-features = ["qemu-demo"]
+test = false
+bench = false
+
+[profile.release]
+panic = "abort"
+opt-level = 2
+codegen-units = 1
+lto = true

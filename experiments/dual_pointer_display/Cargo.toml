@@ -5,6 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+dual-input-lab = { path = "../dual_input" }
 virtio-drivers = { version = "=0.13.0", default-features = false, features = ["alloc"] }
 serde_json = { version = "=1.0.154", default-features = false, features = ["alloc"] }
 

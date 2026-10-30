@@ -148,13 +148,27 @@ def main():
                                 before_req, before_res, before_state = state(serial_stream, 3)
                                 if "ai=560,330" not in before_state:
                                     raise RuntimeError("rejected move changed the AI pointer: " + before_state)
+                                # Check the rightmost synthetic tablet input before the standard scenario.
+                                edge_event = {"execute": "input-send-event", "arguments": {"events": [
+                                    {"type": "abs", "data": {"axis": "x", "value": 32767}},
+                                ]}}
+                                edge_result = qmp_command(qmp_stream, edge_event)
+                                edge_poll = []
+                                for request_id in range(4, 24):
+                                    req, res, current = state(serial_stream, request_id)
+                                    edge_poll.append({"request": req, "response": res})
+                                    if current == "human=390,180; ai=560,330":
+                                        break
+                                    time.sleep(0.2)
+                                else:
+                                    raise TimeoutError("guest did not clamp the human pointer at x=390")
                                 event = {"execute": "input-send-event", "arguments": {"events": [
                                     {"type": "abs", "data": {"axis": "x", "value": 18000}},
                                     {"type": "abs", "data": {"axis": "y", "value": 21000}},
                                 ]}}
                                 event_result = qmp_command(qmp_stream, event)
                                 poll_trace = []
-                                for request_id in range(4, 49):
+                                for request_id in range(24, 44):
                                     req, res, current = state(serial_stream, request_id)
                                     poll_trace.append({"request": req, "response": res})
                                     if "human=223,390" in current:
@@ -187,6 +201,8 @@ def main():
                                     "probe": {"initialization": {"request": initialize, "response": init_response},
                                               "out_of_bounds": {"request": rejected, "response": rejection},
                                               "after_rejection": {"request": before_req, "response": before_res},
+                                              "edge_input": {"request": edge_event, "response": edge_result,
+                                                             "input_poll": edge_poll},
                                               "input_poll": poll_trace},
                                     "mcp_client": trace,
                                     "framebuffer_before": {"file": before_image.name, "sha256": before_hash},

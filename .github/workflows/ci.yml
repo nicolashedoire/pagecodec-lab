@@ -66,6 +66,20 @@ jobs:
           name: virtio-block-vm-evidence
           path: ${{ runner.temp }}/virtio-block-evidence/
           if-no-files-found: ignore
+      - name: Build and check extensible actor registry in QEMU
+        working-directory: experiments/actor_core
+        run: |
+          cargo build --release --locked --features qemu-demo
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/actor-core-demo \
+            --output-dir "$RUNNER_TEMP/actor-core-evidence"
+      - name: Preserve actor VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: actor-core-vm-evidence
+          path: ${{ runner.temp }}/actor-core-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM

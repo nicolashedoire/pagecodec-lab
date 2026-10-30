@@ -2,6 +2,8 @@
 #![no_main]
 extern crate alloc;
 use alloc::format;
+use alloc::collections::BTreeSet;
+use dual_input_lab::{Actor, Event, Grant, Outcome, Point, Router, WorkspaceId};
 use serde_json::{json, Value};
 use core::alloc::{GlobalAlloc, Layout};
 use core::arch::{asm, global_asm};
@@ -211,7 +213,7 @@ fn draw(buf: &mut [u8], human: (u32,u32), ai: (u32,u32), human_click: bool) {
     rounded(buf,49,338,240,5,0x39516d); rounded(buf,49,359,285,5,0x39516d); rounded(buf,49,380,200,5,0x39516d);
     rounded(buf,441,338,240,5,0x39516d); rounded(buf,441,359,285,5,0x39516d); rounded(buf,441,380,200,5,0x39516d);
     text(buf,24,577,b"VIRTUAL MACHINE DEMO - NO OS CONTROL",0x8aa4c5,1);
-    if human_click { rect(buf,human.0 as usize,human.1 as usize,24,24,0x2e7e72); }
+    if human_click { rect(buf,human.0 as usize,human.1 as usize,24.min(PANEL_SPLIT as usize - human.0 as usize),24,0x2e7e72); }
     pointer(buf,human.0,human.1,0x4ee8c8);
     pointer(buf,ai.0,ai.1,0x85aaff);
 }
@@ -233,6 +235,23 @@ fn tool_error(id: Value, msg: &str) {
 }
 fn valid_id(id: &Value) -> bool { id.is_string() || id.is_i64() || id.is_u64() }
 
+// Caller-constructed demonstration grants are not authentication.
+fn move_pointer(router: &mut Router, actor: Actor, grant: &Grant, x: u32, y: u32) -> bool {
+    let workspace = actor.workspace();
+    let revision = router.workspace(workspace).revision();
+    let event = Event::Move { workspace, expected_workspace_revision: revision,
+                              to: Point { x: x as i32, y: y as i32 } };
+    matches!(router.route(actor, grant, event), Ok(Outcome::Moved { .. }))
+}
+fn cursor(router: &Router, workspace: WorkspaceId) -> (u32,u32) {
+    let point = router.workspace(workspace).cursor();
+    (point.x as u32, point.y as u32)
+}
+fn movement_grant(actor: Actor) -> Grant {
+    Grant { actor, workspace: actor.workspace(), may_move: true, may_focus: false,
+            may_click: false, windows: BTreeSet::new(), writable_objects: BTreeSet::new() }
+}
+
 #[no_mangle]
 pub extern "C" fn rust_main() -> ! {
     let mut gpu = None;
@@ -253,13 +272,17 @@ pub extern "C" fn rust_main() -> ! {
         Ok(buf) if buf.len() >= FRAME_BYTES => buf.as_mut_ptr(),
         _ => halt()
     };
-    let mut human = (120u32, 180u32);
-    let mut ai = (560u32, 330u32);
+    let Some(mut router) = Router::new(WIDTH as u32, HEIGHT as u32) else { halt() };
+    let human_grant = movement_grant(Actor::Human);
+    let ai_grant = movement_grant(Actor::Assistant);
+    if !move_pointer(&mut router, Actor::Human, &human_grant, 120, 180)
+        || !move_pointer(&mut router, Actor::Assistant, &ai_grant, 560, 330) { halt() }
     let mut hclick = false;
     let mut pending_move: Option<(Value,u32,u32)> = None;
     // SAFETY: GPU owns this pinned buffer for its lifetime; one CPU and a draw
     // borrow ends before flush. QEMU-only HAL is not for production hardware.
-    unsafe { draw(core::slice::from_raw_parts_mut(frame_ptr, FRAME_BYTES), human, ai, hclick); }
+    unsafe { draw(core::slice::from_raw_parts_mut(frame_ptr, FRAME_BYTES),
+                  cursor(&router, WorkspaceId::Human), cursor(&router, WorkspaceId::Assistant), hclick); }
     if gpu.flush().is_err() { halt() }
     let mut line = [0u8;512];
     let mut used = 0usize;
@@ -271,8 +294,18 @@ pub extern "C" fn rust_main() -> ! {
         let mut changed = false;
         while let Some(ev) = input.pop_pending_event() {
             match (ev.event_type,ev.code) {
-                (3,0) => { human.0 = ev.value.min(32767) * (PANEL_SPLIT - 22) / 32767 + 16; changed = true; }
-                (3,1) => { human.1 = ev.value.min(32767) * (HEIGHT as u32 - 100) / 32767 + 70; changed = true; }
+                (3,0) => {
+                    let x = (ev.value.min(32767) * (PANEL_SPLIT - 22) / 32767 + 16).min(390);
+                    let (_, y) = cursor(&router, WorkspaceId::Human);
+                    if !move_pointer(&mut router, Actor::Human, &human_grant, x, y) { halt() }
+                    changed = true;
+                }
+                (3,1) => {
+                    let y = ev.value.min(32767) * (HEIGHT as u32 - 100) / 32767 + 70;
+                    let (x, _) = cursor(&router, WorkspaceId::Human);
+                    if !move_pointer(&mut router, Actor::Human, &human_grant, x, y) { halt() }
+                    changed = true;
+                }
                 (1,272) => { hclick = ev.value != 0; changed = true; }
                 _ => {}
             }
@@ -328,7 +361,11 @@ pub extern "C" fn rust_main() -> ! {
                                                 let y=args.and_then(|v| v.get("y")).and_then(Value::as_u64);
                                                 let exactly_two=args.and_then(Value::as_object).is_some_and(|o| o.len()==2);
                                                 match (x,y,exactly_two) {
-                                                    (Some(x),Some(y),true) if (400..=773).contains(&x) && y<=573 => { ai=(x as u32,y as u32); pending_move=Some((id,ai.0,ai.1)); changed=true; }
+                                                    (Some(x),Some(y),true) if (400..=773).contains(&x) && y<=573 => {
+                                                        if move_pointer(&mut router, Actor::Assistant, &ai_grant, x as u32, y as u32) {
+                                                            pending_move=Some((id,x as u32,y as u32)); changed=true;
+                                                        } else { tool_error(id,"pointer router rejected move"); }
+                                                    }
                                                     _ => tool_error(id,"invalid or out-of-bounds coordinates"),
                                                 }
                                             }
@@ -337,6 +374,8 @@ pub extern "C" fn rust_main() -> ! {
                                                 if !args.and_then(Value::as_object).is_some_and(|o| o.is_empty()) {
                                                     tool_error(id,"pointer_state requires an empty arguments object");
                                                 } else {
+                                                    let human = cursor(&router, WorkspaceId::Human);
+                                                    let ai = cursor(&router, WorkspaceId::Assistant);
                                                     let v = format!("human={},{}; ai={},{}",human.0,human.1,ai.0,ai.1);
                                                     send(&json!({"jsonrpc":"2.0","id":id,"result":{"content":[{"type":"text","text":v}],"isError":false}}));
                                                 }
@@ -357,7 +396,8 @@ pub extern "C" fn rust_main() -> ! {
             } else if used < line.len() { line[used]=b; used+=1; } else { overflow=true; }
         }
         if changed {
-            unsafe { draw(core::slice::from_raw_parts_mut(frame_ptr, FRAME_BYTES), human, ai, hclick); }
+            unsafe { draw(core::slice::from_raw_parts_mut(frame_ptr, FRAME_BYTES),
+                  cursor(&router, WorkspaceId::Human), cursor(&router, WorkspaceId::Assistant), hclick); }
             if gpu.flush().is_err() { if let Some((id,_,_))=pending_move.take() { tool_error(id,"framebuffer flush failed"); } halt() }
             if let Some((id,x,y))=pending_move.take() {
                 let value = format!("moved AI pointer to {},{}",x,y);
