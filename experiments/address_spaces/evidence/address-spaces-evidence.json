@@ -1,0 +1,7 @@
+{
+  "guest_sha256": "728ef87eed0c590bff2d9f4c9f7373398cc8fd6bfe3ca760a93c65436227ca9e",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "serial": "MMU alias=same_va physical_pages=distinct asids=1,2 kernel=privileged\nBOOT el0_spaces=2 alias=shared_va timer=ppi27 yields=0\nIRQ tick=1 el0_task=0 count=5572993 next=1 active_asid=1\nIRQ tick=2 el0_task=1 count=6842390 next=0 active_asid=2\nIRQ tick=3 el0_task=0 count=10585054 next=1 active_asid=1\nIRQ tick=4 el0_task=1 count=13627952 next=0 active_asid=2\nIRQ tick=5 el0_task=0 count=16720563 next=1 active_asid=1\nIRQ tick=6 el0_task=1 count=19864504 next=0 active_asid=2\nIRQ tick=7 el0_task=0 count=23136076 next=1 active_asid=1\nIRQ tick=8 el0_task=1 count=24632273 next=finish active_asid=2\nCHECK same_va=two_physical_pages values=a1a1,b2b2 neighbors=zero ttbr_asids=verified\nCHECK private_identity_and_kernel=el0_at_denied el0_frames=verified timer=disabled gic=inactive\nPASS two TTBR0 address spaces in QEMU\n",
+  "input": "two EL0 address spaces with identical virtual data address and different synthetic values",
+  "limitations": "single-CPU QEMU; no general process isolation, blocking, IOMMU, FP/SIMD or native Apple hardware"
+}

@@ -461,6 +461,39 @@ jobs:
             ${{ runner.temp }}/graph-mmu-evidence/
             ${{ runner.temp }}/graph-mmu-legacy-evidence/
           if-no-files-found: ignore
+      - name: Build and check integrated system VM in QEMU
+        working-directory: experiments/system_vm
+        run: |
+          cargo build --release --locked
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/system-vm-demo \
+            --output-dir "$RUNNER_TEMP/system-vm-evidence"
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/system-vm-demo \
+            --output-dir "$RUNNER_TEMP/system-vm-legacy-evidence" --transport legacy
+      - name: Preserve integrated system VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: system-vm-evidence
+          path: |
+            ${{ runner.temp }}/system-vm-evidence/
+            ${{ runner.temp }}/system-vm-legacy-evidence/
+          if-no-files-found: ignore
+      - name: Build and check address-space switching in QEMU
+        working-directory: experiments/address_spaces
+        run: |
+          cargo build --release --locked --offline
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/address-spaces-demo \
+            --output-dir "$RUNNER_TEMP/address-spaces-evidence"
+      - name: Preserve address-space VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: address-spaces-vm-evidence
+          path: ${{ runner.temp }}/address-spaces-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM
