@@ -1,0 +1,65 @@
+{
+  "model": "aac6fef/laya-multilingual-mlx",
+  "model_revision": "f2b4faf51023039425946074e2cf1361d2db11d5",
+  "model_sha256": "7fc5834af4d8fdfb268d272a9d1a66e5819a0daac98241651c4c888cc43adff1",
+  "software": {
+    "laya_mlx": "0.6.0",
+    "mlx": "0.32.4"
+  },
+  "environment": {
+    "host": "Apple M4 Pro, macOS 15.1.1",
+    "offline_mode": true,
+    "network_guard": "macOS sandbox denies network; Python socket connect disabled",
+    "source_state": "fictional"
+  },
+  "manifest_integrity_ok": true,
+  "load_seconds": 0.8757770420052111,
+  "first_inference_seconds": 0.062466208008117974,
+  "max_rss_bytes": 964739072,
+  "mlx_peak_bytes": 746726361,
+  "state": "Scénario entièrement fictif : une application au premier plan est lente. Un calcul de fond utilise fortement le processeur. La mémoire disponible est suffisante et il n’y a pas de pression mémoire.",
+  "questions": {
+    "action": {
+      "type": "choice",
+      "instructions": "Quelle action réversible favorise la réactivité sans traiter une pression mémoire inexistante ?",
+      "criteria": {
+        "foreground": "Donner une préférence temporaire à la tâche interactive et garder du temps au travail de fond.",
+        "compress": "Augmenter la compression mémoire alors que la mémoire disponible est suffisante.",
+        "wait": "Ne faire aucun ajustement et continuer à partager le processeur comme avant."
+      }
+    }
+  },
+  "result": {
+    "model": "laya-rl-agent",
+    "answers": {
+      "action": {
+        "type": "choice",
+        "choice": "compress",
+        "probabilities": {
+          "foreground": 0.2131,
+          "compress": 0.6147,
+          "wait": 0.1722
+        },
+        "confidence": 0.1521,
+        "answer_confidence": 0.6147,
+        "action": {
+          "act_probability": 1.0
+        }
+      }
+    },
+    "usage": {
+      "input_tokens": 121,
+      "output_tokens": 0,
+      "state_tokens": 41,
+      "state_tokens_dropped": 0,
+      "truncated": false,
+      "truncated_questions": []
+    }
+  },
+  "notes": [
+    "One example does not establish task accuracy or calibration.",
+    "The score is the model output, not an independently established probability of correctness.",
+    "This is Laya, a separate model, not TypeSafe Jev or a proven equivalent.",
+    "No system policy was changed."
+  ]
+}

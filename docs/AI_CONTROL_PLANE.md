@@ -159,6 +159,12 @@ The general idea of adapting a fast policy with slower asynchronous learning has
 prior art, for example [Learning-Augmented Heuristics](https://www.usenix.org/conference/osdi26/presentation/xia).
 That work does not establish a benefit for Jev or for macOS.
 
+A separate [offline Laya-MLX demonstration](../experiments/local_decision/README.md)
+ran on the research Mac using synthetic input. Laya is **not Jev**. It chose an
+unhelpful policy in one deliberately simple fictional case; the demonstration
+does not establish general accuracy, calibration, or equivalence to Jev. It
+does not change system settings or drive the proposed OS.
+
 ## Research and implementation gaps
 
 First define the system APIs and ownership model: MCP cannot wrap an operation

@@ -12,6 +12,7 @@ The prototypes operate on caller-owned memory. A separate REA/Ghidra investigati
 For the broader OS direction, see the [existing-project landscape and proposed system architecture](docs/SYSTEM_LANDSCAPE.md), and the [detailed comparison, driver dependencies and primary sources](docs/PROJECT_COMPARISON.md).
 For a mechanism-by-mechanism foundation, see the [deep macOS architecture and alternative design](docs/DEEP_ARCHITECTURE.md).
 For proposed AI control interfaces and decision models, see the [MCP and neural decision control plane](docs/AI_CONTROL_PLANE.md).
+The proposed user interface includes a [floating voice assistant](docs/VOICE_ASSISTANT.md) and [separate human and AI workspaces](docs/DUAL_WORKSPACES.md). A [local decision-model demo](experiments/local_decision/README.md) is available; it runs Laya, not Jev.
 
 ## New: adaptive compaction follow-up
 
