@@ -5,6 +5,9 @@ system, including boot, kernel, drivers, services, human and AI workspaces,
 MCP-facing control, model integration and a graphical/voice interface. The
 current code is the beginning of that work, not a usable macOS replacement.
 
+See the [candidate Rust components](RUST_COMPONENTS.md) for existing drivers,
+libraries, services and an experimental AArch64 system under evaluation.
+
 Rust supports [bare-metal AArch64](https://doc.rust-lang.org/stable/rustc/platform-support/aarch64-unknown-none.html)
 without the full standard library. Real systems already use Rust: [Redox](https://github.com/redox-os/redox)
 is an operating-system project, while Rust for Linux documents an
