@@ -1,0 +1,7 @@
+{
+  "guest_sha256": "6c3cfc4ecf8e2ccde3a0798b9449f5e0466deb01e100a045ad7fb1cc78c98af5",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "serial": "CHECK stack_boundaries=top_allowed_bottom_outside_rejected opaque_linker_addresses=yes\nSCHED dispatch=a\nTASK a stage=1 action=yield\nSCHED dispatch=b\nTASK b stage=1 action=block\nSCHED b=blocked\nSCHED dispatch=a\nTASK a stage=2 action=yield\nSCHED b=woken event=synthetic\nSCHED dispatch=a\nTASK a stage=3 action=finish\nSCHED dispatch=b\nTASK b stage=2 action=finish\nCHECK sequence=a1,b1,a2,a3,b2 registers_and_stacks=preserved queue=empty\nPASS cooperative scheduler scenario\n",
+  "input": "two synthetic functions with real cooperative stack switches",
+  "preemption": false
+}

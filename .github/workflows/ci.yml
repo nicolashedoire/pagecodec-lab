@@ -248,6 +248,20 @@ jobs:
           name: virtual-memory-vm-evidence
           path: ${{ runner.temp }}/virtual-memory-evidence/
           if-no-files-found: ignore
+      - name: Build and check cooperative scheduler in QEMU
+        working-directory: experiments/cooperative_scheduler
+        run: |
+          cargo build --release --locked --offline
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/cooperative-scheduler-demo \
+            --output-dir "$RUNNER_TEMP/cooperative-scheduler-evidence"
+      - name: Preserve cooperative scheduler VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cooperative-scheduler-vm-evidence
+          path: ${{ runner.temp }}/cooperative-scheduler-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM

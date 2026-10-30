@@ -24,7 +24,7 @@ The [frame allocator model](experiments/memory_core/README.md) exercises reserva
 
 Other VM experiments test a [logical FIFO scheduler](experiments/scheduler_core/README.md) and a [controlled AArch64 synchronous exception](experiments/interrupt_core/README.md). They do not yet provide process execution, context switching or hardware interrupt handling.
 
-Separate guests demonstrate [cooperative stack and integer-register switching](experiments/cooperative_tasks/README.md) and a [controlled virtual timer interrupt](experiments/arm_timer/README.md). These narrow demonstrations are not integrated into a preemptive scheduler and do not establish process isolation.
+Separate guests demonstrate [cooperative stack and integer-register switching](experiments/cooperative_tasks/README.md), [scheduler-selected cooperative tasks](experiments/cooperative_scheduler/README.md) and a [controlled virtual timer interrupt](experiments/arm_timer/README.md). These narrow demonstrations are not integrated into a preemptive scheduler and do not establish process isolation.
 
 Another guest [enables a small ARM virtual-memory map](experiments/virtual_memory/README.md) in QEMU. The [preemption research](docs/PREEMPTIVE_SCHEDULING_RESEARCH.md) explains why the existing cooperative and timer experiments are not yet a preemptive scheduler.
 
