@@ -178,6 +178,34 @@ jobs:
           name: virtio-fix-vm-evidence
           path: ${{ runner.temp }}/virtio-fix-evidence/
           if-no-files-found: ignore
+      - name: Build and check scheduler model in QEMU
+        working-directory: experiments/scheduler_core
+        run: |
+          cargo build --release --locked --offline --features qemu-demo
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/scheduler-core-demo \
+            --output-dir "$RUNNER_TEMP/scheduler-core-evidence"
+      - name: Preserve scheduler VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scheduler-core-vm-evidence
+          path: ${{ runner.temp }}/scheduler-core-evidence/
+          if-no-files-found: ignore
+      - name: Build and check controlled ARM exception in QEMU
+        working-directory: experiments/interrupt_core
+        run: |
+          cargo build --release --locked --offline
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/interrupt-core-demo \
+            --output-dir "$RUNNER_TEMP/interrupt-core-evidence"
+      - name: Preserve exception VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: interrupt-core-vm-evidence
+          path: ${{ runner.temp }}/interrupt-core-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM

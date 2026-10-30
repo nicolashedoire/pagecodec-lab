@@ -236,11 +236,19 @@ def main():
                                         raise RuntimeError("invalid document response: "+str(response))
                                     return json.loads(content[0]["text"])
                                 remote_before=doc_call(114,"remote_state",{})
-                                if remote_before != {"actor":"remote","x":30,"y":40}:
+                                if remote_before != {"actor":"remote","x":300,"y":450}:
                                     raise RuntimeError("unexpected initial third actor")
-                                remote_move=doc_call(115,"move_remote",{"x":70,"y":90})
-                                if remote_move != {"actor":"remote","x":70,"y":90}:
+                                remote_before_image=destination / "remote-before.ppm"
+                                qmp_command(qmp_stream, {"execute":"screendump","arguments":{"filename":str(remote_before_image)}})
+                                remote_before_hash=sha256(remote_before_image)
+                                remote_move=doc_call(115,"move_remote",{"x":280,"y":480})
+                                if remote_move != {"actor":"remote","x":280,"y":480}:
                                     raise RuntimeError("third actor move failed")
+                                remote_after_image=destination / "remote-after.ppm"
+                                qmp_command(qmp_stream, {"execute":"screendump","arguments":{"filename":str(remote_after_image)}})
+                                remote_after_hash=sha256(remote_after_image)
+                                if remote_before_hash == remote_after_hash:
+                                    raise RuntimeError("framebuffer did not change after remote move")
                                 doc_call(116,"move_remote",{"x":800,"y":90},rejected=True)
                                 if doc_call(117,"remote_state",{}) != remote_move:
                                     raise RuntimeError("rejected third actor move changed state")
@@ -294,6 +302,9 @@ def main():
                                     "framebuffer_before": {"file": before_image.name, "sha256": before_hash},
                                     "framebuffer_after": {"file": screenshot.name, "sha256": after_hash},
                                     "framebuffer_claim": "hashes demonstrate a change, not pointer geometry",
+                                    "remote_framebuffer_before": {"file":remote_before_image.name,"sha256":remote_before_hash},
+                                    "remote_framebuffer_after": {"file":remote_after_image.name,"sha256":remote_after_hash},
+                                    "remote_framebuffer_claim": "hashes demonstrate a change after remote move, not pointer geometry",
                                     "limitations": "experimental VM; no authentication, real workspaces or host OS control"}
                         (destination / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
                         print("Demo succeeded; saved before/after framebuffers and evidence.json")

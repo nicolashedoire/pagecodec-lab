@@ -56,8 +56,10 @@ and post-move state. This run uses the guest connected to the `dynamic_input`
 router: both pointer movement paths update its per-actor cursor states,
 which are read back by the display and `pointer_state`. The runner also moves
 a third logical actor, verifies that an invalid move is rejected, and checks
-that both visible pointer positions are unchanged. This actor has no window
-or visible cursor. The human click indicator is a visual effect and is not a
+that both other pointer positions are unchanged. A separately labeled amber
+remote pointer is rendered, without a third window. Its before/after
+framebuffer hashes differ; this verifies a framebuffer change, not exact
+pointer geometry. The human click indicator is a visual effect and is not a
 routed click or focus. Actor labels and assignments are locally constructed;
 they provide no authentication or security isolation. The runner also recorded guest/client image hashes and
 before/after framebuffer hashes. Different hashes establish a framebuffer

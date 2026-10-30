@@ -1,0 +1,7 @@
+{
+  "guest_sha256": "ba20aad825140b15a51ab1278e14a913d88bcf0d208730b591e506451a4d0ac9",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "serial": "BOOT el=1 stack=sp_el1 stack_alignment=16 vector_alignment=2048 vbar_readback=ok\nTRAP kind=brk64 immediate=0x1234 count=1 vector=current-el-spx\nRETURN pc=next-instruction x0-x30=preserved sp=preserved nzcv=preserved\nPASS controlled synchronous exception\n",
+  "input": "one controlled BRK immediate in the guest",
+  "limitations": "EL1 single-CPU synchronous BRK demo; no IRQs, timers, MMU or isolation"
+}

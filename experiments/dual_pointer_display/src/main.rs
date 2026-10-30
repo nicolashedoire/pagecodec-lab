@@ -188,7 +188,7 @@ fn pointer(buf: &mut [u8], x: u32, y: u32, color: u32) {
     for yy in 1..18 { for xx in 1..13 { if xx < yy/2 { pixel(buf,x+xx,y+yy,color); } } }
     rect(buf,x+6,y+14,4,12,0x09101d); rect(buf,x+7,y+15,2,9,color);
 }
-fn draw(buf: &mut [u8], human: (u32,u32), ai: (u32,u32), human_click: bool) {
+fn draw(buf: &mut [u8], human: (u32,u32), ai: (u32,u32), remote: (u32,u32), human_click: bool) {
     rect(buf,0,0,WIDTH,HEIGHT,0x0b1020);
     rect(buf,0,0,WIDTH,54,0x101a2c);
     rect(buf,0,53,WIDTH,1,0x24354e);
@@ -217,8 +217,17 @@ fn draw(buf: &mut [u8], human: (u32,u32), ai: (u32,u32), human_click: bool) {
     rounded(buf,441,338,240,5,0x39516d); rounded(buf,441,359,285,5,0x39516d); rounded(buf,441,380,200,5,0x39516d);
     text(buf,24,577,b"VIRTUAL MACHINE DEMO - NO OS CONTROL",0x8aa4c5,1);
     if human_click { rect(buf,human.0 as usize,human.1 as usize,24.min(PANEL_SPLIT as usize - human.0 as usize),24,0x2e7e72); }
-    pointer(buf,human.0,human.1,0x4ee8c8);
+    // Clamp only the rendered glyph at the framebuffer edges. Logical remote
+    // coordinates remain unchanged; draw human last so it remains on top.
+    let rx=(remote.0 as usize).min(WIDTH-15);
+    let ry=(remote.1 as usize).min(HEIGHT-26);
+    let label_x=if rx+16+72<WIDTH { rx+16 } else { rx.saturating_sub(72) };
+    let label_y=ry.min(HEIGHT-20);
+    rounded(buf,label_x,label_y,72,18,0x65481d);
+    text(buf,label_x+5,label_y+4,b"REMOTE",0xffe4a6,1);
+    pointer(buf,rx as u32,ry as u32,0xffc45f);
     pointer(buf,ai.0,ai.1,0x85aaff);
+    pointer(buf,human.0,human.1,0x4ee8c8);
 }
 
 fn poll_uart() -> Option<u8> {
@@ -320,15 +329,16 @@ pub extern "C" fn rust_main() -> ! {
     }
     if !move_pointer(&mut router, &human, &hs, 120, 180)
         || !move_pointer(&mut router, &ai, &ais, 560, 330)
-        || !move_pointer(&mut router, &remote, &rs, 30, 40) { halt() }
+        || !move_pointer(&mut router, &remote, &rs, 300, 450) { halt() }
     // The bounded journal overwrites its oldest entries without per-move allocation.
     let mut document = DocumentDemo::new();
     let mut hclick = false;
     let mut pending_move: Option<(Value,u32,u32)> = None;
+    let mut pending_remote: Option<(Value,u32,u32)> = None;
     // SAFETY: GPU owns this pinned buffer for its lifetime; one CPU and a draw
     // borrow ends before flush. QEMU-only HAL is not for production hardware.
     unsafe { draw(core::slice::from_raw_parts_mut(frame_ptr, FRAME_BYTES),
-                  cursor(&router, &human), cursor(&router, &ai), hclick); }
+                  cursor(&router, &human), cursor(&router, &ai), cursor(&router, &remote), hclick); }
     if gpu.flush().is_err() { halt() }
     let mut line = [0u8;512];
     let mut used = 0usize;
@@ -396,7 +406,7 @@ pub extern "C" fn rust_main() -> ! {
                                     Some("tools/list") => send(&json!({"jsonrpc":"2.0","id":id,"result":{"tools":[
                                         {"name":"move_ai","description":"Move AI pointer within its right-hand QEMU workspace.","inputSchema":{"type":"object","properties":{"x":{"type":"integer","minimum":400,"maximum":773},"y":{"type":"integer","minimum":0,"maximum":573}},"required":["x","y"],"additionalProperties":false}},
                                         {"name":"pointer_state","description":"Read the two pointer coordinates in this guest only.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
-                                        {"name":"move_remote","description":"Move a third synthetic logical actor; no graphical window or authenticated identity.","inputSchema":{"type":"object","properties":{"x":{"type":"integer","minimum":0,"maximum":799},"y":{"type":"integer","minimum":0,"maximum":599}},"required":["x","y"],"additionalProperties":false}},
+                                        {"name":"move_remote","description":"Move the visible pointer for a synthetic logical actor; no window or authenticated identity.","inputSchema":{"type":"object","properties":{"x":{"type":"integer","minimum":0,"maximum":799},"y":{"type":"integer","minimum":0,"maximum":599}},"required":["x","y"],"additionalProperties":false}},
                                         {"name":"remote_state","description":"Read the third synthetic actor's logical position.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"exercise_human_moves","description":"Run 1101 synthetic human moves in this VM; overwrites older bounded trace entries.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"document_edit","description":"Edit one synthetic document copy; actor labels are unauthenticated.","inputSchema":{"type":"object","properties":{"actor":{"type":"string","enum":["human","assistant"]},"space":{"type":"string","enum":["human-space","assistant-space"]},"key":{"type":"string","description":"Non-empty; at most 32 UTF-8 bytes."},"value":{"type":["string","null"],"description":"At most 64 UTF-8 bytes; null deletes the field."}},"required":["actor","space","key","value"],"additionalProperties":false}},
@@ -457,7 +467,7 @@ pub extern "C" fn rust_main() -> ! {
                                                 match (x,y,exact) {
                                                     (Some(x),Some(y),true) if x<800 && y<600 => {
                                                         if move_pointer(&mut router,&remote,&rs,x as u32,y as u32) {
-                                                            tool_json(id,json!({"actor":"remote","x":x,"y":y}));
+                                                            pending_remote=Some((id,x as u32,y as u32)); changed=true;
                                                         } else { tool_error(id,"remote move rejected"); }
                                                     }
                                                     _ => tool_error(id,"invalid or out-of-bounds remote coordinates"),
@@ -526,8 +536,13 @@ pub extern "C" fn rust_main() -> ! {
         }
         if changed {
             unsafe { draw(core::slice::from_raw_parts_mut(frame_ptr, FRAME_BYTES),
-                  cursor(&router, &human), cursor(&router, &ai), hclick); }
-            if gpu.flush().is_err() { if let Some((id,_,_))=pending_move.take() { tool_error(id,"framebuffer flush failed"); } halt() }
+                  cursor(&router, &human), cursor(&router, &ai), cursor(&router, &remote), hclick); }
+            if gpu.flush().is_err() {
+                if let Some((id,_,_))=pending_move.take() { tool_error(id,"framebuffer flush failed"); }
+                if let Some((id,_,_))=pending_remote.take() { tool_error(id,"framebuffer flush failed"); }
+                halt()
+            }
+            if let Some((id,x,y))=pending_remote.take() { tool_json(id,json!({"actor":"remote","x":x,"y":y})); }
             if let Some((id,x,y))=pending_move.take() {
                 let value = format!("moved AI pointer to {},{}",x,y);
                 send(&json!({"jsonrpc":"2.0","id":id,"result":{"content":[{"type":"text","text":value}],"isError":false}}));

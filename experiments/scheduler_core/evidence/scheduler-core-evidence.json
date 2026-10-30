@@ -1,0 +1,7 @@
+{
+  "guest_sha256": "85cf53ea08b6fc194d450d062501fdd8081765dcaad0eee2e196af37b3fbd2d3",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "serial": "DECISIONS round_robin=1,2,3,1,2,3 voluntary_yield=yes\nDECISIONS blocked=1 skipped=1 wake_appended=1 finished=2,1,3 queue_empty=yes\nCHECK invalid_transitions=rejected queue_integrity=ok task_ids=unique\nPASS scheduler core synthetic scenario\n",
+  "input": "synthetic decisions",
+  "real_context_switch": false
+}

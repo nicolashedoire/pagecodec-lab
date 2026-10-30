@@ -22,11 +22,13 @@ The separate [extensible actor registry](experiments/actor_core/README.md) model
 
 The [frame allocator model](experiments/memory_core/README.md) exercises reservations and allocation on synthetic addresses. A [VM arena experiment](experiments/memory_arena/README.md) applies it to a guest-owned static array and checks actual guest reads and writes; neither initializes an MMU or manages real Mac memory.
 
+Other VM experiments test a [logical FIFO scheduler](experiments/scheduler_core/README.md) and a [controlled AArch64 synchronous exception](experiments/interrupt_core/README.md). They do not yet provide process execution, context switching or hardware interrupt handling.
+
 The [VirtIO negotiation experiment](experiments/virtio_negotiation/README.md) examines a feature-acceptance gap using a simulated refusal and a QEMU device. A [separate experimental local patch](experiments/virtio_fix/README.md) tests the change with the RNG driver; the other guests still use the unpatched dependency, and full driver conformance remains unproven.
 
-The [dynamic multi-actor pointer router](experiments/dynamic_input/README.md) now drives the graphical demo's two visible pointers and a third logical actor. A separate QEMU prototype explores [restoring a small synthetic workspace record across VM instances](experiments/workspace_persistence/README.md); persistence is not yet integrated into the graphical guest.
+The [dynamic multi-actor pointer router](experiments/dynamic_input/README.md) now drives three visible pointers in the graphical demo. A separate QEMU prototype explores [restoring a small synthetic workspace record across VM instances](experiments/workspace_persistence/README.md); persistence is not yet integrated into the graphical guest.
 
-![Two experimental pointers rendered by the Rust guest in QEMU](assets/dual-pointer-vm.png)
+![Three experimental pointers rendered by the Rust guest in QEMU](assets/dual-pointer-vm.png)
 
 ## New: adaptive compaction follow-up
 
