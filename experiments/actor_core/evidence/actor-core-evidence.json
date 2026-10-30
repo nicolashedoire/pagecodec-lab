@@ -2,5 +2,14 @@
   "guest_sha256": "084c9006abdf34dc4121537bed529821b8104c1540709c8a290d8e0d33bb25fa",
   "serial": "EVENT human pointer=10,40 space=human-space\nEVENT assistant pointer=20,40 space=assistant-space\nEVENT remote pointer=30,40 space=remote-space\nCHECK invalid_ids=ok cross_space=rejected independent_pointers=ok attribution=ok\nCHECK duplicates=rejected unknowns=rejected failed_events=unchanged\nCHECK actor_count=19 spaces=3 reassign_resets_pointer=yes\nPASS actor core synthetic scenario\n",
   "input": "synthetic fixture",
-  "security_isolation": false
+  "security_isolation": false,
+  "previous_automated_evidence": {
+    "description": "Earlier guest image before bounded movement journal integration.",
+    "record": {
+      "guest_sha256": "084c9006abdf34dc4121537bed529821b8104c1540709c8a290d8e0d33bb25fa",
+      "serial": "EVENT human pointer=10,40 space=human-space\nEVENT assistant pointer=20,40 space=assistant-space\nEVENT remote pointer=30,40 space=remote-space\nCHECK invalid_ids=ok cross_space=rejected independent_pointers=ok attribution=ok\nCHECK duplicates=rejected unknowns=rejected failed_events=unchanged\nCHECK actor_count=19 spaces=3 reassign_resets_pointer=yes\nPASS actor core synthetic scenario\n",
+      "input": "synthetic fixture",
+      "security_isolation": false
+    }
+  }
 }

@@ -13,19 +13,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
 
 [[package]]
-name = "dual-input-lab"
-version = "0.1.0"
-
-[[package]]
 name = "dual-pointer-display"
 version = "0.1.0"
 dependencies = [
  "actor-core-sketch",
- "dual-input-lab",
+ "dynamic-input-sketch",
  "serde_json",
  "system-core-sketch",
  "virtio-drivers",
  "workspace-bridge-sketch",
+]
+
+[[package]]
+name = "dynamic-input-sketch"
+version = "0.1.0"
+dependencies = [
+ "actor-core-sketch",
 ]
 
 [[package]]

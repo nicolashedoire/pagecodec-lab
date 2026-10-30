@@ -61,6 +61,7 @@ def main():
         "IO actor=human space=human-space x=-1 y=0 result=out-of-bounds",
         "IO actor=human space=human-space x=0 y=100 result=out-of-bounds",
         "CHECK actors=19 spaces=3 independent_pointers=yes rejected_attempts=logged",
+        "CHECK bounded_moves=1101 last=77,20 rejected_wrong_space=yes ring=64 overwritten=1038 motion_allocations=0",
     }
     if not required.issubset(lines):
         raise RuntimeError("missing synthetic input records: " + serial)

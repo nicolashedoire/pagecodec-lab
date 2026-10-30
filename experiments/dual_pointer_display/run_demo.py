@@ -148,6 +148,15 @@ def main():
                                 before_req, before_res, before_state = state(serial_stream, 3)
                                 if "ai=560,330" not in before_state:
                                     raise RuntimeError("rejected move changed the AI pointer: " + before_state)
+                                stress_request={"jsonrpc":"2.0","id":119,"method":"tools/call",
+                                                "params":{"name":"exercise_human_moves","arguments":{}}}
+                                stress_reply=rpc_call(serial_stream,stress_request)
+                                stress_result=stress_reply.get("result",{})
+                                if stress_result.get("isError") is not False:
+                                    raise RuntimeError("guest bounded movement stress failed")
+                                stress_data=json.loads(stress_result["content"][0]["text"])
+                                if stress_data.get("moves")!=1101 or (stress_data.get("x"),stress_data.get("y"))!=(200,180) or stress_data.get("ring")!=64 or stress_data.get("overwritten",0)<=0 or stress_data.get("motion_allocations")!=0:
+                                    raise RuntimeError("bounded movement evidence incorrect: "+str(stress_data))
                                 # Check the rightmost synthetic tablet input before the standard scenario.
                                 edge_event = {"execute": "input-send-event", "arguments": {"events": [
                                     {"type": "abs", "data": {"axis": "x", "value": 32767}},
@@ -226,6 +235,19 @@ def main():
                                     if len(content)!=1 or content[0].get("type")!="text":
                                         raise RuntimeError("invalid document response: "+str(response))
                                     return json.loads(content[0]["text"])
+                                remote_before=doc_call(114,"remote_state",{})
+                                if remote_before != {"actor":"remote","x":30,"y":40}:
+                                    raise RuntimeError("unexpected initial third actor")
+                                remote_move=doc_call(115,"move_remote",{"x":70,"y":90})
+                                if remote_move != {"actor":"remote","x":70,"y":90}:
+                                    raise RuntimeError("third actor move failed")
+                                doc_call(116,"move_remote",{"x":800,"y":90},rejected=True)
+                                if doc_call(117,"remote_state",{}) != remote_move:
+                                    raise RuntimeError("rejected third actor move changed state")
+                                req,res,positions=state(doc_stream,118)
+                                doc_trace.append({"request":req,"response":res})
+                                if positions != "human=223,390; ai=650,260":
+                                    raise RuntimeError("third actor move changed visible actors")
                                 h={"actor":"human","space":"human-space"}
                                 a={"actor":"assistant","space":"assistant-space"}
                                 doc_call(101,"document_edit",{**h,"key":"title","value":"human-version"})
@@ -263,6 +285,7 @@ def main():
                                     "probe": {"initialization": {"request": initialize, "response": init_response},
                                               "out_of_bounds": {"request": rejected, "response": rejection},
                                               "after_rejection": {"request": before_req, "response": before_res},
+                                              "bounded_movement_stress": {"request":stress_request,"response":stress_reply},
                                               "edge_input": {"request": edge_event, "response": edge_result,
                                                              "input_poll": edge_poll},
                                               "input_poll": poll_trace},

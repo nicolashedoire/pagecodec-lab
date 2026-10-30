@@ -4,15 +4,17 @@
 extern crate alloc;
 
 use core::alloc::{GlobalAlloc, Layout};
+use core::cell::Cell;
 use core::arch::{asm, global_asm};
 use core::panic::PanicInfo;
 use core::ptr::{addr_of_mut, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use virtio_drivers::{
     device::blk::VirtIOBlk,
-    transport::{mmio::{MmioTransport, VirtIOHeader}, DeviceType, Transport},
+    transport::{mmio::{MmioTransport, VirtIOHeader}, DeviceStatus, DeviceType, InterruptStatus, Transport},
     BufferDirection, Hal, PhysAddr,
 };
+use zerocopy::{FromBytes, Immutable, IntoBytes};
 
 global_asm!(r#"
     .section .text.boot, "ax"
@@ -131,8 +133,45 @@ fn write_decimal(mut n: usize) {
 }
 fn halt() -> ! { loop { unsafe { asm!("wfe", options(nomem, nostack)) } } }
 
+// In-guest synthetic transport: it clears FEATURES_OK to model refusal.
+#[derive(Default)]
+struct MockState { status: DeviceStatus, config_calls: Cell<usize>, queue_calls: usize, driver_ok_calls: usize }
+struct Rejecting<'a>(&'a mut MockState);
+impl Transport for Rejecting<'_> {
+    fn device_type(&self) -> DeviceType { DeviceType::Block }
+    fn read_device_features(&mut self) -> u64 { 1u64 << 32 }
+    fn write_driver_features(&mut self, _: u64) {}
+    fn max_queue_size(&mut self, _: u16) -> u32 { self.0.queue_calls += 1; 8 }
+    fn notify(&mut self, _: u16) {}
+    fn get_status(&self) -> DeviceStatus { self.0.status }
+    fn set_status(&mut self, status: DeviceStatus) {
+        if status.contains(DeviceStatus::DRIVER_OK) { self.0.driver_ok_calls += 1; }
+        self.0.status = status & !DeviceStatus::FEATURES_OK;
+    }
+    fn set_guest_page_size(&mut self, _: u32) {}
+    fn requires_legacy_layout(&self) -> bool { false }
+    fn queue_set(&mut self, _: u16, _: u32, _: PhysAddr, _: PhysAddr, _: PhysAddr) { self.0.queue_calls += 1; }
+    fn queue_unset(&mut self, _: u16) { self.0.queue_calls += 1; }
+    fn queue_used(&mut self, _: u16) -> bool { self.0.queue_calls += 1; false }
+    fn ack_interrupt(&mut self) -> InterruptStatus { InterruptStatus::empty() }
+    fn read_config_generation(&self) -> u32 { self.0.config_calls.set(self.0.config_calls.get() + 1); 0 }
+    fn read_config_space<T: FromBytes + IntoBytes>(&self, _: usize) -> virtio_drivers::Result<T> {
+        self.0.config_calls.set(self.0.config_calls.get() + 1); Err(virtio_drivers::Error::Unsupported)
+    }
+    fn write_config_space<T: IntoBytes + Immutable>(&mut self, _: usize, _: T) -> virtio_drivers::Result<()> {
+        self.0.config_calls.set(self.0.config_calls.get() + 1); Err(virtio_drivers::Error::Unsupported)
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn rust_main() -> ! {
+    let mut mock = MockState::default();
+    let before_dma = DMA_NEXT.load(Ordering::Relaxed);
+    let refused = matches!(VirtIOBlk::<VmHal, _>::new(Rejecting(&mut mock)), Err(virtio_drivers::Error::FeatureNegotiationFailed));
+    if !refused || !mock.status.contains(DeviceStatus::FAILED) || mock.config_calls.get() != 0 || mock.queue_calls != 0 || mock.driver_ok_calls != 0 || DMA_NEXT.load(Ordering::Relaxed) != before_dma {
+        write("FAIL simulated features refusal\r\n"); halt();
+    }
+    write("CHECK simulated_features_refusal=error no_config_no_queue_no_dma\r\n");
     for slot in 0..MMIO_SLOTS {
         let ptr = NonNull::new((MMIO_BASE + slot * MMIO_STRIDE) as *mut VirtIOHeader).unwrap();
         let Ok(transport) = (unsafe { MmioTransport::new(ptr, MMIO_STRIDE) }) else { continue };

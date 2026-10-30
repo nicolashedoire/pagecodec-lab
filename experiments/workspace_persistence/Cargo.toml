@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-virtio-drivers = { version = "=0.13.0", default-features = false }
+virtio-drivers = { path = "../virtio_fix/vendor/virtio-drivers", version = "=0.13.0", default-features = false }
 actor-core-sketch = { path = "../actor_core" }
 system-core-sketch = { path = "../system_core" }
 workspace-bridge-sketch = { path = "../workspace_bridge" }

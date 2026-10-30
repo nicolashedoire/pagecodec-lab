@@ -116,6 +116,25 @@ pub extern "C" fn rust_main() -> ! {
     check(router.actor_count() == 19, "dynamic actor count");
     check(router.actor(&remote).unwrap().pointer() == Some(Position { x: 30, y: 40 }), "shared-space pointer changed");
     check(router.traces().len() == 28, "trace count");
+    // The bounded path must recycle its storage even with a non-reclaiming heap.
+    let mut bounded=Router::new_bounded(64);
+    let bounded_actor=ActorId::new("bounded").unwrap();
+    let bounded_space=SpaceId::new("bounded-space").unwrap();
+    let other_space=SpaceId::new("other-space").unwrap();
+    bounded.create_space(bounded_space.clone(),bounds).unwrap();
+    bounded.create_space(other_space.clone(),bounds).unwrap();
+    bounded.create_actor(bounded_actor.clone(),ActorKind::Human).unwrap();
+    bounded.assign(&bounded_actor,&bounded_space).unwrap();
+    let heap_before=NEXT.load(Ordering::Relaxed);
+    for i in 0..1100 { check(bounded.move_pointer_bounded(&bounded_actor,&bounded_space,Position{x:i%100,y:20}).is_ok(), "bounded repeated move"); }
+    check(bounded.move_pointer_bounded(&bounded_actor,&bounded_space,Position{x:77,y:20}).is_ok(), "bounded last move");
+    check(bounded.move_pointer_bounded(&bounded_actor,&other_space,Position{x:5,y:5})==Err(MoveError::WrongSpace), "bounded wrong space");
+    check(bounded.actor(&bounded_actor).unwrap().pointer()==Some(Position{x:77,y:20}), "bounded reject changed pointer");
+    check(bounded.bounded_trace().len()==64 && bounded.overwritten()==1038, "bounded retention");
+    check(NEXT.load(Ordering::Relaxed)==heap_before, "bounded motion allocated");
+    let last=bounded.bounded_trace().back().unwrap();
+    check(last.outcome==Err(MoveError::WrongSpace) && last.actor_slot.and_then(|i|bounded.trace_actor(i))==Some(&bounded_actor) && last.space_slot.and_then(|i|bounded.trace_space(i))==Some(&other_space), "bounded trace slots");
+    write("CHECK bounded_moves=1101 last=77,20 rejected_wrong_space=yes ring=64 overwritten=1038 motion_allocations=0\r\n");
     for record in router.traces() {
         // Trace comes from actual router records, not a separately fabricated log.
         write("IO actor="); write(record.actor.as_str()); write(" space="); write(record.space.as_str());

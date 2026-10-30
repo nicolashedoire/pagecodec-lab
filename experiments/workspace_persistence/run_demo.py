@@ -34,7 +34,7 @@ def create(path, data):
         f.write(data)
 
 
-def boot(qemu, guest, image, marker):
+def boot(qemu, guest, image, marker, legacy):
     blocks = [
         {"driver": "file", "filename": str(image), "node-name": "file0"},
         {"driver": "raw", "file": "file0", "node-name": "disk0"},
@@ -42,6 +42,7 @@ def boot(qemu, guest, image, marker):
     command = [qemu, '-M', 'virt,virtualization=off', '-accel', 'tcg', '-cpu', 'cortex-a57',
                '-smp', '1', '-m', '128M', '-nodefaults', '-display', 'none', '-nic', 'none',
                '-monitor', 'none', '-serial', 'stdio', '-no-reboot', '-kernel', str(guest),
+               '-global', 'virtio-mmio.force-legacy=' + ('true' if legacy else 'false'),
                '-blockdev', json.dumps(blocks[0]), '-blockdev', json.dumps(blocks[1]),
                '-device', 'virtio-blk-device,drive=disk0']
     process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -77,6 +78,7 @@ def main():
     p.add_argument('--qemu', required=True)
     p.add_argument('--guest', required=True)
     p.add_argument('--output-dir', required=True)
+    p.add_argument('--legacy', action='store_true', help='test legacy instead of modern VirtIO-MMIO')
     args = p.parse_args()
     guest = Path(args.guest)
     guest_hash = digest(guest.read_bytes())
@@ -86,7 +88,7 @@ def main():
         base[:8] = b'VMINIT01'
         image = Path(directory) / 'fixture.raw'
         create(image, base)
-        first = boot(args.qemu, guest, image, 'PASS save synthetic bridge record')
+        first = boot(args.qemu, guest, image, 'PASS save synthetic bridge record', args.legacy)
         saved = image.read_bytes()
         sector = saved[OFFSET:OFFSET+BLOCK]
         if saved[:OFFSET] != base[:OFFSET] or saved[OFFSET+BLOCK:] != base[OFFSET+BLOCK:]:
@@ -98,14 +100,14 @@ def main():
         # Only the runner-owned control sector is changed between boots.
         with image.open('r+b') as f:
             f.write(restore[:BLOCK])
-        second = boot(args.qemu, guest, image, 'PASS restore synthetic bridge record')
+        second = boot(args.qemu, guest, image, 'PASS restore synthetic bridge record', args.legacy)
         if image.read_bytes() != restore:
             raise RuntimeError('restore altered fixture')
         corrupt = bytearray(restore)
         corrupt[OFFSET+10] ^= 1
         corrupt_image = Path(directory) / 'checksum-corrupt.raw'
         create(corrupt_image, corrupt)
-        rejected_checksum = boot(args.qemu, guest, corrupt_image, 'REJECT malformed record')
+        rejected_checksum = boot(args.qemu, guest, corrupt_image, 'REJECT malformed record', args.legacy)
         if corrupt_image.read_bytes() != corrupt:
             raise RuntimeError('rejection altered corrupt fixture')
         malformed = bytearray(restore)
@@ -113,13 +115,14 @@ def main():
         malformed[OFFSET+508:OFFSET+512] = fnv(malformed[OFFSET:OFFSET+508]).to_bytes(4, 'little')
         malformed_image = Path(directory) / 'length-corrupt.raw'
         create(malformed_image, malformed)
-        rejected_length = boot(args.qemu, guest, malformed_image, 'REJECT malformed record')
+        rejected_length = boot(args.qemu, guest, malformed_image, 'REJECT malformed record', args.legacy)
         if malformed_image.read_bytes() != malformed:
             raise RuntimeError('rejection altered malformed fixture')
     if digest(guest.read_bytes()) != guest_hash:
         raise RuntimeError('guest image changed during run')
     result = {'guest_sha256': guest_hash, 'qemu_version': version,
               'fixture': 'fresh disposable 1 MiB image; control sector 0 and data sector 4',
+              'virtio_mmio_mode': 'legacy' if args.legacy else 'modern',
               'save_serial': first, 'saved_record_sha256': digest(sector), 'restore_serial': second,
               'corrupt_checksum_serial': rejected_checksum, 'invalid_length_with_valid_checksum_serial': rejected_length,
               'checks': 'unmodified neighboring sectors; restore and rejected images unchanged',

@@ -2,12 +2,11 @@
 #![no_main]
 extern crate alloc;
 use alloc::format;
-use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
-use actor_core_sketch::{ActorId, ActorKind, Registry, SpaceId};
+use actor_core_sketch::{ActorId, ActorKind, Position, Registry, SpaceId};
 use system_core_sketch::{Document, Origin};
 use workspace_bridge_sketch::Bridge;
-use dual_input_lab::{Actor, Event, Grant, Outcome, Point, Router, WorkspaceId};
+use dynamic_input_sketch::{Bounds, Router};
 use serde_json::{json, Value};
 use core::alloc::{GlobalAlloc, Layout};
 use core::arch::{asm, global_asm};
@@ -275,21 +274,13 @@ fn origin_name(origin: Origin) -> &'static str {
     match origin { Origin::Base=>"base", Origin::Human=>"human", Origin::Assistant=>"assistant", Origin::Both=>"both" }
 }
 
-// Caller-constructed demonstration grants are not authentication.
-fn move_pointer(router: &mut Router, actor: Actor, grant: &Grant, x: u32, y: u32) -> bool {
-    let workspace = actor.workspace();
-    let revision = router.workspace(workspace).revision();
-    let event = Event::Move { workspace, expected_workspace_revision: revision,
-                              to: Point { x: x as i32, y: y as i32 } };
-    matches!(router.route(actor, grant, event), Ok(Outcome::Moved { .. }))
+// Actor/space labels are caller-supplied demonstration data, not credentials.
+fn move_pointer(router: &mut Router, actor: &ActorId, space: &SpaceId, x: u32, y: u32) -> bool {
+    router.move_pointer_bounded(actor, space, Position { x: x as i32, y: y as i32 }).is_ok()
 }
-fn cursor(router: &Router, workspace: WorkspaceId) -> (u32,u32) {
-    let point = router.workspace(workspace).cursor();
+fn cursor(router: &Router, actor: &ActorId) -> (u32,u32) {
+    let point = router.actor(actor).and_then(|a|a.pointer()).unwrap();
     (point.x as u32, point.y as u32)
-}
-fn movement_grant(actor: Actor) -> Grant {
-    Grant { actor, workspace: actor.workspace(), may_move: true, may_focus: false,
-            may_click: false, windows: BTreeSet::new(), writable_objects: BTreeSet::new() }
 }
 
 #[no_mangle]
@@ -312,18 +303,32 @@ pub extern "C" fn rust_main() -> ! {
         Ok(buf) if buf.len() >= FRAME_BYTES => buf.as_mut_ptr(),
         _ => halt()
     };
-    let Some(mut router) = Router::new(WIDTH as u32, HEIGHT as u32) else { halt() };
-    let human_grant = movement_grant(Actor::Human);
-    let ai_grant = movement_grant(Actor::Assistant);
-    if !move_pointer(&mut router, Actor::Human, &human_grant, 120, 180)
-        || !move_pointer(&mut router, Actor::Assistant, &ai_grant, 560, 330) { halt() }
+    let mut router = Router::new_bounded(64);
+    let human=ActorId::new("human").unwrap(); let ai=ActorId::new("assistant").unwrap();
+    let remote=ActorId::new("remote").unwrap();
+    let hs=SpaceId::new("human-space").unwrap(); let ais=SpaceId::new("assistant-space").unwrap();
+    let rs=SpaceId::new("remote-space").unwrap();
+    // Bounds here use global display coordinates, even though the router itself
+    // is coordinate-agnostic. The remote actor is logical, not another window.
+    for (space, bounds) in [(&hs, Bounds {left:0, top:0, right:400, bottom:600}),
+                            (&ais, Bounds {left:400, top:0, right:774, bottom:574}),
+                            (&rs, Bounds {left:0, top:0, right:800, bottom:600})] {
+        router.create_space(space.clone(), bounds).unwrap();
+    }
+    for (actor, kind, space) in [(&human,ActorKind::Human,&hs), (&ai,ActorKind::Assistant,&ais), (&remote,ActorKind::Remote,&rs)] {
+        router.create_actor(actor.clone(),kind).unwrap(); router.assign(actor,space).unwrap();
+    }
+    if !move_pointer(&mut router, &human, &hs, 120, 180)
+        || !move_pointer(&mut router, &ai, &ais, 560, 330)
+        || !move_pointer(&mut router, &remote, &rs, 30, 40) { halt() }
+    // The bounded journal overwrites its oldest entries without per-move allocation.
     let mut document = DocumentDemo::new();
     let mut hclick = false;
     let mut pending_move: Option<(Value,u32,u32)> = None;
     // SAFETY: GPU owns this pinned buffer for its lifetime; one CPU and a draw
     // borrow ends before flush. QEMU-only HAL is not for production hardware.
     unsafe { draw(core::slice::from_raw_parts_mut(frame_ptr, FRAME_BYTES),
-                  cursor(&router, WorkspaceId::Human), cursor(&router, WorkspaceId::Assistant), hclick); }
+                  cursor(&router, &human), cursor(&router, &ai), hclick); }
     if gpu.flush().is_err() { halt() }
     let mut line = [0u8;512];
     let mut used = 0usize;
@@ -337,14 +342,14 @@ pub extern "C" fn rust_main() -> ! {
             match (ev.event_type,ev.code) {
                 (3,0) => {
                     let x = (ev.value.min(32767) * (PANEL_SPLIT - 22) / 32767 + 16).min(390);
-                    let (_, y) = cursor(&router, WorkspaceId::Human);
-                    if !move_pointer(&mut router, Actor::Human, &human_grant, x, y) { halt() }
+                    let (_, y) = cursor(&router, &human);
+                    if !move_pointer(&mut router, &human, &hs, x, y) { halt() }
                     changed = true;
                 }
                 (3,1) => {
                     let y = ev.value.min(32767) * (HEIGHT as u32 - 100) / 32767 + 70;
-                    let (x, _) = cursor(&router, WorkspaceId::Human);
-                    if !move_pointer(&mut router, Actor::Human, &human_grant, x, y) { halt() }
+                    let (x, _) = cursor(&router, &human);
+                    if !move_pointer(&mut router, &human, &hs, x, y) { halt() }
                     changed = true;
                 }
                 (1,272) => { hclick = ev.value != 0; changed = true; }
@@ -391,6 +396,9 @@ pub extern "C" fn rust_main() -> ! {
                                     Some("tools/list") => send(&json!({"jsonrpc":"2.0","id":id,"result":{"tools":[
                                         {"name":"move_ai","description":"Move AI pointer within its right-hand QEMU workspace.","inputSchema":{"type":"object","properties":{"x":{"type":"integer","minimum":400,"maximum":773},"y":{"type":"integer","minimum":0,"maximum":573}},"required":["x","y"],"additionalProperties":false}},
                                         {"name":"pointer_state","description":"Read the two pointer coordinates in this guest only.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"move_remote","description":"Move a third synthetic logical actor; no graphical window or authenticated identity.","inputSchema":{"type":"object","properties":{"x":{"type":"integer","minimum":0,"maximum":799},"y":{"type":"integer","minimum":0,"maximum":599}},"required":["x","y"],"additionalProperties":false}},
+                                        {"name":"remote_state","description":"Read the third synthetic actor's logical position.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"exercise_human_moves","description":"Run 1101 synthetic human moves in this VM; overwrites older bounded trace entries.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"document_edit","description":"Edit one synthetic document copy; actor labels are unauthenticated.","inputSchema":{"type":"object","properties":{"actor":{"type":"string","enum":["human","assistant"]},"space":{"type":"string","enum":["human-space","assistant-space"]},"key":{"type":"string","description":"Non-empty; at most 32 UTF-8 bytes."},"value":{"type":["string","null"],"description":"At most 64 UTF-8 bytes; null deletes the field."}},"required":["actor","space","key","value"],"additionalProperties":false}},
                                         {"name":"document_view","description":"Read a field from a synthetic document copy.","inputSchema":{"type":"object","properties":{"actor":{"type":"string","enum":["human","assistant"]},"space":{"type":"string","enum":["human-space","assistant-space"]},"key":{"type":"string","description":"Non-empty; at most 32 UTF-8 bytes."}},"required":["actor","space","key"],"additionalProperties":false}},
                                         {"name":"document_merge","description":"Merge synthetic copies and return fields, origins and conflicts.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}
@@ -406,7 +414,7 @@ pub extern "C" fn rust_main() -> ! {
                                                 let exactly_two=args.and_then(Value::as_object).is_some_and(|o| o.len()==2);
                                                 match (x,y,exactly_two) {
                                                     (Some(x),Some(y),true) if (400..=773).contains(&x) && y<=573 => {
-                                                        if move_pointer(&mut router, Actor::Assistant, &ai_grant, x as u32, y as u32) {
+                                                        if move_pointer(&mut router, &ai, &ais, x as u32, y as u32) {
                                                             pending_move=Some((id,x as u32,y as u32)); changed=true;
                                                         } else { tool_error(id,"pointer router rejected move"); }
                                                     }
@@ -418,11 +426,47 @@ pub extern "C" fn rust_main() -> ! {
                                                 if !args.and_then(Value::as_object).is_some_and(|o| o.is_empty()) {
                                                     tool_error(id,"pointer_state requires an empty arguments object");
                                                 } else {
-                                                    let human = cursor(&router, WorkspaceId::Human);
-                                                    let ai = cursor(&router, WorkspaceId::Assistant);
-                                                    let v = format!("human={},{}; ai={},{}",human.0,human.1,ai.0,ai.1);
+                                                    let human_point = cursor(&router, &human);
+                                                    let ai_point = cursor(&router, &ai);
+                                                    let v = format!("human={},{}; ai={},{}",human_point.0,human_point.1,ai_point.0,ai_point.1);
                                                     send(&json!({"jsonrpc":"2.0","id":id,"result":{"content":[{"type":"text","text":v}],"isError":false}}));
                                                 }
+                                            }
+                                            Some("exercise_human_moves") => {
+                                                let args=params.and_then(|p|p.get("arguments"));
+                                                if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) { tool_error(id,"exercise requires empty arguments"); }
+                                                else {
+                                                    let before=HEAP_NEXT.load(Ordering::Relaxed);
+                                                    let mut ok=true;
+                                                    for i in 0..1100 { ok &= move_pointer(&mut router,&human,&hs,16+i%300,180); }
+                                                    ok &= move_pointer(&mut router,&human,&hs,200,180);
+                                                    let after=HEAP_NEXT.load(Ordering::Relaxed);
+                                                    if !ok || before!=after || cursor(&router,&human)!=(200,180) || router.bounded_trace().len()!=64 || router.overwritten()==0 {
+                                                        tool_error(id,"bounded movement test failed");
+                                                    } else {
+                                                        changed=true;
+                                                        tool_json(id,json!({"moves":1101,"x":200,"y":180,"ring":router.bounded_trace().len(),"overwritten":router.overwritten(),"motion_allocations":0}));
+                                                    }
+                                                }
+                                            }
+                                            Some("move_remote") => {
+                                                let args=params.and_then(|p|p.get("arguments"));
+                                                let x=args.and_then(|v|v.get("x")).and_then(Value::as_u64);
+                                                let y=args.and_then(|v|v.get("y")).and_then(Value::as_u64);
+                                                let exact=args.and_then(Value::as_object).is_some_and(|o|o.len()==2);
+                                                match (x,y,exact) {
+                                                    (Some(x),Some(y),true) if x<800 && y<600 => {
+                                                        if move_pointer(&mut router,&remote,&rs,x as u32,y as u32) {
+                                                            tool_json(id,json!({"actor":"remote","x":x,"y":y}));
+                                                        } else { tool_error(id,"remote move rejected"); }
+                                                    }
+                                                    _ => tool_error(id,"invalid or out-of-bounds remote coordinates"),
+                                                }
+                                            }
+                                            Some("remote_state") => {
+                                                let args=params.and_then(|p|p.get("arguments"));
+                                                if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) { tool_error(id,"remote_state requires empty arguments"); }
+                                                else { let (x,y)=cursor(&router,&remote); tool_json(id,json!({"actor":"remote","x":x,"y":y})); }
                                             }
                                             Some("document_edit") | Some("document_view") => {
                                                 let edit = name == Some("document_edit");
@@ -482,7 +526,7 @@ pub extern "C" fn rust_main() -> ! {
         }
         if changed {
             unsafe { draw(core::slice::from_raw_parts_mut(frame_ptr, FRAME_BYTES),
-                  cursor(&router, WorkspaceId::Human), cursor(&router, WorkspaceId::Assistant), hclick); }
+                  cursor(&router, &human), cursor(&router, &ai), hclick); }
             if gpu.flush().is_err() { if let Some((id,_,_))=pending_move.take() { tool_error(id,"framebuffer flush failed"); } halt() }
             if let Some((id,x,y))=pending_move.take() {
                 let value = format!("moved AI pointer to {},{}",x,y);

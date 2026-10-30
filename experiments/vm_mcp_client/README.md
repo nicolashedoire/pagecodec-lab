@@ -43,18 +43,23 @@ the research Mac with QEMU TCG and retained its full
 [synthetic QMP and MCP evidence](evidence/reproducible-vm-run.json). It
 first verified that an out-of-bounds MCP move to `(399, 260)` was rejected
 with `isError: true` and that the guest reported unchanged positions. It then
-injected a synthetic tablet x=32767 event and observed the guest report
+ran 1,101 synthetic in-guest human movements with a preallocated 64-entry
+circular journal, observing that older entries were overwritten and the guest
+heap did not advance during those moves. It then injected a synthetic tablet
+x=32767 event and observed the guest report
 human x=390, then injected the standard synthetic human VirtIO tablet event
 and captured the QMP responses. The client negotiated MCP, found the two pointer tools and moved the
 assistant cursor. The guest reported human pointer `(223, 390)` and
 assistant pointer `(560, 330)` before the MCP call; afterward it reported
 `(223, 390)` and `(650, 260)` respectively. The client checked the move reply
-and post-move state. This run uses the guest connected to the `dual_input`
-router: both pointer movement paths update its separate workspace cursor
-states, which are read back by the display and `pointer_state`. The human
-click indicator is a visual effect and is not a routed click or focus. Guest
-grants are locally constructed and forgeable; they provide no authentication
-or security isolation. The runner also recorded guest/client image hashes and
+and post-move state. This run uses the guest connected to the `dynamic_input`
+router: both pointer movement paths update its per-actor cursor states,
+which are read back by the display and `pointer_state`. The runner also moves
+a third logical actor, verifies that an invalid move is rejected, and checks
+that both visible pointer positions are unchanged. This actor has no window
+or visible cursor. The human click indicator is a visual effect and is not a
+routed click or focus. Actor labels and assignments are locally constructed;
+they provide no authentication or security isolation. The runner also recorded guest/client image hashes and
 before/after framebuffer hashes. Different hashes establish a framebuffer
 change, not the geometry or cause of that change; the generated raw
 framebuffers themselves are not stored in this repository.

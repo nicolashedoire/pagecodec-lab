@@ -90,11 +90,17 @@ impl Registry {
         self.events.push(Event::ActorAssigned { actor: actor.clone(), space: space.clone() });
         Ok(())
     }
-    pub fn move_pointer(&mut self, actor: &ActorId, space: &SpaceId, position: Position) -> Result<(), Error> {
+    /// Update only state; callers provide any recording policy. No movement
+    /// event is appended here, so callers must not claim an audit history.
+    pub fn move_pointer_unlogged(&mut self, actor: &ActorId, space: &SpaceId, position: Position) -> Result<(), Error> {
         if !self.spaces.contains(space) { return Err(Error::UnknownSpace); }
         let state = self.actors.get_mut(actor).ok_or(Error::UnknownActor)?;
         if state.space.as_ref() != Some(space) { return Err(Error::WrongSpace); }
         state.pointer = Some(position);
+        Ok(())
+    }
+    pub fn move_pointer(&mut self, actor: &ActorId, space: &SpaceId, position: Position) -> Result<(), Error> {
+        self.move_pointer_unlogged(actor,space,position)?;
         self.events.push(Event::PointerMoved { actor: actor.clone(), space: space.clone(), position });
         Ok(())
     }

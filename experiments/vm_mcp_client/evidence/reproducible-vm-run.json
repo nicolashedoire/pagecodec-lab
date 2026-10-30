@@ -1,5 +1,5 @@
 {
-  "guest_sha256": "8670d538bcda8c21c319c5bfe4ac374fb178a632a5b15e1346d8830ac0770515",
+  "guest_sha256": "0ef5029ee0b45d53ff08494b91e893986385d0689fcb60cb22fbf42414fa3ebb",
   "client_sha256": "7cd0810321bbd4c42c099707ab70519ef748a2ed905df1a81e28ca2d06947e8c",
   "qemu_version": {
     "qemu": {
@@ -108,6 +108,30 @@
           "content": [
             {
               "text": "human=120,180; ai=560,330",
+              "type": "text"
+            }
+          ],
+          "isError": false
+        }
+      }
+    },
+    "bounded_movement_stress": {
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 119,
+        "method": "tools/call",
+        "params": {
+          "name": "exercise_human_moves",
+          "arguments": {}
+        }
+      },
+      "response": {
+        "id": 119,
+        "jsonrpc": "2.0",
+        "result": {
+          "content": [
+            {
+              "text": "{\"motion_allocations\":0,\"moves\":1101,\"overwritten\":1040,\"ring\":64,\"x\":200,\"y\":180}",
               "type": "text"
             }
           ],
@@ -273,6 +297,48 @@
                   "type": "object"
                 },
                 "name": "pointer_state"
+              },
+              {
+                "description": "Move a third synthetic logical actor; no graphical window or authenticated identity.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 799,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 599,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_remote"
+              },
+              {
+                "description": "Read the third synthetic actor's logical position.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "remote_state"
+              },
+              {
+                "description": "Run 1101 synthetic human moves in this VM; overwrites older bounded trace entries.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "exercise_human_moves"
               },
               {
                 "description": "Edit one synthetic document copy; actor labels are unauthenticated.",
@@ -521,6 +587,48 @@
               "name": "pointer_state"
             },
             {
+              "description": "Move a third synthetic logical actor; no graphical window or authenticated identity.",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {
+                  "x": {
+                    "maximum": 799,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "y": {
+                    "maximum": 599,
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "type": "object"
+              },
+              "name": "move_remote"
+            },
+            {
+              "description": "Read the third synthetic actor's logical position.",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {},
+                "type": "object"
+              },
+              "name": "remote_state"
+            },
+            {
+              "description": "Run 1101 synthetic human moves in this VM; overwrites older bounded trace entries.",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {},
+                "type": "object"
+              },
+              "name": "exercise_human_moves"
+            },
+            {
               "description": "Edit one synthetic document copy; actor labels are unauthenticated.",
               "inputSchema": {
                 "additionalProperties": false,
@@ -604,6 +712,132 @@
               "name": "document_merge"
             }
           ]
+        }
+      }
+    },
+    {
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 114,
+        "method": "tools/call",
+        "params": {
+          "name": "remote_state",
+          "arguments": {}
+        }
+      },
+      "response": {
+        "id": 114,
+        "jsonrpc": "2.0",
+        "result": {
+          "content": [
+            {
+              "text": "{\"actor\":\"remote\",\"x\":30,\"y\":40}",
+              "type": "text"
+            }
+          ],
+          "isError": false
+        }
+      }
+    },
+    {
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 115,
+        "method": "tools/call",
+        "params": {
+          "name": "move_remote",
+          "arguments": {
+            "x": 70,
+            "y": 90
+          }
+        }
+      },
+      "response": {
+        "id": 115,
+        "jsonrpc": "2.0",
+        "result": {
+          "content": [
+            {
+              "text": "{\"actor\":\"remote\",\"x\":70,\"y\":90}",
+              "type": "text"
+            }
+          ],
+          "isError": false
+        }
+      }
+    },
+    {
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 116,
+        "method": "tools/call",
+        "params": {
+          "name": "move_remote",
+          "arguments": {
+            "x": 800,
+            "y": 90
+          }
+        }
+      },
+      "response": {
+        "id": 116,
+        "jsonrpc": "2.0",
+        "result": {
+          "content": [
+            {
+              "text": "invalid or out-of-bounds remote coordinates",
+              "type": "text"
+            }
+          ],
+          "isError": true
+        }
+      }
+    },
+    {
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 117,
+        "method": "tools/call",
+        "params": {
+          "name": "remote_state",
+          "arguments": {}
+        }
+      },
+      "response": {
+        "id": 117,
+        "jsonrpc": "2.0",
+        "result": {
+          "content": [
+            {
+              "text": "{\"actor\":\"remote\",\"x\":70,\"y\":90}",
+              "type": "text"
+            }
+          ],
+          "isError": false
+        }
+      }
+    },
+    {
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 118,
+        "method": "tools/call",
+        "params": {
+          "name": "pointer_state",
+          "arguments": {}
+        }
+      },
+      "response": {
+        "id": 118,
+        "jsonrpc": "2.0",
+        "result": {
+          "content": [
+            {
+              "text": "human=223,390; ai=650,260",
+              "type": "text"
+            }
+          ],
+          "isError": false
         }
       }
     },
@@ -952,9 +1186,9 @@
   "framebuffer_claim": "hashes demonstrate a change, not pointer geometry",
   "limitations": "experimental VM; no authentication, real workspaces or host OS control",
   "previous_automated_evidence": {
-    "description": "Earlier pointer/document MCP run before schema and cross-space rejection checks; older runs are nested.",
+    "description": "Earlier guest image before bounded movement journal integration.",
     "record": {
-      "guest_sha256": "12ac202cbc0cb8f53d6a09696ac658ba3181d26aa2d500ae2d52a40e5b7d4ab3",
+      "guest_sha256": "0f55b0667d2f9ea615213e8535c16d116f0af5b3510f6e376bd97e3039e5f50f",
       "client_sha256": "7cd0810321bbd4c42c099707ab70519ef748a2ed905df1a81e28ca2d06947e8c",
       "qemu_version": {
         "qemu": {
@@ -1119,7 +1353,7 @@
           {
             "request": {
               "jsonrpc": "2.0",
-              "id": 24,
+              "id": 16,
               "method": "tools/call",
               "params": {
                 "name": "pointer_state",
@@ -1127,7 +1361,7 @@
               }
             },
             "response": {
-              "id": 24,
+              "id": 16,
               "jsonrpc": "2.0",
               "result": {
                 "content": [
@@ -1230,20 +1464,63 @@
                     "name": "pointer_state"
                   },
                   {
+                    "description": "Move a third synthetic logical actor; no graphical window or authenticated identity.",
+                    "inputSchema": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "x": {
+                          "maximum": 799,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "y": {
+                          "maximum": 599,
+                          "minimum": 0,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y"
+                      ],
+                      "type": "object"
+                    },
+                    "name": "move_remote"
+                  },
+                  {
+                    "description": "Read the third synthetic actor's logical position.",
+                    "inputSchema": {
+                      "additionalProperties": false,
+                      "properties": {},
+                      "type": "object"
+                    },
+                    "name": "remote_state"
+                  },
+                  {
                     "description": "Edit one synthetic document copy; actor labels are unauthenticated.",
                     "inputSchema": {
                       "additionalProperties": false,
                       "properties": {
                         "actor": {
+                          "enum": [
+                            "human",
+                            "assistant"
+                          ],
                           "type": "string"
                         },
                         "key": {
+                          "description": "Non-empty; at most 32 UTF-8 bytes.",
                           "type": "string"
                         },
                         "space": {
+                          "enum": [
+                            "human-space",
+                            "assistant-space"
+                          ],
                           "type": "string"
                         },
                         "value": {
+                          "description": "At most 64 UTF-8 bytes; null deletes the field.",
                           "type": [
                             "string",
                             "null"
@@ -1266,12 +1543,21 @@
                       "additionalProperties": false,
                       "properties": {
                         "actor": {
+                          "enum": [
+                            "human",
+                            "assistant"
+                          ],
                           "type": "string"
                         },
                         "key": {
+                          "description": "Non-empty; at most 32 UTF-8 bytes.",
                           "type": "string"
                         },
                         "space": {
+                          "enum": [
+                            "human-space",
+                            "assistant-space"
+                          ],
                           "type": "string"
                         }
                       },
@@ -1409,6 +1695,297 @@
           "notification": {
             "jsonrpc": "2.0",
             "method": "notifications/initialized"
+          }
+        },
+        {
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 113,
+            "method": "tools/list",
+            "params": {}
+          },
+          "response": {
+            "id": 113,
+            "jsonrpc": "2.0",
+            "result": {
+              "tools": [
+                {
+                  "description": "Move AI pointer within its right-hand QEMU workspace.",
+                  "inputSchema": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "x": {
+                        "maximum": 773,
+                        "minimum": 400,
+                        "type": "integer"
+                      },
+                      "y": {
+                        "maximum": 573,
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ],
+                    "type": "object"
+                  },
+                  "name": "move_ai"
+                },
+                {
+                  "description": "Read the two pointer coordinates in this guest only.",
+                  "inputSchema": {
+                    "additionalProperties": false,
+                    "properties": {},
+                    "type": "object"
+                  },
+                  "name": "pointer_state"
+                },
+                {
+                  "description": "Move a third synthetic logical actor; no graphical window or authenticated identity.",
+                  "inputSchema": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "x": {
+                        "maximum": 799,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "y": {
+                        "maximum": 599,
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ],
+                    "type": "object"
+                  },
+                  "name": "move_remote"
+                },
+                {
+                  "description": "Read the third synthetic actor's logical position.",
+                  "inputSchema": {
+                    "additionalProperties": false,
+                    "properties": {},
+                    "type": "object"
+                  },
+                  "name": "remote_state"
+                },
+                {
+                  "description": "Edit one synthetic document copy; actor labels are unauthenticated.",
+                  "inputSchema": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "actor": {
+                        "enum": [
+                          "human",
+                          "assistant"
+                        ],
+                        "type": "string"
+                      },
+                      "key": {
+                        "description": "Non-empty; at most 32 UTF-8 bytes.",
+                        "type": "string"
+                      },
+                      "space": {
+                        "enum": [
+                          "human-space",
+                          "assistant-space"
+                        ],
+                        "type": "string"
+                      },
+                      "value": {
+                        "description": "At most 64 UTF-8 bytes; null deletes the field.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "actor",
+                      "space",
+                      "key",
+                      "value"
+                    ],
+                    "type": "object"
+                  },
+                  "name": "document_edit"
+                },
+                {
+                  "description": "Read a field from a synthetic document copy.",
+                  "inputSchema": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "actor": {
+                        "enum": [
+                          "human",
+                          "assistant"
+                        ],
+                        "type": "string"
+                      },
+                      "key": {
+                        "description": "Non-empty; at most 32 UTF-8 bytes.",
+                        "type": "string"
+                      },
+                      "space": {
+                        "enum": [
+                          "human-space",
+                          "assistant-space"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "actor",
+                      "space",
+                      "key"
+                    ],
+                    "type": "object"
+                  },
+                  "name": "document_view"
+                },
+                {
+                  "description": "Merge synthetic copies and return fields, origins and conflicts.",
+                  "inputSchema": {
+                    "additionalProperties": false,
+                    "properties": {},
+                    "type": "object"
+                  },
+                  "name": "document_merge"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 114,
+            "method": "tools/call",
+            "params": {
+              "name": "remote_state",
+              "arguments": {}
+            }
+          },
+          "response": {
+            "id": 114,
+            "jsonrpc": "2.0",
+            "result": {
+              "content": [
+                {
+                  "text": "{\"actor\":\"remote\",\"x\":30,\"y\":40}",
+                  "type": "text"
+                }
+              ],
+              "isError": false
+            }
+          }
+        },
+        {
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 115,
+            "method": "tools/call",
+            "params": {
+              "name": "move_remote",
+              "arguments": {
+                "x": 70,
+                "y": 90
+              }
+            }
+          },
+          "response": {
+            "id": 115,
+            "jsonrpc": "2.0",
+            "result": {
+              "content": [
+                {
+                  "text": "{\"actor\":\"remote\",\"x\":70,\"y\":90}",
+                  "type": "text"
+                }
+              ],
+              "isError": false
+            }
+          }
+        },
+        {
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 116,
+            "method": "tools/call",
+            "params": {
+              "name": "move_remote",
+              "arguments": {
+                "x": 800,
+                "y": 90
+              }
+            }
+          },
+          "response": {
+            "id": 116,
+            "jsonrpc": "2.0",
+            "result": {
+              "content": [
+                {
+                  "text": "invalid or out-of-bounds remote coordinates",
+                  "type": "text"
+                }
+              ],
+              "isError": true
+            }
+          }
+        },
+        {
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 117,
+            "method": "tools/call",
+            "params": {
+              "name": "remote_state",
+              "arguments": {}
+            }
+          },
+          "response": {
+            "id": 117,
+            "jsonrpc": "2.0",
+            "result": {
+              "content": [
+                {
+                  "text": "{\"actor\":\"remote\",\"x\":70,\"y\":90}",
+                  "type": "text"
+                }
+              ],
+              "isError": false
+            }
+          }
+        },
+        {
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 118,
+            "method": "tools/call",
+            "params": {
+              "name": "pointer_state",
+              "arguments": {}
+            }
+          },
+          "response": {
+            "id": 118,
+            "jsonrpc": "2.0",
+            "result": {
+              "content": [
+                {
+                  "text": "human=223,390; ai=650,260",
+                  "type": "text"
+                }
+              ],
+              "isError": false
+            }
           }
         },
         {
@@ -1581,6 +2158,62 @@
         {
           "request": {
             "jsonrpc": "2.0",
+            "id": 111,
+            "method": "tools/call",
+            "params": {
+              "name": "document_view",
+              "arguments": {
+                "actor": "human",
+                "space": "human-space",
+                "key": "title"
+              }
+            }
+          },
+          "response": {
+            "id": 111,
+            "jsonrpc": "2.0",
+            "result": {
+              "content": [
+                {
+                  "text": "{\"actor\":\"human\",\"key\":\"title\",\"space\":\"human-space\",\"value\":\"human-version\"}",
+                  "type": "text"
+                }
+              ],
+              "isError": false
+            }
+          }
+        },
+        {
+          "request": {
+            "jsonrpc": "2.0",
+            "id": 112,
+            "method": "tools/call",
+            "params": {
+              "name": "document_view",
+              "arguments": {
+                "actor": "assistant",
+                "space": "assistant-space",
+                "key": "title"
+              }
+            }
+          },
+          "response": {
+            "id": 112,
+            "jsonrpc": "2.0",
+            "result": {
+              "content": [
+                {
+                  "text": "{\"actor\":\"assistant\",\"key\":\"title\",\"space\":\"assistant-space\",\"value\":\"base\"}",
+                  "type": "text"
+                }
+              ],
+              "isError": false
+            }
+          }
+        },
+        {
+          "request": {
+            "jsonrpc": "2.0",
             "id": 107,
             "method": "tools/call",
             "params": {
@@ -1641,7 +2274,7 @@
               "arguments": {
                 "actor": "human",
                 "space": "human-space",
-                "key": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                "key": "\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9",
                 "value": "too-long-key"
               }
             }
@@ -1700,9 +2333,9 @@
       "framebuffer_claim": "hashes demonstrate a change, not pointer geometry",
       "limitations": "experimental VM; no authentication, real workspaces or host OS control",
       "previous_automated_evidence": {
-        "description": "Earlier pointer-only integration run, before document MCP tools; older runs are preserved in nested records.",
+        "description": "Previous fixed dual-input-router demonstration, including document tools and earlier evidence.",
         "record": {
-          "guest_sha256": "0f8484bd50ab3fa5bc422c45853e239238219063cfd7a8668ae3cca7a5e7339b",
+          "guest_sha256": "8670d538bcda8c21c319c5bfe4ac374fb178a632a5b15e1346d8830ac0770515",
           "client_sha256": "7cd0810321bbd4c42c099707ab70519ef748a2ed905df1a81e28ca2d06947e8c",
           "qemu_version": {
             "qemu": {
@@ -1867,7 +2500,7 @@
               {
                 "request": {
                   "jsonrpc": "2.0",
-                  "id": 24,
+                  "id": 16,
                   "method": "tools/call",
                   "params": {
                     "name": "pointer_state",
@@ -1875,7 +2508,7 @@
                   }
                 },
                 "response": {
-                  "id": 24,
+                  "id": 16,
                   "jsonrpc": "2.0",
                   "result": {
                     "content": [
@@ -1976,6 +2609,89 @@
                           "type": "object"
                         },
                         "name": "pointer_state"
+                      },
+                      {
+                        "description": "Edit one synthetic document copy; actor labels are unauthenticated.",
+                        "inputSchema": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "actor": {
+                              "enum": [
+                                "human",
+                                "assistant"
+                              ],
+                              "type": "string"
+                            },
+                            "key": {
+                              "description": "Non-empty; at most 32 UTF-8 bytes.",
+                              "type": "string"
+                            },
+                            "space": {
+                              "enum": [
+                                "human-space",
+                                "assistant-space"
+                              ],
+                              "type": "string"
+                            },
+                            "value": {
+                              "description": "At most 64 UTF-8 bytes; null deletes the field.",
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "actor",
+                            "space",
+                            "key",
+                            "value"
+                          ],
+                          "type": "object"
+                        },
+                        "name": "document_edit"
+                      },
+                      {
+                        "description": "Read a field from a synthetic document copy.",
+                        "inputSchema": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "actor": {
+                              "enum": [
+                                "human",
+                                "assistant"
+                              ],
+                              "type": "string"
+                            },
+                            "key": {
+                              "description": "Non-empty; at most 32 UTF-8 bytes.",
+                              "type": "string"
+                            },
+                            "space": {
+                              "enum": [
+                                "human-space",
+                                "assistant-space"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "actor",
+                            "space",
+                            "key"
+                          ],
+                          "type": "object"
+                        },
+                        "name": "document_view"
+                      },
+                      {
+                        "description": "Merge synthetic copies and return fields, origins and conflicts.",
+                        "inputSchema": {
+                          "additionalProperties": false,
+                          "properties": {},
+                          "type": "object"
+                        },
+                        "name": "document_merge"
                       }
                     ]
                   }
@@ -2059,6 +2775,508 @@
             ],
             "transport": "local Unix socket to QEMU serial"
           },
+          "document_mcp_trace": [
+            {
+              "request": {
+                "jsonrpc": "2.0",
+                "id": 100,
+                "method": "initialize",
+                "params": {
+                  "protocolVersion": "2025-11-25",
+                  "capabilities": {},
+                  "clientInfo": {
+                    "name": "vm-document-probe",
+                    "version": "0.1"
+                  }
+                }
+              },
+              "response": {
+                "id": 100,
+                "jsonrpc": "2.0",
+                "result": {
+                  "capabilities": {
+                    "tools": {}
+                  },
+                  "protocolVersion": "2025-11-25",
+                  "serverInfo": {
+                    "name": "dual-pointer-vm",
+                    "version": "0.1.0"
+                  }
+                }
+              }
+            },
+            {
+              "notification": {
+                "jsonrpc": "2.0",
+                "method": "notifications/initialized"
+              }
+            },
+            {
+              "request": {
+                "jsonrpc": "2.0",
+                "id": 113,
+                "method": "tools/list",
+                "params": {}
+              },
+              "response": {
+                "id": 113,
+                "jsonrpc": "2.0",
+                "result": {
+                  "tools": [
+                    {
+                      "description": "Move AI pointer within its right-hand QEMU workspace.",
+                      "inputSchema": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "x": {
+                            "maximum": 773,
+                            "minimum": 400,
+                            "type": "integer"
+                          },
+                          "y": {
+                            "maximum": 573,
+                            "minimum": 0,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "x",
+                          "y"
+                        ],
+                        "type": "object"
+                      },
+                      "name": "move_ai"
+                    },
+                    {
+                      "description": "Read the two pointer coordinates in this guest only.",
+                      "inputSchema": {
+                        "additionalProperties": false,
+                        "properties": {},
+                        "type": "object"
+                      },
+                      "name": "pointer_state"
+                    },
+                    {
+                      "description": "Edit one synthetic document copy; actor labels are unauthenticated.",
+                      "inputSchema": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "actor": {
+                            "enum": [
+                              "human",
+                              "assistant"
+                            ],
+                            "type": "string"
+                          },
+                          "key": {
+                            "description": "Non-empty; at most 32 UTF-8 bytes.",
+                            "type": "string"
+                          },
+                          "space": {
+                            "enum": [
+                              "human-space",
+                              "assistant-space"
+                            ],
+                            "type": "string"
+                          },
+                          "value": {
+                            "description": "At most 64 UTF-8 bytes; null deletes the field.",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "actor",
+                          "space",
+                          "key",
+                          "value"
+                        ],
+                        "type": "object"
+                      },
+                      "name": "document_edit"
+                    },
+                    {
+                      "description": "Read a field from a synthetic document copy.",
+                      "inputSchema": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "actor": {
+                            "enum": [
+                              "human",
+                              "assistant"
+                            ],
+                            "type": "string"
+                          },
+                          "key": {
+                            "description": "Non-empty; at most 32 UTF-8 bytes.",
+                            "type": "string"
+                          },
+                          "space": {
+                            "enum": [
+                              "human-space",
+                              "assistant-space"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "actor",
+                          "space",
+                          "key"
+                        ],
+                        "type": "object"
+                      },
+                      "name": "document_view"
+                    },
+                    {
+                      "description": "Merge synthetic copies and return fields, origins and conflicts.",
+                      "inputSchema": {
+                        "additionalProperties": false,
+                        "properties": {},
+                        "type": "object"
+                      },
+                      "name": "document_merge"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "request": {
+                "jsonrpc": "2.0",
+                "id": 101,
+                "method": "tools/call",
+                "params": {
+                  "name": "document_edit",
+                  "arguments": {
+                    "actor": "human",
+                    "space": "human-space",
+                    "key": "title",
+                    "value": "human-version"
+                  }
+                }
+              },
+              "response": {
+                "id": 101,
+                "jsonrpc": "2.0",
+                "result": {
+                  "content": [
+                    {
+                      "text": "{\"actor\":\"human\",\"key\":\"title\",\"space\":\"human-space\",\"value\":\"human-version\"}",
+                      "type": "text"
+                    }
+                  ],
+                  "isError": false
+                }
+              }
+            },
+            {
+              "request": {
+                "jsonrpc": "2.0",
+                "id": 102,
+                "method": "tools/call",
+                "params": {
+                  "name": "document_edit",
+                  "arguments": {
+                    "actor": "assistant",
+                    "space": "assistant-space",
+                    "key": "status",
+                    "value": "assistant-ready"
+                  }
+                }
+              },
+              "response": {
+                "id": 102,
+                "jsonrpc": "2.0",
+                "result": {
+                  "content": [
+                    {
+                      "text": "{\"actor\":\"assistant\",\"key\":\"status\",\"space\":\"assistant-space\",\"value\":\"assistant-ready\"}",
+                      "type": "text"
+                    }
+                  ],
+                  "isError": false
+                }
+              }
+            },
+            {
+              "request": {
+                "jsonrpc": "2.0",
+                "id": 103,
+                "method": "tools/call",
+                "params": {
+                  "name": "document_view",
+                  "arguments": {
+                    "actor": "human",
+                    "space": "human-space",
+                    "key": "status"
+                  }
+                }
+              },
+              "response": {
+                "id": 103,
+                "jsonrpc": "2.0",
+                "result": {
+                  "content": [
+                    {
+                      "text": "{\"actor\":\"human\",\"key\":\"status\",\"space\":\"human-space\",\"value\":null}",
+                      "type": "text"
+                    }
+                  ],
+                  "isError": false
+                }
+              }
+            },
+            {
+              "request": {
+                "jsonrpc": "2.0",
+                "id": 104,
+                "method": "tools/call",
+                "params": {
+                  "name": "document_view",
+                  "arguments": {
+                    "actor": "assistant",
+                    "space": "assistant-space",
+                    "key": "title"
+                  }
+                }
+              },
+              "response": {
+                "id": 104,
+                "jsonrpc": "2.0",
+                "result": {
+                  "content": [
+                    {
+                      "text": "{\"actor\":\"assistant\",\"key\":\"title\",\"space\":\"assistant-space\",\"value\":\"base\"}",
+                      "type": "text"
+                    }
+                  ],
+                  "isError": false
+                }
+              }
+            },
+            {
+              "request": {
+                "jsonrpc": "2.0",
+                "id": 105,
+                "method": "tools/call",
+                "params": {
+                  "name": "document_merge",
+                  "arguments": {}
+                }
+              },
+              "response": {
+                "id": 105,
+                "jsonrpc": "2.0",
+                "result": {
+                  "content": [
+                    {
+                      "text": "{\"conflicts\":[],\"fields\":[{\"key\":\"status\",\"origin\":\"assistant\",\"value\":\"assistant-ready\"},{\"key\":\"title\",\"origin\":\"human\",\"value\":\"human-version\"}],\"materializable\":true}",
+                      "type": "text"
+                    }
+                  ],
+                  "isError": false
+                }
+              }
+            },
+            {
+              "request": {
+                "jsonrpc": "2.0",
+                "id": 106,
+                "method": "tools/call",
+                "params": {
+                  "name": "document_edit",
+                  "arguments": {
+                    "actor": "assistant",
+                    "space": "human-space",
+                    "key": "title",
+                    "value": "intrusion"
+                  }
+                }
+              },
+              "response": {
+                "id": 106,
+                "jsonrpc": "2.0",
+                "result": {
+                  "content": [
+                    {
+                      "text": "actor or space rejected",
+                      "type": "text"
+                    }
+                  ],
+                  "isError": true
+                }
+              }
+            },
+            {
+              "request": {
+                "jsonrpc": "2.0",
+                "id": 111,
+                "method": "tools/call",
+                "params": {
+                  "name": "document_view",
+                  "arguments": {
+                    "actor": "human",
+                    "space": "human-space",
+                    "key": "title"
+                  }
+                }
+              },
+              "response": {
+                "id": 111,
+                "jsonrpc": "2.0",
+                "result": {
+                  "content": [
+                    {
+                      "text": "{\"actor\":\"human\",\"key\":\"title\",\"space\":\"human-space\",\"value\":\"human-version\"}",
+                      "type": "text"
+                    }
+                  ],
+                  "isError": false
+                }
+              }
+            },
+            {
+              "request": {
+                "jsonrpc": "2.0",
+                "id": 112,
+                "method": "tools/call",
+                "params": {
+                  "name": "document_view",
+                  "arguments": {
+                    "actor": "assistant",
+                    "space": "assistant-space",
+                    "key": "title"
+                  }
+                }
+              },
+              "response": {
+                "id": 112,
+                "jsonrpc": "2.0",
+                "result": {
+                  "content": [
+                    {
+                      "text": "{\"actor\":\"assistant\",\"key\":\"title\",\"space\":\"assistant-space\",\"value\":\"base\"}",
+                      "type": "text"
+                    }
+                  ],
+                  "isError": false
+                }
+              }
+            },
+            {
+              "request": {
+                "jsonrpc": "2.0",
+                "id": 107,
+                "method": "tools/call",
+                "params": {
+                  "name": "document_edit",
+                  "arguments": {
+                    "actor": "assistant",
+                    "space": "assistant-space",
+                    "key": "title",
+                    "value": "assistant-version"
+                  }
+                }
+              },
+              "response": {
+                "id": 107,
+                "jsonrpc": "2.0",
+                "result": {
+                  "content": [
+                    {
+                      "text": "{\"actor\":\"assistant\",\"key\":\"title\",\"space\":\"assistant-space\",\"value\":\"assistant-version\"}",
+                      "type": "text"
+                    }
+                  ],
+                  "isError": false
+                }
+              }
+            },
+            {
+              "request": {
+                "jsonrpc": "2.0",
+                "id": 108,
+                "method": "tools/call",
+                "params": {
+                  "name": "document_merge",
+                  "arguments": {}
+                }
+              },
+              "response": {
+                "id": 108,
+                "jsonrpc": "2.0",
+                "result": {
+                  "content": [
+                    {
+                      "text": "{\"conflicts\":[{\"assistant\":\"assistant-version\",\"base\":\"base\",\"human\":\"human-version\",\"key\":\"title\"}],\"fields\":[{\"key\":\"status\",\"origin\":\"assistant\",\"value\":\"assistant-ready\"}],\"materializable\":false}",
+                      "type": "text"
+                    }
+                  ],
+                  "isError": false
+                }
+              }
+            },
+            {
+              "request": {
+                "jsonrpc": "2.0",
+                "id": 109,
+                "method": "tools/call",
+                "params": {
+                  "name": "document_edit",
+                  "arguments": {
+                    "actor": "human",
+                    "space": "human-space",
+                    "key": "\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9",
+                    "value": "too-long-key"
+                  }
+                }
+              },
+              "response": {
+                "id": 109,
+                "jsonrpc": "2.0",
+                "result": {
+                  "content": [
+                    {
+                      "text": "invalid arguments",
+                      "type": "text"
+                    }
+                  ],
+                  "isError": true
+                }
+              }
+            },
+            {
+              "request": {
+                "jsonrpc": "2.0",
+                "id": 110,
+                "method": "tools/call",
+                "params": {
+                  "name": "document_view",
+                  "arguments": {
+                    "actor": "human",
+                    "space": "human-space",
+                    "key": "title"
+                  }
+                }
+              },
+              "response": {
+                "id": 110,
+                "jsonrpc": "2.0",
+                "result": {
+                  "content": [
+                    {
+                      "text": "{\"actor\":\"human\",\"key\":\"title\",\"space\":\"human-space\",\"value\":\"human-version\"}",
+                      "type": "text"
+                    }
+                  ],
+                  "isError": false
+                }
+              }
+            }
+          ],
           "framebuffer_before": {
             "file": "framebuffer-before.ppm",
             "sha256": "d8ec8ee55a7cccc3fcb100fb2636ab3711f2a4538f2a08a4075c1eb902c21b64"
@@ -2070,9 +3288,9 @@
           "framebuffer_claim": "hashes demonstrate a change, not pointer geometry",
           "limitations": "experimental VM; no authentication, real workspaces or host OS control",
           "previous_automated_evidence": {
-            "description": "Earlier automated VM evidence before the edge-input test, including older runs in its nested previous_automated_evidence.",
+            "description": "Earlier pointer/document MCP run before schema and cross-space rejection checks; older runs are nested.",
             "record": {
-              "guest_sha256": "0f8484bd50ab3fa5bc422c45853e239238219063cfd7a8668ae3cca7a5e7339b",
+              "guest_sha256": "12ac202cbc0cb8f53d6a09696ac658ba3181d26aa2d500ae2d52a40e5b7d4ab3",
               "client_sha256": "7cd0810321bbd4c42c099707ab70519ef748a2ed905df1a81e28ca2d06947e8c",
               "qemu_version": {
                 "qemu": {
@@ -2188,11 +3406,56 @@
                     }
                   }
                 },
+                "edge_input": {
+                  "request": {
+                    "execute": "input-send-event",
+                    "arguments": {
+                      "events": [
+                        {
+                          "type": "abs",
+                          "data": {
+                            "axis": "x",
+                            "value": 32767
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "response": {
+                    "return": {}
+                  },
+                  "input_poll": [
+                    {
+                      "request": {
+                        "jsonrpc": "2.0",
+                        "id": 4,
+                        "method": "tools/call",
+                        "params": {
+                          "name": "pointer_state",
+                          "arguments": {}
+                        }
+                      },
+                      "response": {
+                        "id": 4,
+                        "jsonrpc": "2.0",
+                        "result": {
+                          "content": [
+                            {
+                              "text": "human=390,180; ai=560,330",
+                              "type": "text"
+                            }
+                          ],
+                          "isError": false
+                        }
+                      }
+                    }
+                  ]
+                },
                 "input_poll": [
                   {
                     "request": {
                       "jsonrpc": "2.0",
-                      "id": 4,
+                      "id": 24,
                       "method": "tools/call",
                       "params": {
                         "name": "pointer_state",
@@ -2200,7 +3463,7 @@
                       }
                     },
                     "response": {
-                      "id": 4,
+                      "id": 24,
                       "jsonrpc": "2.0",
                       "result": {
                         "content": [
@@ -2301,6 +3564,70 @@
                               "type": "object"
                             },
                             "name": "pointer_state"
+                          },
+                          {
+                            "description": "Edit one synthetic document copy; actor labels are unauthenticated.",
+                            "inputSchema": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "actor": {
+                                  "type": "string"
+                                },
+                                "key": {
+                                  "type": "string"
+                                },
+                                "space": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "actor",
+                                "space",
+                                "key",
+                                "value"
+                              ],
+                              "type": "object"
+                            },
+                            "name": "document_edit"
+                          },
+                          {
+                            "description": "Read a field from a synthetic document copy.",
+                            "inputSchema": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "actor": {
+                                  "type": "string"
+                                },
+                                "key": {
+                                  "type": "string"
+                                },
+                                "space": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "actor",
+                                "space",
+                                "key"
+                              ],
+                              "type": "object"
+                            },
+                            "name": "document_view"
+                          },
+                          {
+                            "description": "Merge synthetic copies and return fields, origins and conflicts.",
+                            "inputSchema": {
+                              "additionalProperties": false,
+                              "properties": {},
+                              "type": "object"
+                            },
+                            "name": "document_merge"
                           }
                         ]
                       }
@@ -2384,6 +3711,320 @@
                 ],
                 "transport": "local Unix socket to QEMU serial"
               },
+              "document_mcp_trace": [
+                {
+                  "request": {
+                    "jsonrpc": "2.0",
+                    "id": 100,
+                    "method": "initialize",
+                    "params": {
+                      "protocolVersion": "2025-11-25",
+                      "capabilities": {},
+                      "clientInfo": {
+                        "name": "vm-document-probe",
+                        "version": "0.1"
+                      }
+                    }
+                  },
+                  "response": {
+                    "id": 100,
+                    "jsonrpc": "2.0",
+                    "result": {
+                      "capabilities": {
+                        "tools": {}
+                      },
+                      "protocolVersion": "2025-11-25",
+                      "serverInfo": {
+                        "name": "dual-pointer-vm",
+                        "version": "0.1.0"
+                      }
+                    }
+                  }
+                },
+                {
+                  "notification": {
+                    "jsonrpc": "2.0",
+                    "method": "notifications/initialized"
+                  }
+                },
+                {
+                  "request": {
+                    "jsonrpc": "2.0",
+                    "id": 101,
+                    "method": "tools/call",
+                    "params": {
+                      "name": "document_edit",
+                      "arguments": {
+                        "actor": "human",
+                        "space": "human-space",
+                        "key": "title",
+                        "value": "human-version"
+                      }
+                    }
+                  },
+                  "response": {
+                    "id": 101,
+                    "jsonrpc": "2.0",
+                    "result": {
+                      "content": [
+                        {
+                          "text": "{\"actor\":\"human\",\"key\":\"title\",\"space\":\"human-space\",\"value\":\"human-version\"}",
+                          "type": "text"
+                        }
+                      ],
+                      "isError": false
+                    }
+                  }
+                },
+                {
+                  "request": {
+                    "jsonrpc": "2.0",
+                    "id": 102,
+                    "method": "tools/call",
+                    "params": {
+                      "name": "document_edit",
+                      "arguments": {
+                        "actor": "assistant",
+                        "space": "assistant-space",
+                        "key": "status",
+                        "value": "assistant-ready"
+                      }
+                    }
+                  },
+                  "response": {
+                    "id": 102,
+                    "jsonrpc": "2.0",
+                    "result": {
+                      "content": [
+                        {
+                          "text": "{\"actor\":\"assistant\",\"key\":\"status\",\"space\":\"assistant-space\",\"value\":\"assistant-ready\"}",
+                          "type": "text"
+                        }
+                      ],
+                      "isError": false
+                    }
+                  }
+                },
+                {
+                  "request": {
+                    "jsonrpc": "2.0",
+                    "id": 103,
+                    "method": "tools/call",
+                    "params": {
+                      "name": "document_view",
+                      "arguments": {
+                        "actor": "human",
+                        "space": "human-space",
+                        "key": "status"
+                      }
+                    }
+                  },
+                  "response": {
+                    "id": 103,
+                    "jsonrpc": "2.0",
+                    "result": {
+                      "content": [
+                        {
+                          "text": "{\"actor\":\"human\",\"key\":\"status\",\"space\":\"human-space\",\"value\":null}",
+                          "type": "text"
+                        }
+                      ],
+                      "isError": false
+                    }
+                  }
+                },
+                {
+                  "request": {
+                    "jsonrpc": "2.0",
+                    "id": 104,
+                    "method": "tools/call",
+                    "params": {
+                      "name": "document_view",
+                      "arguments": {
+                        "actor": "assistant",
+                        "space": "assistant-space",
+                        "key": "title"
+                      }
+                    }
+                  },
+                  "response": {
+                    "id": 104,
+                    "jsonrpc": "2.0",
+                    "result": {
+                      "content": [
+                        {
+                          "text": "{\"actor\":\"assistant\",\"key\":\"title\",\"space\":\"assistant-space\",\"value\":\"base\"}",
+                          "type": "text"
+                        }
+                      ],
+                      "isError": false
+                    }
+                  }
+                },
+                {
+                  "request": {
+                    "jsonrpc": "2.0",
+                    "id": 105,
+                    "method": "tools/call",
+                    "params": {
+                      "name": "document_merge",
+                      "arguments": {}
+                    }
+                  },
+                  "response": {
+                    "id": 105,
+                    "jsonrpc": "2.0",
+                    "result": {
+                      "content": [
+                        {
+                          "text": "{\"conflicts\":[],\"fields\":[{\"key\":\"status\",\"origin\":\"assistant\",\"value\":\"assistant-ready\"},{\"key\":\"title\",\"origin\":\"human\",\"value\":\"human-version\"}],\"materializable\":true}",
+                          "type": "text"
+                        }
+                      ],
+                      "isError": false
+                    }
+                  }
+                },
+                {
+                  "request": {
+                    "jsonrpc": "2.0",
+                    "id": 106,
+                    "method": "tools/call",
+                    "params": {
+                      "name": "document_edit",
+                      "arguments": {
+                        "actor": "assistant",
+                        "space": "human-space",
+                        "key": "title",
+                        "value": "intrusion"
+                      }
+                    }
+                  },
+                  "response": {
+                    "id": 106,
+                    "jsonrpc": "2.0",
+                    "result": {
+                      "content": [
+                        {
+                          "text": "actor or space rejected",
+                          "type": "text"
+                        }
+                      ],
+                      "isError": true
+                    }
+                  }
+                },
+                {
+                  "request": {
+                    "jsonrpc": "2.0",
+                    "id": 107,
+                    "method": "tools/call",
+                    "params": {
+                      "name": "document_edit",
+                      "arguments": {
+                        "actor": "assistant",
+                        "space": "assistant-space",
+                        "key": "title",
+                        "value": "assistant-version"
+                      }
+                    }
+                  },
+                  "response": {
+                    "id": 107,
+                    "jsonrpc": "2.0",
+                    "result": {
+                      "content": [
+                        {
+                          "text": "{\"actor\":\"assistant\",\"key\":\"title\",\"space\":\"assistant-space\",\"value\":\"assistant-version\"}",
+                          "type": "text"
+                        }
+                      ],
+                      "isError": false
+                    }
+                  }
+                },
+                {
+                  "request": {
+                    "jsonrpc": "2.0",
+                    "id": 108,
+                    "method": "tools/call",
+                    "params": {
+                      "name": "document_merge",
+                      "arguments": {}
+                    }
+                  },
+                  "response": {
+                    "id": 108,
+                    "jsonrpc": "2.0",
+                    "result": {
+                      "content": [
+                        {
+                          "text": "{\"conflicts\":[{\"assistant\":\"assistant-version\",\"base\":\"base\",\"human\":\"human-version\",\"key\":\"title\"}],\"fields\":[{\"key\":\"status\",\"origin\":\"assistant\",\"value\":\"assistant-ready\"}],\"materializable\":false}",
+                          "type": "text"
+                        }
+                      ],
+                      "isError": false
+                    }
+                  }
+                },
+                {
+                  "request": {
+                    "jsonrpc": "2.0",
+                    "id": 109,
+                    "method": "tools/call",
+                    "params": {
+                      "name": "document_edit",
+                      "arguments": {
+                        "actor": "human",
+                        "space": "human-space",
+                        "key": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                        "value": "too-long-key"
+                      }
+                    }
+                  },
+                  "response": {
+                    "id": 109,
+                    "jsonrpc": "2.0",
+                    "result": {
+                      "content": [
+                        {
+                          "text": "invalid arguments",
+                          "type": "text"
+                        }
+                      ],
+                      "isError": true
+                    }
+                  }
+                },
+                {
+                  "request": {
+                    "jsonrpc": "2.0",
+                    "id": 110,
+                    "method": "tools/call",
+                    "params": {
+                      "name": "document_view",
+                      "arguments": {
+                        "actor": "human",
+                        "space": "human-space",
+                        "key": "title"
+                      }
+                    }
+                  },
+                  "response": {
+                    "id": 110,
+                    "jsonrpc": "2.0",
+                    "result": {
+                      "content": [
+                        {
+                          "text": "{\"actor\":\"human\",\"key\":\"title\",\"space\":\"human-space\",\"value\":\"human-version\"}",
+                          "type": "text"
+                        }
+                      ],
+                      "isError": false
+                    }
+                  }
+                }
+              ],
               "framebuffer_before": {
                 "file": "framebuffer-before.ppm",
                 "sha256": "d8ec8ee55a7cccc3fcb100fb2636ab3711f2a4538f2a08a4075c1eb902c21b64"
@@ -2395,9 +4036,9 @@
               "framebuffer_claim": "hashes demonstrate a change, not pointer geometry",
               "limitations": "experimental VM; no authentication, real workspaces or host OS control",
               "previous_automated_evidence": {
-                "description": "Prior VM run with router integration, before the human pointer edge clamp; includes the earlier pre-integration run.",
+                "description": "Earlier pointer-only integration run, before document MCP tools; older runs are preserved in nested records.",
                 "record": {
-                  "guest_sha256": "1248f4fe3d346fdafb50b426a20fc74e5656efdfcfa5bdc03479f673ca2886e8",
+                  "guest_sha256": "0f8484bd50ab3fa5bc422c45853e239238219063cfd7a8668ae3cca7a5e7339b",
                   "client_sha256": "7cd0810321bbd4c42c099707ab70519ef748a2ed905df1a81e28ca2d06947e8c",
                   "qemu_version": {
                     "qemu": {
@@ -2513,11 +4154,56 @@
                         }
                       }
                     },
+                    "edge_input": {
+                      "request": {
+                        "execute": "input-send-event",
+                        "arguments": {
+                          "events": [
+                            {
+                              "type": "abs",
+                              "data": {
+                                "axis": "x",
+                                "value": 32767
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      "response": {
+                        "return": {}
+                      },
+                      "input_poll": [
+                        {
+                          "request": {
+                            "jsonrpc": "2.0",
+                            "id": 4,
+                            "method": "tools/call",
+                            "params": {
+                              "name": "pointer_state",
+                              "arguments": {}
+                            }
+                          },
+                          "response": {
+                            "id": 4,
+                            "jsonrpc": "2.0",
+                            "result": {
+                              "content": [
+                                {
+                                  "text": "human=390,180; ai=560,330",
+                                  "type": "text"
+                                }
+                              ],
+                              "isError": false
+                            }
+                          }
+                        }
+                      ]
+                    },
                     "input_poll": [
                       {
                         "request": {
                           "jsonrpc": "2.0",
-                          "id": 4,
+                          "id": 24,
                           "method": "tools/call",
                           "params": {
                             "name": "pointer_state",
@@ -2525,7 +4211,7 @@
                           }
                         },
                         "response": {
-                          "id": 4,
+                          "id": 24,
                           "jsonrpc": "2.0",
                           "result": {
                             "content": [
@@ -2720,9 +4406,9 @@
                   "framebuffer_claim": "hashes demonstrate a change, not pointer geometry",
                   "limitations": "experimental VM; no authentication, real workspaces or host OS control",
                   "previous_automated_evidence": {
-                    "description": "Earlier VM run before the graphical guest was integrated with dual-input-lab; preserved for comparison.",
+                    "description": "Earlier automated VM evidence before the edge-input test, including older runs in its nested previous_automated_evidence.",
                     "record": {
-                      "guest_sha256": "172db5677e532c175a25bcfa20378bfcf74090afec39d6c2d57c1a1e8c5f92a3",
+                      "guest_sha256": "0f8484bd50ab3fa5bc422c45853e239238219063cfd7a8668ae3cca7a5e7339b",
                       "client_sha256": "7cd0810321bbd4c42c099707ab70519ef748a2ed905df1a81e28ca2d06947e8c",
                       "qemu_version": {
                         "qemu": {
@@ -3043,7 +4729,661 @@
                         "sha256": "d46f4a71dbe9ce5388273d878ca1c72fa3c82cd195d7249f597c34ae858bcb6d"
                       },
                       "framebuffer_claim": "hashes demonstrate a change, not pointer geometry",
-                      "limitations": "experimental VM; no authentication, real workspaces or host OS control"
+                      "limitations": "experimental VM; no authentication, real workspaces or host OS control",
+                      "previous_automated_evidence": {
+                        "description": "Prior VM run with router integration, before the human pointer edge clamp; includes the earlier pre-integration run.",
+                        "record": {
+                          "guest_sha256": "1248f4fe3d346fdafb50b426a20fc74e5656efdfcfa5bdc03479f673ca2886e8",
+                          "client_sha256": "7cd0810321bbd4c42c099707ab70519ef748a2ed905df1a81e28ca2d06947e8c",
+                          "qemu_version": {
+                            "qemu": {
+                              "micro": 3,
+                              "minor": 1,
+                              "major": 11
+                            },
+                            "package": ""
+                          },
+                          "human_input": "synthetic QMP virtio-tablet event",
+                          "qmp_event": {
+                            "execute": "input-send-event",
+                            "arguments": {
+                              "events": [
+                                {
+                                  "type": "abs",
+                                  "data": {
+                                    "axis": "x",
+                                    "value": 18000
+                                  }
+                                },
+                                {
+                                  "type": "abs",
+                                  "data": {
+                                    "axis": "y",
+                                    "value": 21000
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          "qmp_response": {
+                            "return": {}
+                          },
+                          "probe": {
+                            "initialization": {
+                              "request": {
+                                "jsonrpc": "2.0",
+                                "id": 1,
+                                "method": "initialize",
+                                "params": {
+                                  "protocolVersion": "2025-11-25",
+                                  "capabilities": {},
+                                  "clientInfo": {
+                                    "name": "vm-demo-probe",
+                                    "version": "0.1"
+                                  }
+                                }
+                              },
+                              "response": {
+                                "id": 1,
+                                "jsonrpc": "2.0",
+                                "result": {
+                                  "capabilities": {
+                                    "tools": {}
+                                  },
+                                  "protocolVersion": "2025-11-25",
+                                  "serverInfo": {
+                                    "name": "dual-pointer-vm",
+                                    "version": "0.1.0"
+                                  }
+                                }
+                              }
+                            },
+                            "out_of_bounds": {
+                              "request": {
+                                "jsonrpc": "2.0",
+                                "id": 2,
+                                "method": "tools/call",
+                                "params": {
+                                  "name": "move_ai",
+                                  "arguments": {
+                                    "x": 399,
+                                    "y": 260
+                                  }
+                                }
+                              },
+                              "response": {
+                                "id": 2,
+                                "jsonrpc": "2.0",
+                                "result": {
+                                  "content": [
+                                    {
+                                      "text": "invalid or out-of-bounds coordinates",
+                                      "type": "text"
+                                    }
+                                  ],
+                                  "isError": true
+                                }
+                              }
+                            },
+                            "after_rejection": {
+                              "request": {
+                                "jsonrpc": "2.0",
+                                "id": 3,
+                                "method": "tools/call",
+                                "params": {
+                                  "name": "pointer_state",
+                                  "arguments": {}
+                                }
+                              },
+                              "response": {
+                                "id": 3,
+                                "jsonrpc": "2.0",
+                                "result": {
+                                  "content": [
+                                    {
+                                      "text": "human=120,180; ai=560,330",
+                                      "type": "text"
+                                    }
+                                  ],
+                                  "isError": false
+                                }
+                              }
+                            },
+                            "input_poll": [
+                              {
+                                "request": {
+                                  "jsonrpc": "2.0",
+                                  "id": 4,
+                                  "method": "tools/call",
+                                  "params": {
+                                    "name": "pointer_state",
+                                    "arguments": {}
+                                  }
+                                },
+                                "response": {
+                                  "id": 4,
+                                  "jsonrpc": "2.0",
+                                  "result": {
+                                    "content": [
+                                      {
+                                        "text": "human=223,390; ai=560,330",
+                                        "type": "text"
+                                      }
+                                    ],
+                                    "isError": false
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "mcp_client": {
+                            "after": "human=223,390; ai=650,260",
+                            "before": "human=223,390; ai=560,330",
+                            "ok": true,
+                            "protocol": "2025-11-25",
+                            "scope": "guest demo only; no authenticated capability or host UI control",
+                            "trace": [
+                              {
+                                "request": {
+                                  "id": 1,
+                                  "jsonrpc": "2.0",
+                                  "method": "initialize",
+                                  "params": {
+                                    "capabilities": {},
+                                    "clientInfo": {
+                                      "name": "vm-mcp-client",
+                                      "version": "0.1.0"
+                                    },
+                                    "protocolVersion": "2025-11-25"
+                                  }
+                                },
+                                "response": {
+                                  "id": 1,
+                                  "jsonrpc": "2.0",
+                                  "result": {
+                                    "capabilities": {
+                                      "tools": {}
+                                    },
+                                    "protocolVersion": "2025-11-25",
+                                    "serverInfo": {
+                                      "name": "dual-pointer-vm",
+                                      "version": "0.1.0"
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "notification": {
+                                  "jsonrpc": "2.0",
+                                  "method": "notifications/initialized"
+                                }
+                              },
+                              {
+                                "request": {
+                                  "id": 2,
+                                  "jsonrpc": "2.0",
+                                  "method": "tools/list",
+                                  "params": {}
+                                },
+                                "response": {
+                                  "id": 2,
+                                  "jsonrpc": "2.0",
+                                  "result": {
+                                    "tools": [
+                                      {
+                                        "description": "Move AI pointer within its right-hand QEMU workspace.",
+                                        "inputSchema": {
+                                          "additionalProperties": false,
+                                          "properties": {
+                                            "x": {
+                                              "maximum": 773,
+                                              "minimum": 400,
+                                              "type": "integer"
+                                            },
+                                            "y": {
+                                              "maximum": 573,
+                                              "minimum": 0,
+                                              "type": "integer"
+                                            }
+                                          },
+                                          "required": [
+                                            "x",
+                                            "y"
+                                          ],
+                                          "type": "object"
+                                        },
+                                        "name": "move_ai"
+                                      },
+                                      {
+                                        "description": "Read the two pointer coordinates in this guest only.",
+                                        "inputSchema": {
+                                          "additionalProperties": false,
+                                          "properties": {},
+                                          "type": "object"
+                                        },
+                                        "name": "pointer_state"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "request": {
+                                  "id": 3,
+                                  "jsonrpc": "2.0",
+                                  "method": "tools/call",
+                                  "params": {
+                                    "arguments": {},
+                                    "name": "pointer_state"
+                                  }
+                                },
+                                "response": {
+                                  "id": 3,
+                                  "jsonrpc": "2.0",
+                                  "result": {
+                                    "content": [
+                                      {
+                                        "text": "human=223,390; ai=560,330",
+                                        "type": "text"
+                                      }
+                                    ],
+                                    "isError": false
+                                  }
+                                }
+                              },
+                              {
+                                "request": {
+                                  "id": 4,
+                                  "jsonrpc": "2.0",
+                                  "method": "tools/call",
+                                  "params": {
+                                    "arguments": {
+                                      "x": 650,
+                                      "y": 260
+                                    },
+                                    "name": "move_ai"
+                                  }
+                                },
+                                "response": {
+                                  "id": 4,
+                                  "jsonrpc": "2.0",
+                                  "result": {
+                                    "content": [
+                                      {
+                                        "text": "moved AI pointer to 650,260",
+                                        "type": "text"
+                                      }
+                                    ],
+                                    "isError": false
+                                  }
+                                }
+                              },
+                              {
+                                "request": {
+                                  "id": 5,
+                                  "jsonrpc": "2.0",
+                                  "method": "tools/call",
+                                  "params": {
+                                    "arguments": {},
+                                    "name": "pointer_state"
+                                  }
+                                },
+                                "response": {
+                                  "id": 5,
+                                  "jsonrpc": "2.0",
+                                  "result": {
+                                    "content": [
+                                      {
+                                        "text": "human=223,390; ai=650,260",
+                                        "type": "text"
+                                      }
+                                    ],
+                                    "isError": false
+                                  }
+                                }
+                              }
+                            ],
+                            "transport": "local Unix socket to QEMU serial"
+                          },
+                          "framebuffer_before": {
+                            "file": "framebuffer-before.ppm",
+                            "sha256": "d8ec8ee55a7cccc3fcb100fb2636ab3711f2a4538f2a08a4075c1eb902c21b64"
+                          },
+                          "framebuffer_after": {
+                            "file": "framebuffer.ppm",
+                            "sha256": "d46f4a71dbe9ce5388273d878ca1c72fa3c82cd195d7249f597c34ae858bcb6d"
+                          },
+                          "framebuffer_claim": "hashes demonstrate a change, not pointer geometry",
+                          "limitations": "experimental VM; no authentication, real workspaces or host OS control",
+                          "previous_automated_evidence": {
+                            "description": "Earlier VM run before the graphical guest was integrated with dual-input-lab; preserved for comparison.",
+                            "record": {
+                              "guest_sha256": "172db5677e532c175a25bcfa20378bfcf74090afec39d6c2d57c1a1e8c5f92a3",
+                              "client_sha256": "7cd0810321bbd4c42c099707ab70519ef748a2ed905df1a81e28ca2d06947e8c",
+                              "qemu_version": {
+                                "qemu": {
+                                  "micro": 3,
+                                  "minor": 1,
+                                  "major": 11
+                                },
+                                "package": ""
+                              },
+                              "human_input": "synthetic QMP virtio-tablet event",
+                              "qmp_event": {
+                                "execute": "input-send-event",
+                                "arguments": {
+                                  "events": [
+                                    {
+                                      "type": "abs",
+                                      "data": {
+                                        "axis": "x",
+                                        "value": 18000
+                                      }
+                                    },
+                                    {
+                                      "type": "abs",
+                                      "data": {
+                                        "axis": "y",
+                                        "value": 21000
+                                      }
+                                    }
+                                  ]
+                                }
+                              },
+                              "qmp_response": {
+                                "return": {}
+                              },
+                              "probe": {
+                                "initialization": {
+                                  "request": {
+                                    "jsonrpc": "2.0",
+                                    "id": 1,
+                                    "method": "initialize",
+                                    "params": {
+                                      "protocolVersion": "2025-11-25",
+                                      "capabilities": {},
+                                      "clientInfo": {
+                                        "name": "vm-demo-probe",
+                                        "version": "0.1"
+                                      }
+                                    }
+                                  },
+                                  "response": {
+                                    "id": 1,
+                                    "jsonrpc": "2.0",
+                                    "result": {
+                                      "capabilities": {
+                                        "tools": {}
+                                      },
+                                      "protocolVersion": "2025-11-25",
+                                      "serverInfo": {
+                                        "name": "dual-pointer-vm",
+                                        "version": "0.1.0"
+                                      }
+                                    }
+                                  }
+                                },
+                                "out_of_bounds": {
+                                  "request": {
+                                    "jsonrpc": "2.0",
+                                    "id": 2,
+                                    "method": "tools/call",
+                                    "params": {
+                                      "name": "move_ai",
+                                      "arguments": {
+                                        "x": 399,
+                                        "y": 260
+                                      }
+                                    }
+                                  },
+                                  "response": {
+                                    "id": 2,
+                                    "jsonrpc": "2.0",
+                                    "result": {
+                                      "content": [
+                                        {
+                                          "text": "invalid or out-of-bounds coordinates",
+                                          "type": "text"
+                                        }
+                                      ],
+                                      "isError": true
+                                    }
+                                  }
+                                },
+                                "after_rejection": {
+                                  "request": {
+                                    "jsonrpc": "2.0",
+                                    "id": 3,
+                                    "method": "tools/call",
+                                    "params": {
+                                      "name": "pointer_state",
+                                      "arguments": {}
+                                    }
+                                  },
+                                  "response": {
+                                    "id": 3,
+                                    "jsonrpc": "2.0",
+                                    "result": {
+                                      "content": [
+                                        {
+                                          "text": "human=120,180; ai=560,330",
+                                          "type": "text"
+                                        }
+                                      ],
+                                      "isError": false
+                                    }
+                                  }
+                                },
+                                "input_poll": [
+                                  {
+                                    "request": {
+                                      "jsonrpc": "2.0",
+                                      "id": 4,
+                                      "method": "tools/call",
+                                      "params": {
+                                        "name": "pointer_state",
+                                        "arguments": {}
+                                      }
+                                    },
+                                    "response": {
+                                      "id": 4,
+                                      "jsonrpc": "2.0",
+                                      "result": {
+                                        "content": [
+                                          {
+                                            "text": "human=223,390; ai=560,330",
+                                            "type": "text"
+                                          }
+                                        ],
+                                        "isError": false
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              "mcp_client": {
+                                "after": "human=223,390; ai=650,260",
+                                "before": "human=223,390; ai=560,330",
+                                "ok": true,
+                                "protocol": "2025-11-25",
+                                "scope": "guest demo only; no authenticated capability or host UI control",
+                                "trace": [
+                                  {
+                                    "request": {
+                                      "id": 1,
+                                      "jsonrpc": "2.0",
+                                      "method": "initialize",
+                                      "params": {
+                                        "capabilities": {},
+                                        "clientInfo": {
+                                          "name": "vm-mcp-client",
+                                          "version": "0.1.0"
+                                        },
+                                        "protocolVersion": "2025-11-25"
+                                      }
+                                    },
+                                    "response": {
+                                      "id": 1,
+                                      "jsonrpc": "2.0",
+                                      "result": {
+                                        "capabilities": {
+                                          "tools": {}
+                                        },
+                                        "protocolVersion": "2025-11-25",
+                                        "serverInfo": {
+                                          "name": "dual-pointer-vm",
+                                          "version": "0.1.0"
+                                        }
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "notification": {
+                                      "jsonrpc": "2.0",
+                                      "method": "notifications/initialized"
+                                    }
+                                  },
+                                  {
+                                    "request": {
+                                      "id": 2,
+                                      "jsonrpc": "2.0",
+                                      "method": "tools/list",
+                                      "params": {}
+                                    },
+                                    "response": {
+                                      "id": 2,
+                                      "jsonrpc": "2.0",
+                                      "result": {
+                                        "tools": [
+                                          {
+                                            "description": "Move AI pointer within its right-hand QEMU workspace.",
+                                            "inputSchema": {
+                                              "additionalProperties": false,
+                                              "properties": {
+                                                "x": {
+                                                  "maximum": 773,
+                                                  "minimum": 400,
+                                                  "type": "integer"
+                                                },
+                                                "y": {
+                                                  "maximum": 573,
+                                                  "minimum": 0,
+                                                  "type": "integer"
+                                                }
+                                              },
+                                              "required": [
+                                                "x",
+                                                "y"
+                                              ],
+                                              "type": "object"
+                                            },
+                                            "name": "move_ai"
+                                          },
+                                          {
+                                            "description": "Read the two pointer coordinates in this guest only.",
+                                            "inputSchema": {
+                                              "additionalProperties": false,
+                                              "properties": {},
+                                              "type": "object"
+                                            },
+                                            "name": "pointer_state"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "request": {
+                                      "id": 3,
+                                      "jsonrpc": "2.0",
+                                      "method": "tools/call",
+                                      "params": {
+                                        "arguments": {},
+                                        "name": "pointer_state"
+                                      }
+                                    },
+                                    "response": {
+                                      "id": 3,
+                                      "jsonrpc": "2.0",
+                                      "result": {
+                                        "content": [
+                                          {
+                                            "text": "human=223,390; ai=560,330",
+                                            "type": "text"
+                                          }
+                                        ],
+                                        "isError": false
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "request": {
+                                      "id": 4,
+                                      "jsonrpc": "2.0",
+                                      "method": "tools/call",
+                                      "params": {
+                                        "arguments": {
+                                          "x": 650,
+                                          "y": 260
+                                        },
+                                        "name": "move_ai"
+                                      }
+                                    },
+                                    "response": {
+                                      "id": 4,
+                                      "jsonrpc": "2.0",
+                                      "result": {
+                                        "content": [
+                                          {
+                                            "text": "moved AI pointer to 650,260",
+                                            "type": "text"
+                                          }
+                                        ],
+                                        "isError": false
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "request": {
+                                      "id": 5,
+                                      "jsonrpc": "2.0",
+                                      "method": "tools/call",
+                                      "params": {
+                                        "arguments": {},
+                                        "name": "pointer_state"
+                                      }
+                                    },
+                                    "response": {
+                                      "id": 5,
+                                      "jsonrpc": "2.0",
+                                      "result": {
+                                        "content": [
+                                          {
+                                            "text": "human=223,390; ai=650,260",
+                                            "type": "text"
+                                          }
+                                        ],
+                                        "isError": false
+                                      }
+                                    }
+                                  }
+                                ],
+                                "transport": "local Unix socket to QEMU serial"
+                              },
+                              "framebuffer_before": {
+                                "file": "framebuffer-before.ppm",
+                                "sha256": "d8ec8ee55a7cccc3fcb100fb2636ab3711f2a4538f2a08a4075c1eb902c21b64"
+                              },
+                              "framebuffer_after": {
+                                "file": "framebuffer.ppm",
+                                "sha256": "d46f4a71dbe9ce5388273d878ca1c72fa3c82cd195d7249f597c34ae858bcb6d"
+                              },
+                              "framebuffer_claim": "hashes demonstrate a change, not pointer geometry",
+                              "limitations": "experimental VM; no authentication, real workspaces or host OS control"
+                            }
+                          }
+                        }
+                      }
                     }
                   }
                 }
