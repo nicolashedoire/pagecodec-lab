@@ -1,0 +1,18 @@
+{
+  "guest_sha256": "ecaccd1625c95aec63776050abcbd38dc8b65840c5b18fcdeafe1e09e2b28657",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "transport": "modern",
+  "record_sha256": "fbd8e3b19e97bff08dba80506c564b286c95dc618e63cfaba1cfa60df6fb2fef",
+  "record_bytes": 512,
+  "synthetic_event_count": 16,
+  "serial": {
+    "save": "APPEND events=16 sequences=1..16 categories=4 actors=3 outcomes=3 payload=none\nCHECK full=refused prior_records=unchanged record_bytes=512 flush_call=ok readback=exact\nPASS save synthetic journal\n",
+    "replay": "REPLAY events=16 sequences=1..16 categories=4 actors=3 outcomes=3 io_actions=none\nPASS replay synthetic journal\n",
+    "checksum": "REJECT checksum\n",
+    "logical_truncation": "REJECT length\n",
+    "count": "REJECT count\n",
+    "sequence": "REJECT malformed\n"
+  },
+  "truncation": "logical input slice of 511 bytes; raw disk remains full sized",
+  "limitations": "FNV is not authentication; no power-loss durability; no real I/O monitoring"
+}

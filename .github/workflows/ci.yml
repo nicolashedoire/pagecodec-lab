@@ -560,6 +560,44 @@ jobs:
             ${{ runner.temp }}/concurrent-isolation-evidence/
             ${{ runner.temp }}/concurrent-isolation-legacy-evidence/
           if-no-files-found: ignore
+      - name: Build and check synthetic IO journal in QEMU
+        working-directory: experiments/io_journal
+        run: |
+          cargo build --release --locked --offline
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/io-journal-sketch \
+            --output-dir "$RUNNER_TEMP/io-journal-evidence"
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/io-journal-sketch \
+            --output-dir "$RUNNER_TEMP/io-journal-legacy-evidence" --legacy
+      - name: Preserve IO journal VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: io-journal-vm-evidence
+          path: |
+            ${{ runner.temp }}/io-journal-evidence/
+            ${{ runner.temp }}/io-journal-legacy-evidence/
+          if-no-files-found: ignore
+      - name: Build and check synthetic decision MCP guest in QEMU
+        working-directory: experiments/decision_vm
+        run: |
+          cargo build --release --locked
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/decision-vm-demo \
+            --output-dir "$RUNNER_TEMP/decision-vm-evidence"
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/decision-vm-demo \
+            --output-dir "$RUNNER_TEMP/decision-vm-legacy-evidence" --transport legacy
+      - name: Preserve decision VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: decision-vm-evidence
+          path: |
+            ${{ runner.temp }}/decision-vm-evidence/
+            ${{ runner.temp }}/decision-vm-legacy-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM
