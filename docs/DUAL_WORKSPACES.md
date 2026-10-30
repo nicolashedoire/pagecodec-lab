@@ -59,7 +59,21 @@ streams.
 
 The two workspaces can share selected data without copying it all. Each access
 retains the actor's authorization. For read-only work, both actors can often
-inspect the same object concurrently. For edits, an implementation could use
+inspect the same object concurrently. The intended default is **concurrent
+work**, not having one actor wait for the other whenever collaboration is
+possible. Independent edits should proceed in parallel; compatible edits to the
+same object should be merged by the relevant collaboration mechanism.
+
+For a collaboration-aware document, the system could track actor, operation,
+document version and causal history, then exchange updates and merge them.
+[Automerge](https://automerge.org/docs/hello/) and [Yjs](https://docs.yjs.dev/)
+are existing examples of shared data structures designed for concurrent updates.
+They are prior art, not components we have integrated. Convergence does not
+guarantee the merged result reflects human intent: conflicting values or edits
+with incompatible meaning need explicit treatment. Automerge documents cases
+where [concurrent updates to the same property conflict](https://automerge.org/docs/reference/documents/conflicts/).
+
+The suitable strategy depends on the resource; an implementation could use
 one of several modes:
 
 | Mode | Behavior | Trade-off |
