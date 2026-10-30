@@ -598,6 +598,33 @@ jobs:
             ${{ runner.temp }}/decision-vm-evidence/
             ${{ runner.temp }}/decision-vm-legacy-evidence/
           if-no-files-found: ignore
+      - name: Build and check MCP journal in QEMU
+        working-directory: experiments/journal_vm
+        run: |
+          cargo build --release --locked
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/journal-vm-demo \
+            --output-dir "$RUNNER_TEMP/journal-vm-evidence"
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/journal-vm-demo \
+            --output-dir "$RUNNER_TEMP/journal-vm-legacy-evidence" --transport legacy
+          python3 regression.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/journal-vm-demo \
+            --output-dir "$RUNNER_TEMP/journal-regression-evidence"
+          python3 regression.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/journal-vm-demo \
+            --output-dir "$RUNNER_TEMP/journal-regression-legacy-evidence" --transport legacy
+      - name: Preserve MCP journal VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: journal-vm-evidence
+          path: |
+            ${{ runner.temp }}/journal-vm-evidence/
+            ${{ runner.temp }}/journal-vm-legacy-evidence/
+            ${{ runner.temp }}/journal-regression-evidence/
+            ${{ runner.temp }}/journal-regression-legacy-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM

@@ -36,7 +36,7 @@ The [interactive graphics prototype](experiments/graph_interaction/README.md) ad
 
 The [interleaved system VM](experiments/concurrent_isolation/README.md) runs two EL0 loops in separate page tables between graphical service operations and tests synthetic two-slot snapshots in one QEMU image. A separate [process-isolation experiment](experiments/process_isolation/README.md) tests controlled forbidden reads. These scenarios do not yet establish complete process isolation or native hardware support. See the [kernel integration research](docs/KERNEL_INTEGRATION_RESEARCH.md).
 
-A [tiny synthetic neural inference experiment](experiments/local_inference/README.md) runs in QEMU and is exposed for diagnostic scoring in a [separate MCP guest](experiments/decision_vm/README.md). Its fixed, hand-written weights are neither Jev nor Laya and do not control the system. A separate [synthetic I/O journal](experiments/io_journal/README.md) tests encoding and replay without recording real user data.
+A [tiny synthetic neural inference experiment](experiments/local_inference/README.md) runs in QEMU and is exposed for diagnostic scoring in a [journal-enabled MCP guest](experiments/journal_vm/README.md). Its fixed, hand-written weights are neither Jev nor Laya and do not control the system. The journal records only specified synthetic inference outcomes, not all system I/O or real user data.
 
 ![Three experimental pointers rendered by the Rust guest in QEMU](assets/dual-pointer-vm.png)
 

@@ -1,0 +1,2223 @@
+{
+  "guest_sha256": "2af92523c3646a53d8d0a33fd7f6c24f0186a605c3b5f49f5e134905db72fefa",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "transport": "modern",
+  "journal_sector_sha256": "9cc4058b4d81cd4bbefb9e8a200d9a6d435f075b7d774f026736e90f556a3f96",
+  "sessions": [
+    [
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {
+              "name": "graph-snapshot-test",
+              "version": "0.1"
+            }
+          }
+        },
+        "response": {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "result": {
+            "capabilities": {
+              "tools": {}
+            },
+            "protocolVersion": "2025-11-25",
+            "serverInfo": {
+              "name": "dual-pointer-vm",
+              "version": "0.1.0"
+            }
+          }
+        }
+      },
+      {
+        "notification": {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/list",
+          "params": {}
+        },
+        "response": {
+          "id": 2,
+          "jsonrpc": "2.0",
+          "result": {
+            "tools": [
+              {
+                "description": "Move AI pointer within its right-hand QEMU workspace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 773,
+                      "minimum": 400,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 573,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_ai"
+              },
+              {
+                "description": "Read the two pointer coordinates in this guest only.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "pointer_state"
+              },
+              {
+                "description": "Activate the synthetic button under the AI pointer; no host click or authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "click_ai"
+              },
+              {
+                "description": "Read logical button focus and click counts in this guest.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "interaction_state"
+              },
+              {
+                "description": "Calculate arbitrary integer scores for synthetic inputs; no policy or system action.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "cpu_load": {
+                      "maximum": 100,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "io_activity": {
+                      "maximum": 100,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "pressure": {
+                      "maximum": 100,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "pressure",
+                    "cpu_load",
+                    "io_activity"
+                  ],
+                  "type": "object"
+                },
+                "name": "infer_synthetic"
+              },
+              {
+                "description": "Read the bounded synthetic inference journal.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "journal_status"
+              },
+              {
+                "description": "Write the journal sector to the synthetic VM disk.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "journal_save"
+              },
+              {
+                "description": "Read and validate the journal sector from the synthetic VM disk.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "journal_load"
+              },
+              {
+                "description": "Read the guest's verified identity-map status.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "mmu_status"
+              },
+              {
+                "description": "Read verified pre-graphical EL0 timer trace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "el0_status"
+              },
+              {
+                "description": "Move the visible pointer for a synthetic logical actor; no window or authenticated identity.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 799,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 599,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_remote"
+              },
+              {
+                "description": "Read the third synthetic actor's logical position.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "remote_state"
+              },
+              {
+                "description": "Run 1101 synthetic human moves in this VM; overwrites older bounded trace entries.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "exercise_human_moves"
+              },
+              {
+                "description": "Edit one synthetic document copy; actor labels are unauthenticated.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "actor": {
+                      "enum": [
+                        "human",
+                        "assistant"
+                      ],
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Non-empty; at most 32 UTF-8 bytes.",
+                      "type": "string"
+                    },
+                    "space": {
+                      "enum": [
+                        "human-space",
+                        "assistant-space"
+                      ],
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "At most 64 UTF-8 bytes; null deletes the field.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "actor",
+                    "space",
+                    "key",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "name": "document_edit"
+              },
+              {
+                "description": "Read a field from a synthetic document copy.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "actor": {
+                      "enum": [
+                        "human",
+                        "assistant"
+                      ],
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Non-empty; at most 32 UTF-8 bytes.",
+                      "type": "string"
+                    },
+                    "space": {
+                      "enum": [
+                        "human-space",
+                        "assistant-space"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "actor",
+                    "space",
+                    "key"
+                  ],
+                  "type": "object"
+                },
+                "name": "document_view"
+              },
+              {
+                "description": "Merge synthetic copies and return fields, origins and conflicts.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_merge"
+              },
+              {
+                "description": "Read the synthetic base and both full copies.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_snapshot"
+              },
+              {
+                "description": "Stage or commit a bounded synthetic snapshot in the inactive slot.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "mode": {
+                      "enum": [
+                        "stage",
+                        "commit"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "mode"
+                  ],
+                  "type": "object"
+                },
+                "name": "document_save"
+              },
+              {
+                "description": "Validate and restore a synthetic snapshot from the guest virtual disk.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_load"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "method": "tools/call",
+          "params": {
+            "name": "mmu_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 3,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"address_spaces\":2,\"asids\":[1,2],\"caches\":false,\"enabled\":true,\"gic\":\"device-xn\",\"image\":\"normal-nc\",\"kernel_el0\":\"samples-denied\",\"mapping\":\"identity\",\"range_checks\":\"full\",\"user_code\":\"ro\",\"user_stack\":\"private-alias-rw\",\"virtio\":\"device-xn\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 4,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":5584951,\"next\":1,\"task\":0},{\"count\":7040449,\"next\":0,\"task\":1},{\"count\":11576208,\"next\":1,\"task\":0},{\"count\":13759446,\"next\":0,\"task\":1},{\"count\":18329514,\"next\":1,\"task\":0},{\"count\":20446499,\"next\":0,\"task\":1},{\"count\":23681175,\"next\":1,\"task\":0},{\"count\":27194299,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[40262625,43322101],\"slice_ticks\":10,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "method": "tools/call",
+          "params": {
+            "name": "document_snapshot",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 5,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"assistant\":{\"common\":\"seed\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"title\":\"base\"}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 6,
+          "method": "tools/call",
+          "params": {
+            "name": "pointer_state",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 6,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "human=120,180; ai=560,330",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 7,
+          "method": "tools/call",
+          "params": {
+            "name": "interaction_state",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 7,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"assistant\":{\"clicks\":0,\"focus\":\"none\"},\"human\":{\"clicks\":0,\"focus\":\"none\",\"pressed\":false}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 8,
+          "method": "tools/call",
+          "params": {
+            "name": "journal_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 8,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"dropped\":0,\"entries\":[]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 9,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 20,
+              "cpu_load": 40,
+              "io_activity": 60
+            }
+          }
+        },
+        "response": {
+          "id": 9,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"model_version\":\"local-inference-sketch-0.1.0-handwritten-v1\",\"scores\":[-120,410]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 10,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 101,
+              "cpu_load": 0,
+              "io_activity": 0
+            }
+          }
+        },
+        "response": {
+          "id": 10,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "expected exactly three integers between 0 and 100",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 11,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 20,
+              "cpu_load": 40,
+              "io_activity": 60
+            }
+          }
+        },
+        "response": {
+          "id": 11,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"model_version\":\"local-inference-sketch-0.1.0-handwritten-v1\",\"scores\":[-120,410]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 12,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 101,
+              "cpu_load": 0,
+              "io_activity": 0
+            }
+          }
+        },
+        "response": {
+          "id": 12,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "expected exactly three integers between 0 and 100",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 13,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 20,
+              "cpu_load": 40,
+              "io_activity": 60
+            }
+          }
+        },
+        "response": {
+          "id": 13,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"model_version\":\"local-inference-sketch-0.1.0-handwritten-v1\",\"scores\":[-120,410]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 14,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 20,
+              "cpu_load": 40,
+              "io_activity": 60
+            }
+          }
+        },
+        "response": {
+          "id": 14,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"model_version\":\"local-inference-sketch-0.1.0-handwritten-v1\",\"scores\":[-120,410]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 15,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 20,
+              "cpu_load": 40,
+              "io_activity": 60
+            }
+          }
+        },
+        "response": {
+          "id": 15,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"model_version\":\"local-inference-sketch-0.1.0-handwritten-v1\",\"scores\":[-120,410]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 16,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 20,
+              "cpu_load": 40,
+              "io_activity": 60
+            }
+          }
+        },
+        "response": {
+          "id": 16,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"model_version\":\"local-inference-sketch-0.1.0-handwritten-v1\",\"scores\":[-120,410]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 17,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 20,
+              "cpu_load": 40,
+              "io_activity": 60
+            }
+          }
+        },
+        "response": {
+          "id": 17,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"model_version\":\"local-inference-sketch-0.1.0-handwritten-v1\",\"scores\":[-120,410]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 18,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 20,
+              "cpu_load": 40,
+              "io_activity": 60
+            }
+          }
+        },
+        "response": {
+          "id": 18,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"model_version\":\"local-inference-sketch-0.1.0-handwritten-v1\",\"scores\":[-120,410]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 19,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 20,
+              "cpu_load": 40,
+              "io_activity": 60
+            }
+          }
+        },
+        "response": {
+          "id": 19,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"model_version\":\"local-inference-sketch-0.1.0-handwritten-v1\",\"scores\":[-120,410]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 20,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 20,
+              "cpu_load": 40,
+              "io_activity": 60
+            }
+          }
+        },
+        "response": {
+          "id": 20,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"model_version\":\"local-inference-sketch-0.1.0-handwritten-v1\",\"scores\":[-120,410]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 21,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 20,
+              "cpu_load": 40,
+              "io_activity": 60
+            }
+          }
+        },
+        "response": {
+          "id": 21,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"model_version\":\"local-inference-sketch-0.1.0-handwritten-v1\",\"scores\":[-120,410]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 22,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 20,
+              "cpu_load": 40,
+              "io_activity": 60
+            }
+          }
+        },
+        "response": {
+          "id": 22,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"model_version\":\"local-inference-sketch-0.1.0-handwritten-v1\",\"scores\":[-120,410]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 23,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 20,
+              "cpu_load": 40,
+              "io_activity": 60
+            }
+          }
+        },
+        "response": {
+          "id": 23,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"model_version\":\"local-inference-sketch-0.1.0-handwritten-v1\",\"scores\":[-120,410]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 24,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 20,
+              "cpu_load": 40,
+              "io_activity": 60
+            }
+          }
+        },
+        "response": {
+          "id": 24,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"model_version\":\"local-inference-sketch-0.1.0-handwritten-v1\",\"scores\":[-120,410]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 25,
+          "method": "tools/call",
+          "params": {
+            "name": "journal_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 25,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"dropped\":0,\"entries\":[{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":1},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"rejected\",\"sequence\":2},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":3},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"rejected\",\"sequence\":4},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":5},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":6},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":7},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":8},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":9},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":10},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":11},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":12},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":13},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":14},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":15},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":16}]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 26,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 0,
+              "cpu_load": 0,
+              "io_activity": 0
+            }
+          }
+        },
+        "response": {
+          "id": 26,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"model_version\":\"local-inference-sketch-0.1.0-handwritten-v1\",\"scores\":[-40,30]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 27,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": -1,
+              "cpu_load": 0,
+              "io_activity": 0
+            }
+          }
+        },
+        "response": {
+          "id": 27,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "expected exactly three integers between 0 and 100",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 28,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 0,
+              "cpu_load": 0,
+              "io_activity": 0
+            }
+          }
+        },
+        "response": {
+          "id": 28,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"model_version\":\"local-inference-sketch-0.1.0-handwritten-v1\",\"scores\":[-40,30]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 29,
+          "method": "tools/call",
+          "params": {
+            "name": "journal_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 29,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"dropped\":3,\"entries\":[{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":1},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"rejected\",\"sequence\":2},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":3},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"rejected\",\"sequence\":4},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":5},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":6},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":7},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":8},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":9},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":10},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":11},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":12},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":13},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":14},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":15},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":16}]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 30,
+          "method": "tools/call",
+          "params": {
+            "name": "journal_save",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 30,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"dropped_in_memory\":3,\"entries\":16,\"operation\":\"save\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 31,
+          "method": "tools/call",
+          "params": {
+            "name": "document_snapshot",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 31,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"assistant\":{\"common\":\"seed\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"title\":\"base\"}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 32,
+          "method": "tools/call",
+          "params": {
+            "name": "pointer_state",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 32,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "human=120,180; ai=560,330",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 33,
+          "method": "tools/call",
+          "params": {
+            "name": "interaction_state",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 33,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"assistant\":{\"clicks\":0,\"focus\":\"none\"},\"human\":{\"clicks\":0,\"focus\":\"none\",\"pressed\":false}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 34,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 34,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":5584951,\"next\":1,\"task\":0},{\"count\":7040449,\"next\":0,\"task\":1},{\"count\":11576208,\"next\":1,\"task\":0},{\"count\":13759446,\"next\":0,\"task\":1},{\"count\":18329514,\"next\":1,\"task\":0},{\"count\":20446499,\"next\":0,\"task\":1},{\"count\":23681175,\"next\":1,\"task\":0},{\"count\":27194299,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[134414710,142946440],\"slice_ticks\":70,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      }
+    ],
+    [
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {
+              "name": "graph-snapshot-test",
+              "version": "0.1"
+            }
+          }
+        },
+        "response": {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "result": {
+            "capabilities": {
+              "tools": {}
+            },
+            "protocolVersion": "2025-11-25",
+            "serverInfo": {
+              "name": "dual-pointer-vm",
+              "version": "0.1.0"
+            }
+          }
+        }
+      },
+      {
+        "notification": {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/list",
+          "params": {}
+        },
+        "response": {
+          "id": 2,
+          "jsonrpc": "2.0",
+          "result": {
+            "tools": [
+              {
+                "description": "Move AI pointer within its right-hand QEMU workspace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 773,
+                      "minimum": 400,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 573,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_ai"
+              },
+              {
+                "description": "Read the two pointer coordinates in this guest only.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "pointer_state"
+              },
+              {
+                "description": "Activate the synthetic button under the AI pointer; no host click or authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "click_ai"
+              },
+              {
+                "description": "Read logical button focus and click counts in this guest.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "interaction_state"
+              },
+              {
+                "description": "Calculate arbitrary integer scores for synthetic inputs; no policy or system action.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "cpu_load": {
+                      "maximum": 100,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "io_activity": {
+                      "maximum": 100,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "pressure": {
+                      "maximum": 100,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "pressure",
+                    "cpu_load",
+                    "io_activity"
+                  ],
+                  "type": "object"
+                },
+                "name": "infer_synthetic"
+              },
+              {
+                "description": "Read the bounded synthetic inference journal.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "journal_status"
+              },
+              {
+                "description": "Write the journal sector to the synthetic VM disk.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "journal_save"
+              },
+              {
+                "description": "Read and validate the journal sector from the synthetic VM disk.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "journal_load"
+              },
+              {
+                "description": "Read the guest's verified identity-map status.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "mmu_status"
+              },
+              {
+                "description": "Read verified pre-graphical EL0 timer trace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "el0_status"
+              },
+              {
+                "description": "Move the visible pointer for a synthetic logical actor; no window or authenticated identity.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 799,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 599,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_remote"
+              },
+              {
+                "description": "Read the third synthetic actor's logical position.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "remote_state"
+              },
+              {
+                "description": "Run 1101 synthetic human moves in this VM; overwrites older bounded trace entries.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "exercise_human_moves"
+              },
+              {
+                "description": "Edit one synthetic document copy; actor labels are unauthenticated.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "actor": {
+                      "enum": [
+                        "human",
+                        "assistant"
+                      ],
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Non-empty; at most 32 UTF-8 bytes.",
+                      "type": "string"
+                    },
+                    "space": {
+                      "enum": [
+                        "human-space",
+                        "assistant-space"
+                      ],
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "At most 64 UTF-8 bytes; null deletes the field.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "actor",
+                    "space",
+                    "key",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "name": "document_edit"
+              },
+              {
+                "description": "Read a field from a synthetic document copy.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "actor": {
+                      "enum": [
+                        "human",
+                        "assistant"
+                      ],
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Non-empty; at most 32 UTF-8 bytes.",
+                      "type": "string"
+                    },
+                    "space": {
+                      "enum": [
+                        "human-space",
+                        "assistant-space"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "actor",
+                    "space",
+                    "key"
+                  ],
+                  "type": "object"
+                },
+                "name": "document_view"
+              },
+              {
+                "description": "Merge synthetic copies and return fields, origins and conflicts.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_merge"
+              },
+              {
+                "description": "Read the synthetic base and both full copies.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_snapshot"
+              },
+              {
+                "description": "Stage or commit a bounded synthetic snapshot in the inactive slot.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "mode": {
+                      "enum": [
+                        "stage",
+                        "commit"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "mode"
+                  ],
+                  "type": "object"
+                },
+                "name": "document_save"
+              },
+              {
+                "description": "Validate and restore a synthetic snapshot from the guest virtual disk.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_load"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "method": "tools/call",
+          "params": {
+            "name": "mmu_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 3,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"address_spaces\":2,\"asids\":[1,2],\"caches\":false,\"enabled\":true,\"gic\":\"device-xn\",\"image\":\"normal-nc\",\"kernel_el0\":\"samples-denied\",\"mapping\":\"identity\",\"range_checks\":\"full\",\"user_code\":\"ro\",\"user_stack\":\"private-alias-rw\",\"virtio\":\"device-xn\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 4,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":4562191,\"next\":1,\"task\":0},{\"count\":4970061,\"next\":0,\"task\":1},{\"count\":11267990,\"next\":1,\"task\":0},{\"count\":11231705,\"next\":0,\"task\":1},{\"count\":17140158,\"next\":1,\"task\":0},{\"count\":16352430,\"next\":0,\"task\":1},{\"count\":22791712,\"next\":1,\"task\":0},{\"count\":21896051,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[42354839,44222099],\"slice_ticks\":16,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "method": "tools/call",
+          "params": {
+            "name": "journal_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 5,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"dropped\":0,\"entries\":[]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 6,
+          "method": "tools/call",
+          "params": {
+            "name": "journal_load",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 6,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"dropped_in_memory\":0,\"entries\":16,\"operation\":\"load\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 7,
+          "method": "tools/call",
+          "params": {
+            "name": "journal_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 7,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"dropped\":0,\"entries\":[{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":1},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"rejected\",\"sequence\":2},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":3},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"rejected\",\"sequence\":4},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":5},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":6},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":7},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":8},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":9},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":10},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":11},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":12},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":13},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":14},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":15},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":16}]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 8,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 0,
+              "cpu_load": 0,
+              "io_activity": 0
+            }
+          }
+        },
+        "response": {
+          "id": 8,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"model_version\":\"local-inference-sketch-0.1.0-handwritten-v1\",\"scores\":[-40,30]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 9,
+          "method": "tools/call",
+          "params": {
+            "name": "journal_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 9,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"dropped\":1,\"entries\":[{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":1},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"rejected\",\"sequence\":2},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":3},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"rejected\",\"sequence\":4},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":5},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":6},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":7},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":8},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":9},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":10},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":11},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":12},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":13},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":14},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":15},{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":16}]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 10,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 10,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":4562191,\"next\":1,\"task\":0},{\"count\":4970061,\"next\":0,\"task\":1},{\"count\":11267990,\"next\":1,\"task\":0},{\"count\":11231705,\"next\":0,\"task\":1},{\"count\":17140158,\"next\":1,\"task\":0},{\"count\":16352430,\"next\":0,\"task\":1},{\"count\":22791712,\"next\":1,\"task\":0},{\"count\":21896051,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[61194927,64360100],\"slice_ticks\":28,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      }
+    ],
+    [
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {
+              "name": "graph-snapshot-test",
+              "version": "0.1"
+            }
+          }
+        },
+        "response": {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "result": {
+            "capabilities": {
+              "tools": {}
+            },
+            "protocolVersion": "2025-11-25",
+            "serverInfo": {
+              "name": "dual-pointer-vm",
+              "version": "0.1.0"
+            }
+          }
+        }
+      },
+      {
+        "notification": {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/list",
+          "params": {}
+        },
+        "response": {
+          "id": 2,
+          "jsonrpc": "2.0",
+          "result": {
+            "tools": [
+              {
+                "description": "Move AI pointer within its right-hand QEMU workspace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 773,
+                      "minimum": 400,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 573,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_ai"
+              },
+              {
+                "description": "Read the two pointer coordinates in this guest only.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "pointer_state"
+              },
+              {
+                "description": "Activate the synthetic button under the AI pointer; no host click or authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "click_ai"
+              },
+              {
+                "description": "Read logical button focus and click counts in this guest.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "interaction_state"
+              },
+              {
+                "description": "Calculate arbitrary integer scores for synthetic inputs; no policy or system action.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "cpu_load": {
+                      "maximum": 100,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "io_activity": {
+                      "maximum": 100,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "pressure": {
+                      "maximum": 100,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "pressure",
+                    "cpu_load",
+                    "io_activity"
+                  ],
+                  "type": "object"
+                },
+                "name": "infer_synthetic"
+              },
+              {
+                "description": "Read the bounded synthetic inference journal.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "journal_status"
+              },
+              {
+                "description": "Write the journal sector to the synthetic VM disk.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "journal_save"
+              },
+              {
+                "description": "Read and validate the journal sector from the synthetic VM disk.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "journal_load"
+              },
+              {
+                "description": "Read the guest's verified identity-map status.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "mmu_status"
+              },
+              {
+                "description": "Read verified pre-graphical EL0 timer trace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "el0_status"
+              },
+              {
+                "description": "Move the visible pointer for a synthetic logical actor; no window or authenticated identity.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 799,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 599,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_remote"
+              },
+              {
+                "description": "Read the third synthetic actor's logical position.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "remote_state"
+              },
+              {
+                "description": "Run 1101 synthetic human moves in this VM; overwrites older bounded trace entries.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "exercise_human_moves"
+              },
+              {
+                "description": "Edit one synthetic document copy; actor labels are unauthenticated.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "actor": {
+                      "enum": [
+                        "human",
+                        "assistant"
+                      ],
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Non-empty; at most 32 UTF-8 bytes.",
+                      "type": "string"
+                    },
+                    "space": {
+                      "enum": [
+                        "human-space",
+                        "assistant-space"
+                      ],
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "At most 64 UTF-8 bytes; null deletes the field.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "actor",
+                    "space",
+                    "key",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "name": "document_edit"
+              },
+              {
+                "description": "Read a field from a synthetic document copy.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "actor": {
+                      "enum": [
+                        "human",
+                        "assistant"
+                      ],
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Non-empty; at most 32 UTF-8 bytes.",
+                      "type": "string"
+                    },
+                    "space": {
+                      "enum": [
+                        "human-space",
+                        "assistant-space"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "actor",
+                    "space",
+                    "key"
+                  ],
+                  "type": "object"
+                },
+                "name": "document_view"
+              },
+              {
+                "description": "Merge synthetic copies and return fields, origins and conflicts.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_merge"
+              },
+              {
+                "description": "Read the synthetic base and both full copies.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_snapshot"
+              },
+              {
+                "description": "Stage or commit a bounded synthetic snapshot in the inactive slot.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "mode": {
+                      "enum": [
+                        "stage",
+                        "commit"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "mode"
+                  ],
+                  "type": "object"
+                },
+                "name": "document_save"
+              },
+              {
+                "description": "Validate and restore a synthetic snapshot from the guest virtual disk.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_load"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "method": "tools/call",
+          "params": {
+            "name": "mmu_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 3,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"address_spaces\":2,\"asids\":[1,2],\"caches\":false,\"enabled\":true,\"gic\":\"device-xn\",\"image\":\"normal-nc\",\"kernel_el0\":\"samples-denied\",\"mapping\":\"identity\",\"range_checks\":\"full\",\"user_code\":\"ro\",\"user_stack\":\"private-alias-rw\",\"virtio\":\"device-xn\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 4,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":5975841,\"next\":1,\"task\":0},{\"count\":6509393,\"next\":0,\"task\":1},{\"count\":11698072,\"next\":1,\"task\":0},{\"count\":13181480,\"next\":0,\"task\":1},{\"count\":18383649,\"next\":1,\"task\":0},{\"count\":18352664,\"next\":0,\"task\":1},{\"count\":23851524,\"next\":1,\"task\":0},{\"count\":22878558,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[39871378,36793806],\"slice_ticks\":10,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "method": "tools/call",
+          "params": {
+            "name": "infer_synthetic",
+            "arguments": {
+              "pressure": 0,
+              "cpu_load": 0,
+              "io_activity": 0
+            }
+          }
+        },
+        "response": {
+          "id": 5,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"model_version\":\"local-inference-sketch-0.1.0-handwritten-v1\",\"scores\":[-40,30]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 6,
+          "method": "tools/call",
+          "params": {
+            "name": "journal_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 6,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"dropped\":0,\"entries\":[{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":1}]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 7,
+          "method": "tools/call",
+          "params": {
+            "name": "journal_load",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 7,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "invalid journal sector",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 8,
+          "method": "tools/call",
+          "params": {
+            "name": "journal_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 8,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"dropped\":0,\"entries\":[{\"actor\":\"system\",\"category\":\"input\",\"outcome\":\"ok\",\"sequence\":1}]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      }
+    ]
+  ],
+  "limitations": "Synthetic inference handler results only; actor is unauthenticated system label; dropped count is RAM-only; no payload, delivery proof, universal I/O, authentication, atomicity or durability."
+}
