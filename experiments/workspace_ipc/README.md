@@ -4,6 +4,8 @@
 
 In that guest each task writes an eight-byte integer in its private page. Its SVC checks the current task and TTBR and copies from a fixed alias into a kernel slot; the EL1 owner derives a synthetic key/value from the latched number. The fixture checks rejection flags for the other task's opcode, an unknown opcode and a scalar over 65,535. Document mutation, save and load are not exposed via MCP; snapshot, view and merge are read-only. The tasks do not consume the response codes written in their pages. The two per-task slots are idempotent bitsets, not a FIFO with request IDs, backpressure or arbitrary messages. Task roles do not authenticate a person or MCP caller, and no persistent workspace restoration or general process/DMA isolation is established.
 
+The separate [`workspace_queue_vm`](../workspace_queue_vm/README.md) is a **design diagnosis only**. It specifies the work needed for a bounded FIFO and consumed completions, but no FIFO guest or test is implemented there.
+
 ## What actually exists
 
 - [`concurrent_isolation`](../concurrent_isolation/) has two fixed EL0 loops with distinct TTBR roots, private physical pages and an interleaved EL1 graphical service. Its lower-EL AArch64 synchronous-exception vector branches to `irq_fatal`; an `SVC` from either loop therefore cannot currently reach a document. Its address-translation checks are probes, not actual forbidden access faults. The loops have no document protocol.

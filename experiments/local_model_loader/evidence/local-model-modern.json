@@ -1,0 +1,70 @@
+{
+  "guest_sha256": "bce9bafa6362afd0d3e5c229c0cf2e8aa45a624cb202e6237ad2fedc86ddca86",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "transport": "modern",
+  "fixture_sector_sha256": "18a54cc8ada687d8321ba63a532e3447782c5cda7bc06012195ab1debaa61abf",
+  "reference": [
+    [
+      [
+        0,
+        20,
+        0,
+        30
+      ],
+      [
+        -40,
+        30
+      ]
+    ],
+    [
+      [
+        250,
+        0,
+        100,
+        0
+      ],
+      [
+        610,
+        -70
+      ]
+    ],
+    [
+      [
+        0,
+        420,
+        0,
+        0
+      ],
+      [
+        -410,
+        400
+      ]
+    ],
+    [
+      [
+        150,
+        220,
+        400,
+        30
+      ],
+      [
+        460,
+        880
+      ]
+    ]
+  ],
+  "serial": {
+    "valid": "CHECK sha256=abc,boundaries shape=3x4x2 payload=32 input=bounded\nCHECK cases=4 hidden_and_scores=reference guest_writes=none\nSCORES zero=-40,30 cpu=610,-70 load=-410,400 all=460,880\nPASS synthetic model load and inference\n",
+    "magic": "REJECT magic\n",
+    "version": "REJECT version\n",
+    "flags": "REJECT version\n",
+    "shape": "REJECT shape\n",
+    "overflow": "REJECT overflow\n",
+    "length31": "REJECT length\n",
+    "length513": "REJECT length\n",
+    "hash": "REJECT hash\n",
+    "payload_corrupt": "REJECT hash\n",
+    "padding": "REJECT padding\n"
+  },
+  "limitations": "synthetic fixed model; SHA-256 is not authentication; no trained model, Jev, Laya or system control"
+}

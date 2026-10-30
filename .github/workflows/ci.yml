@@ -672,6 +672,25 @@ jobs:
             ${{ runner.temp }}/workspace-ipc-vm-evidence/
             ${{ runner.temp }}/workspace-ipc-vm-legacy-evidence/
           if-no-files-found: ignore
+      - name: Build and check synthetic local model loader in QEMU
+        working-directory: experiments/local_model_loader
+        run: |
+          cargo build --release --locked --offline
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/local-model-loader \
+            --output-dir "$RUNNER_TEMP/local-model-loader-evidence"
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/local-model-loader \
+            --output-dir "$RUNNER_TEMP/local-model-loader-legacy-evidence" --legacy
+      - name: Preserve local model loader VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: local-model-loader-vm-evidence
+          path: |
+            ${{ runner.temp }}/local-model-loader-evidence/
+            ${{ runner.temp }}/local-model-loader-legacy-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM
