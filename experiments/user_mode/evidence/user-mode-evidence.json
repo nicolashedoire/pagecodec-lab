@@ -1,0 +1,7 @@
+{
+  "guest_sha256": "fb297371584051503300c3bd77aa0e381a84483dd2c357e25281d7b27aef8583",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "serial": "BOOT el=1 pages=4k image=bounded uart=one-page tables=aligned\nMMU enabled=yes kernel=privileged user_code=ro user_stack=rw uart=privileged\nCHECK at_el0 kernel_read=denied kernel_write=denied user_code=read_only user_stack=rw zeroed=yes\nABORT el0_read_kernel=denied ec=0x24 dfsc=0x0f far=kernel elr=load count=1\nSVC first=0x1234 response=0x99 returned_to_el0=yes final=0x5678\nCHECK el0_sp=dedicated spsr=el0t kernel_data=unchanged user_stack=preserved\nPASS controlled EL0 SVC and kernel protection\n",
+  "input": "synthetic EL0 code, stack, SVC and protected EL1 data",
+  "limitations": "single-CPU single-address-space demo; no general process isolation or native Apple support"
+}

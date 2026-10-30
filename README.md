@@ -32,6 +32,8 @@ The [VirtIO negotiation experiment](experiments/virtio_negotiation/README.md) ex
 
 The [dynamic multi-actor pointer router](experiments/dynamic_input/README.md) drives three visible pointers in the graphical demo. A separate [graphical recovery prototype](experiments/graph_crash_recovery/README.md) tests two snapshot slots over VirtIO in QEMU; it does not yet guarantee recovery from a power failure.
 
+The [interactive graphics prototype](experiments/graph_interaction/README.md) adds synthetic clickable controls and independent logical focus. The [EL0 guest experiment](experiments/user_mode/README.md) tests a controlled user-mode call and a denied kernel-page access; it does not establish complete process isolation. See the [user-mode research](docs/USER_MODE_RESEARCH.md) for the implementation and remaining work.
+
 ![Three experimental pointers rendered by the Rust guest in QEMU](assets/dual-pointer-vm.png)
 
 ## New: adaptive compaction follow-up

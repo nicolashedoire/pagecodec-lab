@@ -362,6 +362,39 @@ jobs:
           name: preemptive-blocking-vm-evidence
           path: ${{ runner.temp }}/preemptive-blocking-evidence/
           if-no-files-found: ignore
+      - name: Build and check ARM user mode in QEMU
+        working-directory: experiments/user_mode
+        run: |
+          cargo build --release --locked --offline
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/user-mode-demo \
+            --output-dir "$RUNNER_TEMP/user-mode-evidence"
+      - name: Preserve user mode VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: user-mode-vm-evidence
+          path: ${{ runner.temp }}/user-mode-evidence/
+          if-no-files-found: ignore
+      - name: Build and check graphical interaction in QEMU
+        working-directory: experiments/graph_interaction
+        run: |
+          cargo build --release --locked
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/graph-interaction-demo \
+            --output-dir "$RUNNER_TEMP/graph-interaction-evidence"
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/graph-interaction-demo \
+            --output-dir "$RUNNER_TEMP/graph-interaction-legacy-evidence" --transport legacy
+      - name: Preserve graphical interaction VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: graph-interaction-vm-evidence
+          path: |
+            ${{ runner.temp }}/graph-interaction-evidence/
+            ${{ runner.temp }}/graph-interaction-legacy-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM
