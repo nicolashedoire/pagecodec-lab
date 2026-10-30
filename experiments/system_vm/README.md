@@ -36,6 +36,6 @@ python3 run_demo.py --qemu /path/to/qemu-system-aarch64 \
 # Optional: repeat with --transport legacy and another empty directory
 ```
 
-The host harness launches isolated one-CPU QEMU instances with no network or host directory sharing, sends synthetic MCP/QMP requests, and inspects only its own temporary images. It records protocol I/O, QEMU version, guest hash and framebuffer/slot hashes; it checks that the guest binary does not change during the run.
+The host harness launches isolated one-CPU QEMU instances with no network or host directory sharing, sends synthetic MCP/QMP requests, and inspects only its own temporary images. It records protocol I/O, QEMU version, guest hash and framebuffer/slot hashes; it checks that the guest binary does not change during the run. The output directory contains one distinct `frame-1.ppm` through `frame-8.ppm` per VM session; before writing the evidence the runner verifies the exact file list and each recorded hash. These framebuffer files are generated in the chosen output directory, not bundled alongside the checked-in JSON evidence.
 
 The copied glyphs use **Inter**, designed by Rasmus Andersson under the [SIL Open Font License 1.1](assets/OFL.txt); source: [Google Fonts](https://github.com/google/fonts/tree/main/ofl/inter).

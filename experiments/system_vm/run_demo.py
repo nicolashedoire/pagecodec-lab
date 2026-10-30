@@ -53,14 +53,15 @@ class Guest:
             if not preempt.get('validated') or preempt.get('ticks')!=8 or preempt.get('el')!='EL0' or preempt.get('timer')!='disabled' or preempt.get('interrupts')!='masked':raise RuntimeError('EL0 probe status invalid')
             events=preempt.get('events',[]);previous=[0,0]
             if len(events)!=8:raise RuntimeError('EL0 event count')
-            for index,event in enumerate(events):
-                actor=index%2;expected_next=1-actor if index<7 else 2
+            for event_index,event in enumerate(events):
+                actor=event_index%2;expected_next=1-actor if event_index<7 else 2
                 if event.get('task')!=actor or event.get('next')!=expected_next or event.get('count',0)<=previous[actor]:raise RuntimeError('EL0 preemption trace invalid: '+str(events))
                 previous[actor]=event['count']
             with connect(self.qmp,self.process) as q:
                 with q.makefile('rwb',buffering=0) as st:
                     if 'QMP' not in json.loads(st.readline()):raise RuntimeError('bad QMP greeting')
                     screenshot=out/('frame-'+str(index)+'.ppm')
+                    if screenshot.exists():raise RuntimeError('duplicate session framebuffer: '+screenshot.name)
                     for req in [{'execute':'qmp_capabilities'},{'execute':'screendump','arguments':{'filename':str(screenshot)}}]:
                         st.write(json.dumps(req).encode()+b'\n')
                         while True:
@@ -70,6 +71,7 @@ class Guest:
             frame=screenshot.read_bytes()
             if not frame.startswith(b'P6\n800 600\n255\n') or len(set(frame[-100000::997]))<2:raise RuntimeError('graphics not ready')
             self.frame_hash=sha(frame)
+            self.frame_info={'file':screenshot.name,'sha256':self.frame_hash}
         except BaseException:
             if hasattr(self,'stream'): self.stream.close()
             if hasattr(self,'sock'): self.sock.close()
@@ -205,7 +207,7 @@ def main():
             if first.call('document_snapshot',{})!=v1:raise RuntimeError('initial state mismatch')
             if first.call('document_save',{'mode':'commit'})!={'operation':'commit','slot':0,'generation':1}:raise RuntimeError('first commit')
             if first.call('interaction_state',{})!=interacted or first.pointer()!='human=114,444; ai=660,444':raise RuntimeError('save changed pointer or focus state')
-            traces.append(first.trace);frames.append(first.frame_hash)
+            traces.append(first.trace);frames.append(first.frame_info)
         finally:first.close()
         after_first=disk.read_bytes();s0=after_first[OFFSET:OFFSET+RECORD];slot_check(s0,1,0xa5,v1)
         if after_first[:OFFSET]!=bytes(OFFSET) or after_first[OFFSET+RECORD:]!=bytes(SIZE-OFFSET-RECORD):raise RuntimeError('first commit touched outside slot')
@@ -218,7 +220,7 @@ def main():
             edit(second,'human','title','human-v2')
             if second.call('document_snapshot',{})!=v2:raise RuntimeError('second state mismatch')
             if second.call('document_save',{'mode':'stage'})!={'operation':'stage','slot':1,'generation':2}:raise RuntimeError('stage failpoint')
-            traces.append(second.trace);frames.append(second.frame_hash)
+            traces.append(second.trace);frames.append(second.frame_info)
         finally:second.close() # Host terminates QEMU before commit; no physical power-loss claim.
         after_stage=disk.read_bytes();s1=after_stage[OFFSET+RECORD:OFFSET+2*RECORD]
         if after_stage[OFFSET:OFFSET+RECORD]!=s0 or after_stage[:OFFSET]!=after_first[:OFFSET] or after_stage[OFFSET+2*RECORD:]!=after_first[OFFSET+2*RECORD:]:raise RuntimeError('stage modified prior slot or unrelated sectors')
@@ -227,20 +229,20 @@ def main():
         try:
             expect_load(third,0,1,v1);edit(third,'human','title','human-v2')
             if third.call('document_save',{'mode':'commit'})!={'operation':'commit','slot':1,'generation':2}:raise RuntimeError('second commit')
-            traces.append(third.trace);frames.append(third.frame_hash)
+            traces.append(third.trace);frames.append(third.frame_info)
         finally:third.close()
         committed=disk.read_bytes();s1=committed[OFFSET+RECORD:OFFSET+2*RECORD];slot_check(s1,2,0xa5,v2)
         if committed[OFFSET:OFFSET+RECORD]!=s0 or committed[:OFFSET]!=bytes(OFFSET) or committed[OFFSET+2*RECORD:]!=bytes(SIZE-OFFSET-2*RECORD):raise RuntimeError('unexpected writes')
         fourth=Guest(args.qemu,guest,disk,tmp,4,out,args.transport)
         try:
-            expect_load(fourth,1,2,v2);traces.append(fourth.trace);frames.append(fourth.frame_hash)
+            expect_load(fourth,1,2,v2);traces.append(fourth.trace);frames.append(fourth.frame_info)
         finally:fourth.close()
         if disk.read_bytes()!=committed:raise RuntimeError('load changed disk')
         damaged=bytearray(committed);damaged[OFFSET+RECORD+512]^=1
         bad=Path(tmp)/'corrupt-newest.raw';create(bad,damaged)
         fifth=Guest(args.qemu,guest,bad,tmp,5,out,args.transport)
         try:
-            expect_load(fifth,0,1,v1);traces.append(fifth.trace);frames.append(fifth.frame_hash)
+            expect_load(fifth,0,1,v1);traces.append(fifth.trace);frames.append(fifth.frame_info)
         finally:fifth.close()
         if bad.read_bytes()!=damaged:raise RuntimeError('fallback changed corrupted image')
         damaged[OFFSET+512]^=1
@@ -249,7 +251,7 @@ def main():
         try:
             baseline=sixth.call('document_snapshot',{});sixth.call('document_load',{},rejected=True)
             if sixth.call('document_snapshot',{})!=baseline:raise RuntimeError('invalid recovery changed active snapshot')
-            traces.append(sixth.trace);frames.append(sixth.frame_hash)
+            traces.append(sixth.trace);frames.append(sixth.frame_info)
         finally:sixth.close()
         if both.read_bytes()!=damaged:raise RuntimeError('failed recovery changed disk')
         # An interrupted first-ever write must not be silently treated as a
@@ -259,7 +261,7 @@ def main():
         try:
             fresh=seventh.call('document_snapshot',{})
             if seventh.call('document_save',{'mode':'stage'})!={'operation':'stage','slot':0,'generation':1}:raise RuntimeError('first stage failed')
-            traces.append(seventh.trace);frames.append(seventh.frame_hash)
+            traces.append(seventh.trace);frames.append(seventh.frame_info)
         finally:seventh.close()
         initial_staged=first_stage_disk.read_bytes();slot_check(initial_staged[OFFSET:OFFSET+RECORD],1,0,fresh)
         eighth=Guest(args.qemu,guest,first_stage_disk,tmp,8,out,args.transport)
@@ -268,13 +270,21 @@ def main():
             eighth.call('document_load',{},rejected=True)
             eighth.call('document_save',{'mode':'commit'},rejected=True)
             if eighth.call('document_snapshot',{})!=baseline:raise RuntimeError('failed first recovery changed active snapshot')
-            traces.append(eighth.trace);frames.append(eighth.frame_hash)
+            traces.append(eighth.trace);frames.append(eighth.frame_info)
         finally:eighth.close()
         if first_stage_disk.read_bytes()!=initial_staged:raise RuntimeError('failed first recovery overwrote disk')
     if sha(guest.read_bytes())!=guest_hash:raise RuntimeError('guest changed during test')
+    expected_frames=[f'frame-{i}.ppm' for i in range(1,9)]
+    if ([frame['file'] for frame in frames]!=expected_frames or len({frame['file'] for frame in frames})!=8
+            or sorted(path.name for path in out.glob('frame-*.ppm'))!=expected_frames):
+        raise RuntimeError('session framebuffer names missing, duplicated or out of order')
+    for frame in frames:
+        path=out/frame['file']
+        if not path.is_file() or sha(path.read_bytes())!=frame['sha256']:
+            raise RuntimeError('session framebuffer missing or hash mismatch: '+frame['file'])
     evidence={'guest_sha256':guest_hash,'qemu_version':version,'transport':args.transport,'disk':'exclusively created synthetic 1 MiB image',
               'first_committed_slot_sha256':sha(s0),'staged_slot_sha256':sha(after_stage[OFFSET+RECORD:OFFSET+2*RECORD]),'second_committed_slot_sha256':sha(s1),
-              'v1':v1,'v2':v2,'qmp_input':qmp_input,'interaction_frame_hashes':interaction_frames,'sessions':traces,'framebuffers':[{'file':f'frame-{i}.ppm','sha256':h} for i,h in enumerate(frames,1)],
+              'v1':v1,'v2':v2,'qmp_input':qmp_input,'interaction_frame_hashes':interaction_frames,'sessions':traces,'framebuffers':frames,
               'limitations':'synthetic QMP input; host terminates QEMU after stage response; no real power loss, atomicity, guaranteed flush, authentication or process isolation'}
     (out/'system-vm-evidence.json').write_text(json.dumps(evidence,indent=2)+'\n')
     print('PASS EL0 preemption, MMU-backed interactive panels and two-slot recovery in QEMU')

@@ -1,6 +1,12 @@
 # Running graphical services and EL0 tasks concurrently in QEMU
 
-This is an integration proposal. The current [`system_vm`](../experiments/system_vm/README.md) runs two fixed EL0 loops for eight timer IRQs, stops that probe, masks interrupts and then transfers to its graphical/MCP loop. Its phases are sequential: no graphical request is processed while those EL0 loops run. One CPU can interleave execution, but this is not multicore parallelism.
+[`concurrent_vm`](../experiments/concurrent_vm/README.md) now demonstrates bounded, voluntary interleaving of an EL1 graphical service with two fixed EL0 loops in a single QEMU image. It extends [`system_vm`](../experiments/system_vm/README.md), whose original EL0 and graphical phases remain sequential. Further arbitrary-preemption and process-scheduling work described below remains a proposal. One CPU interleaves execution; this is not multicore parallelism.
+
+## Demonstrated service-boundary interleaving
+
+After the original boot probe, the EL1 service yields at outer-loop boundaries following processed input or a completed request, or after 20,000 service-loop polls. Each yield saves an EL1 call continuation, enters the fixed EL0 loops, handles two virtual-timer IRQs and restores the service stack and continuation. Register sentinels and a stack sentinel check the selected continuation; IRQ handling does not call the allocator, MCP or drivers. The timer is disabled and IRQs are masked on return to the service. An incomplete UART request can still span an idle-poll yield, and the poll count is not a time or fairness guarantee.
+
+The [modern](../experiments/concurrent_vm/evidence/concurrent-vm-evidence.json) and [legacy](../experiments/concurrent_vm/evidence/concurrent-vm-legacy-evidence.json) QEMU traces check that both EL0 counters progress around synthetic QMP input, MCP clicks and document save/load checkpoints. This shows execution **between** service turns, not during an individual request or device operation. There is no arbitrary EL1 preemption, general task scheduler, authenticated MCP, process/DMA isolation or latency guarantee. Both EL0 loops use the same address space and accessible user pages; the separate `address_spaces` experiment is not integrated here.
 
 ## The current ownership boundary
 
@@ -8,11 +14,11 @@ This is an integration proposal. The current [`system_vm`](../experiments/system
 
 The existing EL0 IRQ path saves a 272-byte integer frame including `SP_EL0`, `ELR_EL1` and `SPSR_EL1`, but it handles the lower-EL IRQ fixture, not preemption of a live graphical EL1 task. Its two EL0 loops share an address space and do not run applications. It does not establish general task scheduling, SVC handling, nested IRQ recovery or FP/SIMD and extension-state preservation.
 
-## Candidate single-CPU design
+## Candidate arbitrary-preemption design
 
 One incremental candidate is a persistent EL1 service task, with its own stack and saved execution context, and fixed EL0 test tasks. One vector table would dispatch interrupts taken from both EL1 SPx and EL0. The scheduler would save the interrupted task's actual frame and stack pointer, choose a runnable context, and restore its mode, PC, status and registers before returning. An EL1 continuation needs a persistent, bounded kernel stack; it cannot be recreated by jumping back to `graph_main`. User tasks need their own saved user and exception context. If address-space roots change, all kernel code, vectors, driver mappings and active kernel stacks required during the transition must remain valid under each root.
 
-This is a design to implement and verify; the separate [`address_spaces`](../experiments/address_spaces/README.md) experiment does not yet make it part of `system_vm`. A complete context must cover all architectural state actually used by the selected build, including extension state if enabled. The exact context format, task lifecycle and failure behavior must be specified before describing the result as a general scheduler.
+This remains a design to implement and verify; neither the voluntary `concurrent_vm` yield nor the separate [`address_spaces`](../experiments/address_spaces/README.md) experiment demonstrates arbitrary interruption of a live EL1 service. A complete context must cover all architectural state actually used by the selected build, including extension state if enabled. The exact context format, task lifecycle and failure behavior must be specified before describing the result as a general scheduler.
 
 ## Interrupts, Rust state and device access
 
