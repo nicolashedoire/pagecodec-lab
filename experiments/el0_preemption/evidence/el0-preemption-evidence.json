@@ -1,0 +1,7 @@
+{
+  "guest_sha256": "f2153c235470ccad847cd92ab21844165200572f55d00df57a0498eef6054114",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "serial": "MMU el0_code=ro el0_stacks=rw kernel_data_uart_gic=privileged\nBOOT el0_tasks=2 stacks=separate timer=ppi27 yields=0\nIRQ tick=1 el0_task=0 count=40489968 next=1\nIRQ tick=2 el0_task=1 count=41016177 next=0\nIRQ tick=3 el0_task=0 count=72832792 next=1\nIRQ tick=4 el0_task=1 count=82279473 next=0\nIRQ tick=5 el0_task=0 count=113008651 next=1\nIRQ tick=6 el0_task=1 count=113638903 next=0\nIRQ tick=7 el0_task=0 count=153365073 next=1\nIRQ tick=8 el0_task=1 count=150222732 next=finish\nCHECK el0_frames=two gpr=x0-x30_except_counter user_sp=separate kernel_irq_stack=bounded\nCHECK el0_permissions=translation_queries timer=disabled gic=inactive terminal_snapshot=residual\nPASS timer preemption of two EL0 loops\n",
+  "input": "eight guest virtual-timer IRQs selecting two EL0 assembly loops from a fixed ready ring",
+  "limitations": "single-CPU QEMU integer-only test; no blocking, general process isolation, FP/SIMD or native Apple hardware"
+}
