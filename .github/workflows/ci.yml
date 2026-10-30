@@ -25,6 +25,11 @@ jobs:
         run: |
           cargo build --release --locked --offline
           python3 run_vm.py
+      - name: Build and check VirtIO driver in QEMU
+        working-directory: experiments/virtio_rng
+        run: |
+          cargo build --release --locked
+          python3 run_vm.py --qemu qemu-system-aarch64
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM

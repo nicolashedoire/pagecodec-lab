@@ -1,6 +1,12 @@
 //! User-space concepts for a future system. This is not an operating system or a security boundary.
+#![no_std]
 #![forbid(unsafe_code)]
-use std::collections::{BTreeMap, BTreeSet};
+
+extern crate alloc;
+
+use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::string::String;
+use alloc::vec::Vec;
 
 /// A deliberately small structured document. A field is either a string or absent.
 pub type Document = BTreeMap<String, String>;

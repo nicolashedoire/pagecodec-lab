@@ -5,6 +5,13 @@ is not a kernel, bootable image, window manager, security service, MCP server,
 AI model, or operating system. It does not change any settings on the host.
 It is written in Rust 2021 and has no third-party dependencies.
 
+The library is `no_std` and uses Rust's `alloc` crate for its maps, strings
+and vectors. A bare-metal consumer must provide a working global allocator
+and its own runtime and error handling; this library alone supplies none of
+those components. The example executable and tests use the host's standard
+library. The two workspaces here are separate in-memory values, not isolated
+processes, protected address spaces, or independently scheduled desktops.
+
 ## What works
 
 - Two independently editable in-memory workspaces derive from one base document.

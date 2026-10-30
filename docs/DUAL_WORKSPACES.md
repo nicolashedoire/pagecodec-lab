@@ -13,6 +13,29 @@ and tasks. Its cursor and activity are visibly distinguishable. A floating
 conversation or the assistant workspace. The user can see what the assistant
 is doing, pause or stop it, and inspect results.
 
+The owner also wants a **remote human participant** to have a third workspace
+and pointer. The intended design generalizes to multiple named actor sessions,
+not a permanent limit of exactly two. The machine owner determines the remote
+participant's access scope and can revoke it. Identity, transport and grants
+must be enforced by the system; a visible third cursor alone does not establish
+remote access or isolation. Remote input and a third workspace are not yet
+implemented in the current two-pointer prototype.
+
+The target is an extensible number of participants, including the owner's
+example of **1,000 agents with 1,000 distinct pointers**. Each pointer needs a
+stable actor/session identity, coordinates, target workspace, focus, permissions
+and lifecycle. Pointer creation and retirement, batching, event backpressure and
+rendering costs must be measured as the number of active actors grows. The UI
+may offer user-controlled filtering or grouping for readability, without
+silently collapsing distinct actors into one. Independent pointers do not imply
+that every legacy application supports 1,000 separate simultaneous keyboard
+focuses, nor that 1,000 application instances fit into available memory.
+
+The present two-pointer demonstration is the first functional step; it does
+not establish that a thousand participants are supported or fast. A scalable
+actor registry, revocable permissions, multi-party conflict handling and an
+explicit VM workload are future implementation and measurement work.
+
 ```mermaid
 flowchart TB
   subgraph H[Human workspace]

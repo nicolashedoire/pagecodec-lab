@@ -1,0 +1,122 @@
+{
+  "schema": "virtio-rng-workspaces-v2",
+  "recorded_utc": "2026-10-30T19:11:46.265947+00:00",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "host_system": "Darwin",
+  "host_arch": "arm64",
+  "guest": {
+    "board": "virt,virtualization=off",
+    "cpu": "cortex-a57",
+    "accelerator": "tcg",
+    "vcpus": 1,
+    "memory_bytes": 134217728,
+    "network": false,
+    "disk": false,
+    "transport": "virtio-mmio v2",
+    "serial": "PL011"
+  },
+  "guest_image_sha256": "659aa56c0b920be4e08469efdcd7df7487b0acc02f1cb7dc4fa3915f3be397e9",
+  "input_scope": "Temporary synthetic file read by QEMU; not a physical-device trace.",
+  "cases": [
+    {
+      "scenario": "valid_synthetic_bytes",
+      "device_present": true,
+      "input": {
+        "description": "bytes 0..255 repeated 16 times",
+        "size_bytes": 4096,
+        "sha256": "c8f5d0341d54d951a71b136e6e2afcb14d11ed8489a7ae126a8fee0df6ecf193",
+        "guest_requested_bytes": 32
+      },
+      "console_output": "WORKSPACE_INPUT base.title=base human.title=human assistant.status=assistant\r\nWORKSPACE_CHECK independent=ok human=human assistant=assistant\r\nWORKSPACE_INPUT conflict.base=base conflict.human=human conflict.assistant=assistant\r\nWORKSPACE_CHECK conflict_preserved=ok materialize_rejected=ok\r\nRECEIVED count=32 hex=000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\r\nIO_MERGE_CHECK human=human assistant=device_data data_hex=000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\r\nPASS: synthetic bytes via VirtIO RNG\r\n",
+      "expected_marker": "PASS: synthetic bytes via VirtIO RNG",
+      "observed_markers": [
+        "PASS: synthetic bytes via VirtIO RNG"
+      ],
+      "received": {
+        "count": 32,
+        "hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+      },
+      "expected_received": {
+        "count": 32,
+        "hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+      },
+      "workspace_inputs_and_checks": [
+        "WORKSPACE_INPUT base.title=base human.title=human assistant.status=assistant",
+        "WORKSPACE_CHECK independent=ok human=human assistant=assistant",
+        "WORKSPACE_INPUT conflict.base=base conflict.human=human conflict.assistant=assistant",
+        "WORKSPACE_CHECK conflict_preserved=ok materialize_rejected=ok"
+      ],
+      "workspace_verified": true,
+      "io_merge_checks": [
+        "IO_MERGE_CHECK human=human assistant=device_data data_hex=000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+      ],
+      "io_merge_expected": "IO_MERGE_CHECK human=human assistant=device_data data_hex=000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "io_merge_verified": true,
+      "verified": true,
+      "wall_seconds": 0.036966,
+      "runner_terminated_process": true
+    },
+    {
+      "scenario": "invalid_synthetic_bytes",
+      "device_present": true,
+      "input": {
+        "description": "byte 255 repeated 4096 times",
+        "size_bytes": 4096,
+        "sha256": "f47a8ec3e9aff2318d896942282ad4fe37d6391c82914f54a5da8a37de1300c6",
+        "guest_requested_bytes": 32
+      },
+      "console_output": "WORKSPACE_INPUT base.title=base human.title=human assistant.status=assistant\r\nWORKSPACE_CHECK independent=ok human=human assistant=assistant\r\nWORKSPACE_INPUT conflict.base=base conflict.human=human conflict.assistant=assistant\r\nWORKSPACE_CHECK conflict_preserved=ok materialize_rejected=ok\r\nRECEIVED count=32 hex=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\r\nFAIL: unexpected RNG data\r\n",
+      "expected_marker": "FAIL: unexpected RNG data",
+      "observed_markers": [
+        "FAIL: unexpected RNG data"
+      ],
+      "received": {
+        "count": 32,
+        "hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "expected_received": {
+        "count": 32,
+        "hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "workspace_inputs_and_checks": [
+        "WORKSPACE_INPUT base.title=base human.title=human assistant.status=assistant",
+        "WORKSPACE_CHECK independent=ok human=human assistant=assistant",
+        "WORKSPACE_INPUT conflict.base=base conflict.human=human conflict.assistant=assistant",
+        "WORKSPACE_CHECK conflict_preserved=ok materialize_rejected=ok"
+      ],
+      "workspace_verified": true,
+      "io_merge_checks": [],
+      "io_merge_expected": null,
+      "io_merge_verified": true,
+      "verified": true,
+      "wall_seconds": 0.03101,
+      "runner_terminated_process": true
+    },
+    {
+      "scenario": "no_device",
+      "device_present": false,
+      "input": null,
+      "console_output": "WORKSPACE_INPUT base.title=base human.title=human assistant.status=assistant\r\nWORKSPACE_CHECK independent=ok human=human assistant=assistant\r\nWORKSPACE_INPUT conflict.base=base conflict.human=human conflict.assistant=assistant\r\nWORKSPACE_CHECK conflict_preserved=ok materialize_rejected=ok\r\nPASS: no recognized VirtIO entropy device\r\n",
+      "expected_marker": "PASS: no recognized VirtIO entropy device",
+      "observed_markers": [
+        "PASS: no recognized VirtIO entropy device"
+      ],
+      "received": null,
+      "expected_received": null,
+      "workspace_inputs_and_checks": [
+        "WORKSPACE_INPUT base.title=base human.title=human assistant.status=assistant",
+        "WORKSPACE_CHECK independent=ok human=human assistant=assistant",
+        "WORKSPACE_INPUT conflict.base=base conflict.human=human conflict.assistant=assistant",
+        "WORKSPACE_CHECK conflict_preserved=ok materialize_rejected=ok"
+      ],
+      "workspace_verified": true,
+      "io_merge_checks": [],
+      "io_merge_expected": null,
+      "io_merge_verified": true,
+      "verified": true,
+      "wall_seconds": 0.030137,
+      "runner_terminated_process": true
+    }
+  ],
+  "all_verified": true
+}

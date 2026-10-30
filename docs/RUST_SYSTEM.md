@@ -96,11 +96,16 @@ on the M4 Pro or implement physical Mac drivers, a scheduler, memory management,
 applications or a desktop. Its boot check is a functional result, not a
 performance benchmark.
 
-The [workspace core sketch](../experiments/system_core/README.md) is a small
-Rust program running in user space. It models two copies and a three-way merge,
-preserving conflicting edits for a future AI resolver. Its initial five tests
-were run on the host before the VM-only requirement; future tests use a VM.
-It does not implement a kernel, security boundary or actual AI resolution.
+The [workspace core sketch](../experiments/system_core/README.md) models two
+copies and a three-way merge, preserving conflicting edits for a future AI
+resolver. Its library now uses `no_std` and `alloc`, and is linked with a
+VirtIO guest in [this VM experiment](../experiments/virtio_rng/README.md).
+In that experiment, received synthetic bytes become an AI-side edit and are
+merged with a separate human-side edit; the [I/O log](../experiments/virtio_rng/evidence/qemu-smoke.json)
+records the exact inputs and outputs. These are in-memory structures in a
+single guest address space, not processes, UI or an AI resolver. The initial
+five workspace tests ran on the host before the VM-only requirement; subsequent
+tests use a VM.
 
 The [deep architecture](DEEP_ARCHITECTURE.md), [two workspaces](DUAL_WORKSPACES.md),
 [AI control plane](AI_CONTROL_PLANE.md), and [voice assistant](VOICE_ASSISTANT.md)
