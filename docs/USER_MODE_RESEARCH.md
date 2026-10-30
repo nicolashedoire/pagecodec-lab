@@ -28,6 +28,10 @@ The separate [`user_ipc`](../experiments/user_ipc/README.md) guest uses two TTBR
 
 These are cooperative switches and exact, prearranged request sites and values. The guest does not implement a general IPC API, arbitrary process scheduling, authenticated callers, dynamic mapping validation, general fault recovery or DMA isolation. It is a separate experiment from both `user_mode` and the graphical guest.
 
+The separate [`ipc_service`](../experiments/ipc_service/README.md) guest extends this into a bounded dispatcher with a two-slot FIFO mailbox for each of the two fixed tasks. The kernel derives the fixture's task identity from its current context and verified TTBR, validates destination, size and checked user-page range, copies messages and returns status codes. The [QEMU trace](../experiments/ipc_service/evidence/ipc-service-evidence.json) covers cooperative switches, ordered two-way messages and selected full, empty, invalid destination, size and pointer rejections. It also checks that rejected operations leave mailboxes unchanged and that 8-bit diagnostic counters saturate at 255.
+
+This identity belongs to fixed synthetic tasks; it does not authenticate a person or external MCP caller. The guest's immutable mappings and controlled copies are not a universal IPC interface: hardware faults during a copy are fatal, and atomicity across faults or concurrent changes is not established. General scheduling, dynamic page ownership and DMA isolation are not implemented. The separate [`workspace_ipc` diagnosis](../experiments/workspace_ipc/README.md) explains why this dispatcher is not yet connected to the graphical document service or an authenticated MCP path.
+
 ## Remaining engineering work
 
 - Define process and address-space ownership, protected mappings, lifecycle and zeroing rules, including reuse of physical pages and user stacks.

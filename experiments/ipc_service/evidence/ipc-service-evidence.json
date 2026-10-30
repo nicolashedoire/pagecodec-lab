@@ -1,0 +1,7 @@
+{
+  "guest_sha256": "6cbdf5d90397b4628ed7a0fbd51ce32ae888361ea2b2967414c2628e956facec",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "serial": "MMU alias=same_va physical_pages=distinct asids=1,2 kernel=privileged\nCHECK counters=saturating_at_255\nCHECK requests=a:HELLO,PING b:OK,GO fifo=preserved\nREJECT pointer=page_cross,overflow,kernel size=17,short_buffer target=invalid mailbox_unchanged=yes\nREJECT full=a,b empty=a,a,b mailboxes_unchanged=yes\nCHECK a_send=2 a_receive=2 b_send=2 b_receive=2 switches=2 pages=expected\nPASS EL0 bounded IPC dispatcher\n",
+  "input": "two synthetic EL0 actors each send and receive two messages",
+  "limitations": "fixed single-CPU scenario; no general IPC, authentication, certified isolation, IOMMU, FP/SIMD or native Apple hardware"
+}

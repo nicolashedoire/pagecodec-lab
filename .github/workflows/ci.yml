@@ -639,6 +639,20 @@ jobs:
           name: user-ipc-vm-evidence
           path: ${{ runner.temp }}/user-ipc-evidence/
           if-no-files-found: ignore
+      - name: Build and check bounded IPC dispatcher in QEMU
+        working-directory: experiments/ipc_service
+        run: |
+          cargo build --release --locked --offline
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/ipc-service-demo \
+            --output-dir "$RUNNER_TEMP/ipc-service-evidence"
+      - name: Preserve bounded IPC VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ipc-service-vm-evidence
+          path: ${{ runner.temp }}/ipc-service-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM
