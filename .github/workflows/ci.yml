@@ -748,6 +748,25 @@ jobs:
             ${{ runner.temp }}/workspace-storage-ipc-evidence/
             ${{ runner.temp }}/workspace-storage-ipc-legacy-evidence/
           if-no-files-found: ignore
+      - name: Build and check dynamic task snapshot in QEMU
+        working-directory: experiments/workspace_dynamic_storage
+        run: |
+          cargo build --release --locked
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/workspace-dynamic-storage-demo \
+            --output-dir "$RUNNER_TEMP/workspace-dynamic-storage-evidence" --transport modern
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/workspace-dynamic-storage-demo \
+            --output-dir "$RUNNER_TEMP/workspace-dynamic-storage-legacy-evidence" --transport legacy
+      - name: Preserve dynamic task snapshot VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: workspace-dynamic-storage-vm-evidence
+          path: |
+            ${{ runner.temp }}/workspace-dynamic-storage-evidence/
+            ${{ runner.temp }}/workspace-dynamic-storage-legacy-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM
