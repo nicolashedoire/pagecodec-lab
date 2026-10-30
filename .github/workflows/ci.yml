@@ -710,6 +710,25 @@ jobs:
             ${{ runner.temp }}/workspace-queue-evidence/
             ${{ runner.temp }}/workspace-queue-legacy-evidence/
           if-no-files-found: ignore
+      - name: Build and check dynamic EL0 workspace requests in QEMU
+        working-directory: experiments/workspace_queue_dynamic
+        run: |
+          cargo build --release --locked
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/workspace-queue-dynamic-demo \
+            --output-dir "$RUNNER_TEMP/workspace-queue-dynamic-evidence"
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/workspace-queue-dynamic-demo \
+            --output-dir "$RUNNER_TEMP/workspace-queue-dynamic-legacy-evidence" --transport legacy
+      - name: Preserve dynamic workspace request VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: workspace-queue-dynamic-vm-evidence
+          path: |
+            ${{ runner.temp }}/workspace-queue-dynamic-evidence/
+            ${{ runner.temp }}/workspace-queue-dynamic-legacy-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM
