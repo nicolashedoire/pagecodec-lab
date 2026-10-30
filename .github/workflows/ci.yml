@@ -234,6 +234,20 @@ jobs:
           name: cooperative-tasks-vm-evidence
           path: ${{ runner.temp }}/cooperative-tasks-evidence/
           if-no-files-found: ignore
+      - name: Build and check guest virtual memory in QEMU
+        working-directory: experiments/virtual_memory
+        run: |
+          cargo build --release --locked --offline
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/virtual-memory-demo \
+            --output-dir "$RUNNER_TEMP/virtual-memory-evidence"
+      - name: Preserve virtual memory VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: virtual-memory-vm-evidence
+          path: ${{ runner.temp }}/virtual-memory-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM

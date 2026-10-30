@@ -160,6 +160,27 @@ fn tick(expected: u64) {
     }
 }
 fn current_sp() -> usize { let sp: usize; unsafe { asm!("mov {}, sp", out(reg) sp, options(nomem, nostack, preserves_flags)); } sp }
+// Linker-provided symbols can coincide with the end of a Rust static. Do not
+// let compiler provenance assumptions turn physical boundary comparisons into
+// compile-time assumptions about distinct Rust objects.
+fn physical_address(value: usize) -> usize {
+    let observed: usize;
+    unsafe { asm!("mov {observed}, {value}", observed = out(reg) observed,
+                  value = in(reg) value, options(nomem, nostack, preserves_flags)); }
+    observed
+}
+fn write_hex(value: usize) {
+    const HEX: &[u8;16]=b"0123456789abcdef";
+    write("0x");
+    for shift in (0..16).rev() {
+        let b=HEX[(value >> (shift*4)) & 15];
+        unsafe { while (0x0900_0018 as *const u32).read_volatile() & (1 << 5) != 0 { core::hint::spin_loop() }
+                 (0x0900_0000 as *mut u32).write_volatile(b as u32); }
+    }
+}
+fn stack_position(start: usize, top: usize, sp: usize) -> bool {
+    start < top && sp > start && sp <= top && sp % 16 == 0
+}
 fn stack_contains(stack: *const Stack, sp: usize) -> bool { let start = stack as usize; sp >= start && sp < start + STACK_BYTES && sp % 16 == 0 }
 fn object_on_stack(stack: *const Stack, address: usize, length: usize) -> bool {
     let start = stack as usize;
@@ -202,14 +223,31 @@ extern "C" fn task_b() -> ! {
 
 #[no_mangle]
 pub extern "C" fn rust_main() -> ! {
-    let a = addr_of!(A_STACK) as usize;
-    let b = addr_of!(B_STACK) as usize;
-    let main_start = addr_of!(__bss_end) as usize;
-    let main_top = addr_of!(__stack_top) as usize;
+    let a = physical_address(addr_of!(A_STACK) as usize);
+    let b = physical_address(addr_of!(B_STACK) as usize);
+    let main_start = physical_address(addr_of!(__bss_end) as usize);
+    let main_top = physical_address(addr_of!(__stack_top) as usize);
     let main_sp = current_sp();
-    check(a % 16 == 0 && b % 16 == 0 && (a + STACK_BYTES <= b || b + STACK_BYTES <= a)
-          && (a + STACK_BYTES <= main_start || main_top <= a) && (b + STACK_BYTES <= main_start || main_top <= b)
-          && main_sp >= main_start && main_sp < main_top && main_sp % 16 == 0, "disjoint aligned stacks");
+    let a_end = a.checked_add(STACK_BYTES);
+    let b_end = b.checked_add(STACK_BYTES);
+    let valid = match (a_end,b_end) {
+        (Some(a_end),Some(b_end)) => a % 16 == 0 && b % 16 == 0 && main_start % 16 == 0 && main_top % 16 == 0
+            && (a_end <= b || b_end <= a)
+            && (a_end <= main_start || main_top <= a) && (b_end <= main_start || main_top <= b)
+            // AArch64 permits SP at the top of an empty descending stack.
+            && stack_position(main_start, main_top, main_sp),
+        _ => false,
+    };
+    if !valid {
+        write("STACK_DIAGNOSTIC a="); write_hex(a); write(" b="); write_hex(b);
+        write(" main_start="); write_hex(main_start); write(" main_top="); write_hex(main_top);
+        write(" main_sp="); write_hex(main_sp); write("\r\n");
+    }
+    check(valid, "disjoint aligned stacks");
+    check(stack_position(main_start, main_top, main_top), "empty main stack boundary");
+    check(!stack_position(main_start, main_top, main_start), "empty stack bottom boundary");
+    check(main_top.checked_add(16).is_some_and(|outside| !stack_position(main_start, main_top, outside)), "outside main stack boundary");
+    write("CHECK stack_boundaries=top_allowed_bottom_outside_rejected opaque_linker_addresses=yes\r\n");
     unsafe {
         (*addr_of_mut!(A_CONTEXT)).words[0] = (a + STACK_BYTES) as u64;
         (*addr_of_mut!(A_CONTEXT)).words[12] = task_a as *const () as usize as u64;

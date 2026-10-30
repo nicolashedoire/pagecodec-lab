@@ -45,6 +45,8 @@ def main():
     serial = output.decode("ascii").replace("\r", "")
     if "PASS cooperative stack switching" not in serial:
         raise RuntimeError("guest reported failure: " + serial)
+    if "CHECK stack_boundaries=top_allowed_bottom_outside_rejected opaque_linker_addresses=yes" not in serial.splitlines():
+        raise RuntimeError("stack boundary checks missing: " + serial)
     if hashlib.sha256(Path(args.guest).read_bytes()).hexdigest() != guest_hash:
         raise RuntimeError("guest image changed during run")
     result = {"guest_sha256": guest_hash, "qemu_version": version,
