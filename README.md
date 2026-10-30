@@ -9,6 +9,8 @@ Experiments in exact data representations and native memory-management mechanism
 
 The prototypes operate on caller-owned memory. A separate REA/Ghidra investigation inspects the local ARM kernel image and matching public XNU sources. These experiments do not redesign DRAM, replace the macOS memory compressor, or establish general superiority to Apple.
 
+For the broader OS direction, see the [existing-project landscape and proposed system architecture](docs/SYSTEM_LANDSCAPE.md).
+
 ## New: adaptive compaction follow-up
 
 An adaptive rule selects segments with trailing holes first, but falls back to
