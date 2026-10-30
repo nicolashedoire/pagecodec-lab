@@ -21,8 +21,8 @@ must be enforced by the system; a visible third cursor alone does not establish
 remote access or isolation. Remote input and a third workspace are not yet
 implemented in the current two-pointer prototype.
 
-The target is an extensible number of participants, including the owner's
-example of **1,000 agents with 1,000 distinct pointers**. Each pointer needs a
+The target is an extensible number of participants; the owner's example of
+1,000 agents illustrates flexibility, not a fixed capacity requirement. Each pointer needs a
 stable actor/session identity, coordinates, target workspace, focus, permissions
 and lifecycle. Pointer creation and retirement, batching, event backpressure and
 rendering costs must be measured as the number of active actors grows. The UI
@@ -32,9 +32,9 @@ that every legacy application supports 1,000 separate simultaneous keyboard
 focuses, nor that 1,000 application instances fit into available memory.
 
 The present two-pointer demonstration is the first functional step; it does
-not establish that a thousand participants are supported or fast. A scalable
-actor registry, revocable permissions, multi-party conflict handling and an
-explicit VM workload are future implementation and measurement work.
+not establish a supported participant count or performance. A scalable actor
+registry, revocable permissions, multi-party conflict handling and realistic
+VM workloads are future implementation and measurement work.
 
 ```mermaid
 flowchart TB

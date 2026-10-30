@@ -30,6 +30,11 @@ jobs:
         run: |
           cargo build --release --locked
           python3 run_vm.py --qemu qemu-system-aarch64
+      - name: Build and check dual input router in QEMU
+        working-directory: experiments/dual_input
+        run: |
+          cargo build --release --locked --offline
+          python3 run_vm.py --qemu qemu-system-aarch64
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM
@@ -39,6 +44,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Test two-workspace merge
         working-directory: experiments/system_core
+        run: cargo test --locked --offline
+      - name: Test AI pointer adapter
+        working-directory: experiments/agent_pointer
         run: cargo test --locked --offline
 
   portable-codec:

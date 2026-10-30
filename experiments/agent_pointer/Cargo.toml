@@ -1,0 +1,8 @@
+[package]
+name = "agent-pointer-contract"
+version = "0.1.0"
+edition = "2021"
+description = "Typed contracts for an AI workspace pointer (no_std sketch)"
+license = "MIT"
+
+[dependencies]
