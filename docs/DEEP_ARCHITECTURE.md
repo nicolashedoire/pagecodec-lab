@@ -344,6 +344,27 @@ copy path. Selection itself consumes time and memory, so it should not require
 a model call for every access. Existing equivalent mechanisms must be researched
 before claiming novelty, and all three choices need end-to-end comparison.
 
+### Multiple intersecting flows
+
+A complementary sketch is a layered system with many concurrent flows rather
+than one compulsory route through every layer. Small, isolated services could
+act as meeting points when flows refer to the same authorized object or event.
+For example, an image decoder and a renderer could receive permitted references
+to the same image buffer, with an explicit ready/completion signal. A reference
+identifies an object; similar-looking data or a common filename is not enough
+to assume the objects are interchangeable or their owners consent to sharing.
+
+Each meeting point would declare the format and version, data ownership,
+permissions, lifetime, synchronization and failure behavior. A bounded queue
+and backpressure would prevent a slow consumer from accumulating unlimited
+work; cancellation and failure would release references safely. If sharing is
+not safe or available, the path uses an isolated copy. Some flows have no
+intersection and should not be forced through an extra broker. Services,
+message passing and shared buffers already exist, so the research question is
+whether a particular design of these intersections improves the complete
+workload after accounting for transitions, coordination, memory and isolation.
+This sketch has not been implemented or compared with macOS.
+
 Reducing an IPC boundary may save transitions while removing fault isolation;
 shared memory may save bytes copied while increasing synchronization or memory
 retention. A proposed path therefore needs both a resource-accounting model and
