@@ -1,0 +1,723 @@
+{
+  "guest_sha256": "f0b8206c57a94a43bd50880d182bf3ca531101329ac9dd2c969a57853404f13d",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "transport": "legacy",
+  "status": {
+    "accepted": [
+      1,
+      2,
+      3
+    ],
+    "applied": [
+      1,
+      2,
+      3
+    ],
+    "capacity": 2,
+    "consumed": [
+      1,
+      2,
+      3
+    ],
+    "finished": true,
+    "full_consumed": true,
+    "full_rejected": true,
+    "queue_len": 0,
+    "range_rejected": [
+      true,
+      true
+    ],
+    "source": "synthetic private EL0 pages, kernel-seeded",
+    "spoof_rejected": [
+      true,
+      true
+    ]
+  },
+  "snapshot": {
+    "assistant": {
+      "common": "seed",
+      "layout": "assistant",
+      "title": "base"
+    },
+    "base": {
+      "common": "seed",
+      "title": "base"
+    },
+    "human": {
+      "common": "seed",
+      "theme": "human-two",
+      "title": "base"
+    }
+  },
+  "qmp_input": [
+    {
+      "request": {
+        "execute": "input-send-event",
+        "arguments": {
+          "events": [
+            {
+              "type": "abs",
+              "data": {
+                "axis": "x",
+                "value": 8500
+              }
+            },
+            {
+              "type": "abs",
+              "data": {
+                "axis": "y",
+                "value": 24575
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "return": {}
+      }
+    },
+    {
+      "request": {
+        "execute": "input-send-event",
+        "arguments": {
+          "events": [
+            {
+              "type": "btn",
+              "data": {
+                "button": "left",
+                "down": true
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "return": {}
+      }
+    },
+    {
+      "request": {
+        "execute": "input-send-event",
+        "arguments": {
+          "events": [
+            {
+              "type": "btn",
+              "data": {
+                "button": "left",
+                "down": false
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "return": {}
+      }
+    }
+  ],
+  "sessions": [
+    [
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {
+              "name": "graph-snapshot-test",
+              "version": "0.1"
+            }
+          }
+        },
+        "response": {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "result": {
+            "capabilities": {
+              "tools": {}
+            },
+            "protocolVersion": "2025-11-25",
+            "serverInfo": {
+              "name": "dual-pointer-vm",
+              "version": "0.1.0"
+            }
+          }
+        }
+      },
+      {
+        "notification": {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/list",
+          "params": {}
+        },
+        "response": {
+          "id": 2,
+          "jsonrpc": "2.0",
+          "result": {
+            "tools": [
+              {
+                "description": "Move AI pointer within its right-hand QEMU workspace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 773,
+                      "minimum": 400,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 573,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_ai"
+              },
+              {
+                "description": "Read the two pointer coordinates in this guest only.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "pointer_state"
+              },
+              {
+                "description": "Activate the synthetic button under the AI pointer; no host click or authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "click_ai"
+              },
+              {
+                "description": "Read logical button focus and click counts in this guest.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "interaction_state"
+              },
+              {
+                "description": "Read the guest's verified identity-map status.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "mmu_status"
+              },
+              {
+                "description": "Read verified pre-graphical EL0 timer trace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "el0_status"
+              },
+              {
+                "description": "Move the visible pointer for a synthetic logical actor; no window or authenticated identity.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 799,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 599,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_remote"
+              },
+              {
+                "description": "Read the third synthetic actor's logical position.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "remote_state"
+              },
+              {
+                "description": "Run 1101 synthetic human moves in this VM; overwrites older bounded trace entries.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "exercise_human_moves"
+              },
+              {
+                "description": "Read the bounded FIFO and task completion status.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "ipc_status"
+              },
+              {
+                "description": "Read a field from a synthetic document copy.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "actor": {
+                      "enum": [
+                        "human",
+                        "assistant"
+                      ],
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Non-empty; at most 32 UTF-8 bytes.",
+                      "type": "string"
+                    },
+                    "space": {
+                      "enum": [
+                        "human-space",
+                        "assistant-space"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "actor",
+                    "space",
+                    "key"
+                  ],
+                  "type": "object"
+                },
+                "name": "document_view"
+              },
+              {
+                "description": "Merge synthetic copies and return fields, origins and conflicts.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_merge"
+              },
+              {
+                "description": "Read the synthetic base and both full copies.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_snapshot"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "method": "tools/call",
+          "params": {
+            "name": "mmu_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 3,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"address_spaces\":2,\"asids\":[1,2],\"caches\":false,\"enabled\":true,\"gic\":\"device-xn\",\"image\":\"normal-nc\",\"kernel_el0\":\"samples-denied\",\"mapping\":\"identity\",\"range_checks\":\"full\",\"user_code\":\"ro\",\"user_stack\":\"private-alias-rw\",\"virtio\":\"device-xn\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 4,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":1822,\"next\":1,\"task\":0},{\"count\":2553,\"next\":0,\"task\":1},{\"count\":4424,\"next\":1,\"task\":0},{\"count\":4609,\"next\":0,\"task\":1},{\"count\":6866,\"next\":1,\"task\":0},{\"count\":6850,\"next\":0,\"task\":1},{\"count\":9514,\"next\":1,\"task\":0},{\"count\":9256,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[15317,15217],\"slice_ticks\":10,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "method": "tools/call",
+          "params": {
+            "name": "ipc_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 5,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"accepted\":[1,2,3],\"applied\":[1,2,3],\"capacity\":2,\"consumed\":[1,2,3],\"finished\":true,\"full_consumed\":true,\"full_rejected\":true,\"queue_len\":0,\"range_rejected\":[true,true],\"source\":\"synthetic private EL0 pages, kernel-seeded\",\"spoof_rejected\":[true,true]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 6,
+          "method": "tools/call",
+          "params": {
+            "name": "document_snapshot",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 6,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 7,
+          "method": "tools/call",
+          "params": {
+            "name": "document_merge",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 7,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"conflicts\":[],\"fields\":[{\"key\":\"common\",\"origin\":\"base\",\"value\":\"seed\"},{\"key\":\"layout\",\"origin\":\"assistant\",\"value\":\"assistant\"},{\"key\":\"theme\",\"origin\":\"human\",\"value\":\"human-two\"},{\"key\":\"title\",\"origin\":\"base\",\"value\":\"base\"}],\"materializable\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 8,
+          "method": "tools/call",
+          "params": {
+            "name": "document_edit",
+            "arguments": {
+              "actor": "human",
+              "space": "human-space",
+              "key": "theme",
+              "value": "forged"
+            }
+          }
+        },
+        "response": {
+          "error": {
+            "code": -32602,
+            "message": "unknown tool"
+          },
+          "id": 8,
+          "jsonrpc": "2.0"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 9,
+          "method": "tools/call",
+          "params": {
+            "name": "document_load",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "error": {
+            "code": -32602,
+            "message": "unknown tool"
+          },
+          "id": 9,
+          "jsonrpc": "2.0"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 10,
+          "method": "tools/call",
+          "params": {
+            "name": "document_save",
+            "arguments": {
+              "mode": "commit"
+            }
+          }
+        },
+        "response": {
+          "error": {
+            "code": -32602,
+            "message": "unknown tool"
+          },
+          "id": 10,
+          "jsonrpc": "2.0"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 11,
+          "method": "tools/call",
+          "params": {
+            "name": "document_snapshot",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 11,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 12,
+          "method": "tools/call",
+          "params": {
+            "name": "pointer_state",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 12,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "human=114,444; ai=560,330",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 13,
+          "method": "tools/call",
+          "params": {
+            "name": "interaction_state",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 13,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"assistant\":{\"clicks\":0,\"focus\":\"none\"},\"human\":{\"clicks\":1,\"focus\":\"action\",\"pressed\":true}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 14,
+          "method": "tools/call",
+          "params": {
+            "name": "interaction_state",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 14,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"assistant\":{\"clicks\":0,\"focus\":\"none\"},\"human\":{\"clicks\":1,\"focus\":\"action\",\"pressed\":false}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 15,
+          "method": "tools/call",
+          "params": {
+            "name": "move_ai",
+            "arguments": {
+              "x": 660,
+              "y": 444
+            }
+          }
+        },
+        "response": {
+          "id": 15,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "moved AI pointer to 660,444",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 16,
+          "method": "tools/call",
+          "params": {
+            "name": "click_ai",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 16,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"clicks\":1,\"focus\":\"select\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 17,
+          "method": "tools/call",
+          "params": {
+            "name": "document_snapshot",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 17,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 18,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 18,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":1822,\"next\":1,\"task\":0},{\"count\":2553,\"next\":0,\"task\":1},{\"count\":4424,\"next\":1,\"task\":0},{\"count\":4609,\"next\":0,\"task\":1},{\"count\":6866,\"next\":1,\"task\":0},{\"count\":6850,\"next\":0,\"task\":1},{\"count\":9514,\"next\":1,\"task\":0},{\"count\":9256,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[36442,35548],\"slice_ticks\":44,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      }
+    ]
+  ]
+}

@@ -691,6 +691,25 @@ jobs:
             ${{ runner.temp }}/local-model-loader-evidence/
             ${{ runner.temp }}/local-model-loader-legacy-evidence/
           if-no-files-found: ignore
+      - name: Build and check workspace FIFO in QEMU
+        working-directory: experiments/workspace_queue_vm
+        run: |
+          cargo build --release --locked
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/workspace-queue-vm-demo \
+            --output-dir "$RUNNER_TEMP/workspace-queue-evidence" --transport modern
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/workspace-queue-vm-demo \
+            --output-dir "$RUNNER_TEMP/workspace-queue-legacy-evidence" --transport legacy
+      - name: Preserve workspace FIFO VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: workspace-queue-vm-evidence
+          path: |
+            ${{ runner.temp }}/workspace-queue-evidence/
+            ${{ runner.temp }}/workspace-queue-legacy-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM
