@@ -1,0 +1,7 @@
+{
+  "guest_sha256": "76443bd4cc6fb6b6d4fda50b4ef9041d7d8cdecd834699c290552e6043bba36d",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "serial": "CHECK empty_ready=idle_sentinel\nBOOT qemu-gicv2 timer=virtual-ppi27 tasks=2 idle=wfi yields=0\nIRQ tick=1 task=0 next=1 action=1 states=515 ready=0 count=40551599\nIRQ tick=2 task=1 next=2 action=2 states=771 ready=0 count=39923222\nIRQ tick=3 task=2 next=0 action=3 states=770 ready=0 count=0\nIRQ tick=4 task=0 next=1 action=4 states=513 ready=1 count=71651455\nIRQ tick=5 task=1 next=0 action=0 states=258 ready=1 count=70630551\nIRQ tick=6 task=0 next=1 action=0 states=513 ready=1 count=105314400\nIRQ tick=7 task=1 next=0 action=0 states=258 ready=1 count=109529999\nIRQ tick=8 task=0 next=finish action=5 states=258 ready=1 count=132352385\nCHECK blocked_a_b=observed idle_context=observed wake_a_b=observed states_and_queue=verified\nCHECK task_and_idle_frames=verified timer=disabled gic=inactive terminal_snapshot=residual\nPASS preemptive block wake idle scenario\n",
+  "input": "eight guest timer IRQs, two CPU loops and scripted synthetic block/wake events",
+  "limitations": "single-CPU QEMU integer-only test; synthetic event script, no generic scheduler, process isolation, FP/SIMD or native Apple hardware"
+}

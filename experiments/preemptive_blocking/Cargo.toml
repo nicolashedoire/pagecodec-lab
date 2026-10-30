@@ -1,0 +1,11 @@
+[package]
+name = "preemptive-blocking-demo"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[profile.release]
+panic = "abort"
+opt-level = 2
+codegen-units = 1
+lto = true
