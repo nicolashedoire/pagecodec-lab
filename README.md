@@ -9,7 +9,26 @@ Experiments in exact data representations and native memory-management mechanism
 
 The prototypes operate on caller-owned memory. A separate REA/Ghidra investigation inspects the local ARM kernel image and matching public XNU sources. These experiments do not redesign DRAM, replace the macOS memory compressor, or establish general superiority to Apple.
 
-## New: a native memory-compaction experiment
+## New: adaptive compaction follow-up
+
+An adaptive rule selects segments with trailing holes first, but falls back to
+FIFO when the entire reclaimable pool is required. In 1,456 fresh processes,
+the prespecified exploratory criterion passed for all three real inputs: on
+seeded mixed layouts, median paired phase times were 13.72–35.02% lower than
+FIFO at partial quotas, without a full-quota regression exceeding 10%.
+The rule still lost in other cases: on the dictionary with random holes and a
+50% quota it was 18.54% slower than FIFO. These are five-round medians in a
+user-space arena with synthetic deletions, not an improvement demonstrated in
+the macOS kernel. Repeated small inputs are not independent workloads.
+
+![Adaptive compaction against FIFO across all scenarios](assets/compaction-adaptive-results.png)
+
+[Methods and limitations](docs/ADAPTIVE_COMPACTION.md) ·
+[All samples and summary](results/compaction-adaptive-2026-10-30/) ·
+[Comparison with efficiency sorting](assets/compaction-adaptive-versus-efficiency.png) ·
+[Apple reverse-engineering tools](docs/APPLE_REVERSE_TOOLS.md).
+
+## Earlier: a native memory-compaction experiment
 
 **Choosing which segments to compact can avoid real copies and release actual
 pages—but a more elaborate ranking can also make the operation slower.** After
@@ -29,8 +48,8 @@ independent data.
 **Negative result:** on Covertype with random holes and a full reclaim quota,
 the same rule takes **57.01% more time**, losing **9/9**, despite moving and
 releasing the same number of bytes as FIFO. These are median paired changes,
-not an overall Mac speedup. No learned model is involved, and a cheaper tail-first
-reference remains to be tested.
+not an overall Mac speedup. No learned model is involved; the follow-up above
+tests cheaper tail-first and adaptive references.
 
 ![Native compaction: benefits, overhead and regressions](assets/compaction-results.png)
 
@@ -38,6 +57,10 @@ reference remains to be tested.
 [REA/Ghidra evidence and Apple safeguards](docs/NATIVE_MEMORY.md) ·
 [1,120 process measurements](results/compaction-2026-10-30/process-samples.csv) ·
 [Observed resident-memory recovery](assets/compaction-costs.png).
+
+The next system-level investigation examines the Mac's active Edge scheduler,
+its existing statistical estimates and a source-grounded migration decision.
+See [scheduler research and limitations](docs/SCHEDULER_RESEARCH.md).
 
 ## Earlier: a complete application, including construction and peak RSS
 

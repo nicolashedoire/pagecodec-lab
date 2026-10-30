@@ -1,0 +1,72 @@
+{
+  "recorded_utc": "2026-10-30T18:16:25.398880+00:00",
+  "pilot": false,
+  "sources_sha256": {
+    "experiments/compaction_adaptive/compaction_bench.cpp": "f1cba7aaab548d2db052071762cb11bedaa94752bef8586738d8810fb76aff7b",
+    "tests/test_compaction_adaptive.py": "751975dc723145b5722e156d57838632f2fd63fabf9734bb27b4f54a32f0c83b",
+    "scripts/prepare_compaction.py": "7966e480f73de3bd3d916bda89d607a71d0201ee6dddb74bae66bf95adf7d6e3",
+    "scripts/prepare_compaction_adaptive.py": "981c75d50c6b3961c13df36ed6056692fbcb01465d32919bb441ebb413836779",
+    "scripts/run_compaction_adaptive.py": "ca365fc2d316c9b23346975b72bf60d106c1f11afb092760730ae061981aed38",
+    "manifests/compaction-adaptive-v1.json": "075500a09198a333bf8887a85fe4bc545179bb5cda12cb71720033baf55facfb"
+  },
+  "binary_sha256": "e9340d95ec0e1d9bd78c60d6a49fbc4c7ecadfdbf39e459b0e66a835775aa096",
+  "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin24.1.0\nThread model: posix",
+  "platform": "Darwin 24.1.0 arm64",
+  "protocol": {
+    "policies": [
+      "fifo",
+      "benefit",
+      "efficiency",
+      "tail_first",
+      "adaptive"
+    ],
+    "layouts": [
+      "front",
+      "tail",
+      "random",
+      "mixed",
+      "scrambled",
+      "rare_tail"
+    ],
+    "quotas_by_layout": {
+      "front": [
+        0.5
+      ],
+      "tail": [
+        0.5
+      ],
+      "random": [
+        0.25,
+        0.5,
+        1.0
+      ],
+      "mixed": [
+        0.25,
+        0.5,
+        1.0
+      ],
+      "scrambled": [
+        0.25,
+        0.5,
+        1.0
+      ],
+      "rare_tail": [
+        0.25,
+        0.5,
+        1.0
+      ]
+    },
+    "repetitions": 5,
+    "order_seed": 20261031,
+    "layout_seed_base": 910000,
+    "segment_bytes": 65536,
+    "cache_scrub_mib": 64,
+    "control_repetitions": 1,
+    "success_rule": "Exploratory criterion: adaptive median paired phase time >=10% below FIFO in scrambled 25% and 50% on at least 2 of 3 real sources, and no real-source median regression >10% at scrambled 100%.",
+    "primary_timing": "Native selection + data movement + handles + unmapping; setup and integrity separate."
+  },
+  "machine": "hw.memsize: 25769803776\nhw.model: Mac16,8\nmachdep.cpu.brand_string: Apple M4 Pro",
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t15.1.1\nBuildVersion:\t\t24B2091",
+  "vm_before": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                               93199.\nPages active:                            331990.\nPages inactive:                          322869.\nPages speculative:                         9457.\nPages throttled:                              0.\nPages wired down:                        231800.\nPages purgeable:                          13733.\n\"Translation faults\":                2931432836.\nPages copy-on-write:                  124098896.\nPages zero filled:                    961171954.\nPages reactivated:                    891848707.\nPages purged:                          68715537.\nFile-backed pages:                       226874.\nAnonymous pages:                         437442.\nPages stored in compressor:             1636772.\nPages occupied by compressor:            542077.\nDecompressions:                       839098960.\nCompressions:                         921909878.\nPageins:                               48377689.\nPageouts:                                936244.\nSwapins:                               15314916.\nSwapouts:                              18533563.",
+  "swap_before": "vm.swapusage: total = 6144.00M  used = 4783.25M  free = 1360.75M  (encrypted)"
+}

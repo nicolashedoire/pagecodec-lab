@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "all_results_sha256": "335d0eb0199e83f56297cd5a02b3a9afc7becbf461382d58e0f4d23dfa69077a",
+  "audit_script_sha256": "a1152f7c245f129cdde9a990dbf416c176895ba45067001141bd0342891bb6a5",
+  "post_run_source_packed_and_upstream_sha256_match": true,
+  "all_packed_pages_decompress_to_original_source_bytes": true,
+  "all_engine_source_fingerprints_match_independent_oracle": true,
+  "noncryptographic_fingerprint_is_not_a_cryptographic_integrity_proof": true,
+  "engine_fnv1a64_by_case": {
+    "household_row": "1d8c892db2208022",
+    "bike": "cd7acbe63e06e7f0",
+    "cmu_pronunciations": "0b6431e483985949",
+    "random_control": "1d9f2b59b8ab51f5"
+  },
+  "sample_counts_by_case": {
+    "household_row": 364,
+    "bike": 364,
+    "cmu_pronunciations": 364,
+    "random_control": 364
+  }
+}

@@ -25,6 +25,13 @@ jobs:
         run: make test-end-to-end sanitize-end-to-end CXX=clang++
       - name: Check native minor compaction
         run: make test-compaction sanitize-compaction CXX=clang++
+      - name: Check adaptive compaction
+        run: |
+          mkdir -p build
+          clang++ -O3 -std=c++17 -Wall -Wextra -Werror experiments/compaction_adaptive/compaction_bench.cpp -o build/adaptive-compaction
+          python3 tests/test_compaction_adaptive.py --binary "$PWD/build/adaptive-compaction"
+          clang++ -O1 -g -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer experiments/compaction_adaptive/compaction_bench.cpp -o build/adaptive-compaction-sanitize
+          python3 tests/test_compaction_adaptive.py --binary "$PWD/build/adaptive-compaction-sanitize"
 
   macos-comparator:
     name: Apple codec comparator / macOS
@@ -45,5 +52,12 @@ jobs:
         run: make test-end-to-end sanitize-end-to-end CXX=clang++
       - name: Check native minor compaction
         run: make test-compaction sanitize-compaction CXX=clang++
+      - name: Check adaptive compaction
+        run: |
+          mkdir -p build
+          clang++ -O3 -std=c++17 -Wall -Wextra -Werror experiments/compaction_adaptive/compaction_bench.cpp -o build/adaptive-compaction
+          python3 tests/test_compaction_adaptive.py --binary "$PWD/build/adaptive-compaction"
+          clang++ -O1 -g -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer experiments/compaction_adaptive/compaction_bench.cpp -o build/adaptive-compaction-sanitize
+          python3 tests/test_compaction_adaptive.py --binary "$PWD/build/adaptive-compaction-sanitize"
       # Shared CI runners validate correctness only. Their timings are not
       # used as benchmark results or evidence of performance superiority.

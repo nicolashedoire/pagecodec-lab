@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "experiment": "adaptive user-space minor compaction",
+  "purpose": "Compare zero-copy-first and a budget-aware rule with the prior policies; no kernel modification.",
+  "data_caveat": "Repeated corpora are not independent data; synthetic deletion layouts are not production traces.",
+  "codec": "zlib level 1",
+  "zlib_version": "1.2.12",
+  "pool_target_mib": 48,
+  "protocol": {
+    "policies": [
+      "fifo",
+      "benefit",
+      "efficiency",
+      "tail_first",
+      "adaptive"
+    ],
+    "layouts": [
+      "front",
+      "tail",
+      "random",
+      "mixed",
+      "scrambled",
+      "rare_tail"
+    ],
+    "quotas_by_layout": {
+      "front": [
+        0.5
+      ],
+      "tail": [
+        0.5
+      ],
+      "random": [
+        0.25,
+        0.5,
+        1.0
+      ],
+      "mixed": [
+        0.25,
+        0.5,
+        1.0
+      ],
+      "scrambled": [
+        0.25,
+        0.5,
+        1.0
+      ],
+      "rare_tail": [
+        0.25,
+        0.5,
+        1.0
+      ]
+    },
+    "repetitions": 5,
+    "order_seed": 20261031,
+    "layout_seed_base": 910000,
+    "segment_bytes": 65536,
+    "cache_scrub_mib": 64,
+    "control_repetitions": 1,
+    "success_rule": "Exploratory criterion: adaptive median paired phase time >=10% below FIFO in scrambled 25% and 50% on at least 2 of 3 real sources, and no real-source median regression >10% at scrambled 100%.",
+    "primary_timing": "Native selection + data movement + handles + unmapping; setup and integrity separate."
+  },
+  "cases": [
+    {
+      "name": "household_row",
+      "kind": "real household measurements; same source as prior column layout",
+      "source": {
+        "path": "data/household/household-row-i32.bin",
+        "bytes": 66408288,
+        "sha256": "46d42e3a182b035c397b786974e2c4e75e979fdc5f4f1e631f5a7e668dab75f7"
+      },
+      "upstream_manifest": {
+        "path": "manifests/household.json",
+        "sha256": "c7b76443fdad103757557df27da65deb7ab18e0cb5e52143f15f04b0faec6134"
+      },
+      "packed": {
+        "path": "data/compaction-adaptive/household_row.pcmp",
+        "bytes": 20142161,
+        "sha256": "bb76be77a4fa5669c8aea8c2f7a94998005790177a3f4608c2b61fa6fb13eec3"
+      },
+      "records": 4054,
+      "compressed_payload_bytes": 20109713,
+      "copies": 3,
+      "replicated_payload_bytes": 60329139
+    },
+    {
+      "name": "bike",
+      "kind": "real bike-sharing records",
+      "source": {
+        "path": "data/end-to-end/bike.csv",
+        "bytes": 1156736,
+        "sha256": "e03de4ee4ef4dc376ac6e04bf829673c6269e8eba5c60fa121640fa2f829504f"
+      },
+      "upstream_manifest": {
+        "path": "manifests/end-to-end-v1.json",
+        "sha256": "c35de9244f94ab001a95684e779cf99e9bb5a41e1101666093fa1fff351cc199"
+      },
+      "packed": {
+        "path": "data/compaction-adaptive/bike.pcmp",
+        "bytes": 344614,
+        "sha256": "88dba514137fa8c1acb7bdd3c3004c53a8478cf9cf98c9a25b5c5c672a41ade4"
+      },
+      "records": 71,
+      "compressed_payload_bytes": 344030,
+      "copies": 147,
+      "replicated_payload_bytes": 50572410
+    },
+    {
+      "name": "cmu_pronunciations",
+      "kind": "real pronunciation dictionary",
+      "source": {
+        "path": "data/operations/cmu-pronunciations.txt",
+        "bytes": 2438406,
+        "sha256": "c3ee4e9f3b956e7fe701901e01f313f4380873fbff3f7aa0e79f7a1b24c399a5"
+      },
+      "upstream_manifest": {
+        "path": "manifests/operations-v1.json",
+        "sha256": "430dbd5a5a02ecc289e723812a87d33918fa12b413a910fd26cccb6949b69ece"
+      },
+      "packed": {
+        "path": "data/compaction-adaptive/cmu_pronunciations.pcmp",
+        "bytes": 662050,
+        "sha256": "f33d4a4eb7ce966b75afd750a11d54ecc2ca23a4551652d34804da59689c17f9"
+      },
+      "records": 149,
+      "compressed_payload_bytes": 660842,
+      "copies": 77,
+      "replicated_payload_bytes": 50884834
+    },
+    {
+      "name": "random_control",
+      "kind": "previous synthetic incompressible control",
+      "source": {
+        "path": "data/initial/random.bin",
+        "bytes": 4194304,
+        "sha256": "36793342fab8cee6d5c4566eb4d4a609f37e0587d61de4bf45d768c513e3d62f"
+      },
+      "upstream_manifest": {
+        "path": "manifests/initial-v2.json",
+        "sha256": "1da038688b4e686c367aebedc2e2d5719685f61d40059b88b6ae4e9eeba034a6"
+      },
+      "packed": {
+        "path": "data/compaction-adaptive/random_control.pcmp",
+        "bytes": 4199184,
+        "sha256": "77defc4578cc475ef7f2244cbe689f15637e09c27a22d92ba00f14a8f799a159"
+      },
+      "records": 256,
+      "compressed_payload_bytes": 4197120,
+      "copies": 12,
+      "replicated_payload_bytes": 50365440
+    }
+  ]
+}
