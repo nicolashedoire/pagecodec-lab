@@ -10,6 +10,8 @@ Two further QEMU guests make narrower integration steps. [`graph_mmu`](../experi
 
 The separate [`address_spaces`](../experiments/address_spaces/README.md) guest constructs two TTBR0 roots with ASIDs 1 and 2. Two EL0 loops access the same virtual address through distinct physical pages, write and check separate sentinels, and alternate via timer IRQs; the [QEMU trace](../experiments/address_spaces/evidence/address-spaces-evidence.json) records that fixed scenario. Selected forbidden kernel and physical-identity accesses are checked by AT translation queries, not real EL0 faults. Each switch performs a full local TLB invalidation, so the test does not prove retained translations, ASID reuse or scalable shootdown. It does not establish general process or DMA isolation and is not integrated with `system_vm`.
 
+The separate [`process_isolation`](../experiments/process_isolation/README.md) guest extends that scenario with two **real EL0 read faults**: each task attempts to read the other page through its privileged physical-identity mapping. The handler checks the fault syndrome, address, instruction, active root and actor before skipping that exact load, and the tasks continue to exercise their own private aliases. Its [QEMU evidence](../experiments/process_isolation/evidence/process-isolation-evidence.json) covers these particular reads and subsequent checks. No forbidden write is attempted, and neither general process isolation nor DMA isolation follows from this fixture. It is not integrated with `system_vm`.
+
 ## Where the prototypes meet
 
 | Concern | Current evidence | Work needed for a common guest |

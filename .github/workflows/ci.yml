@@ -494,6 +494,20 @@ jobs:
           name: address-spaces-vm-evidence
           path: ${{ runner.temp }}/address-spaces-evidence/
           if-no-files-found: ignore
+      - name: Build and check controlled process isolation in QEMU
+        working-directory: experiments/process_isolation
+        run: |
+          cargo build --release --locked --offline
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/process-isolation-demo \
+            --output-dir "$RUNNER_TEMP/process-isolation-evidence"
+      - name: Preserve process isolation VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: process-isolation-vm-evidence
+          path: ${{ runner.temp }}/process-isolation-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM
