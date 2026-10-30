@@ -206,6 +206,34 @@ jobs:
           name: interrupt-core-vm-evidence
           path: ${{ runner.temp }}/interrupt-core-evidence/
           if-no-files-found: ignore
+      - name: Build and check virtual ARM timer in QEMU
+        working-directory: experiments/arm_timer
+        run: |
+          cargo build --release --locked --offline
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/arm-timer-demo \
+            --output-dir "$RUNNER_TEMP/arm-timer-evidence"
+      - name: Preserve timer VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: arm-timer-vm-evidence
+          path: ${{ runner.temp }}/arm-timer-evidence/
+          if-no-files-found: ignore
+      - name: Build and check cooperative context switching in QEMU
+        working-directory: experiments/cooperative_tasks
+        run: |
+          cargo build --release --locked --offline
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/cooperative-tasks-demo \
+            --output-dir "$RUNNER_TEMP/cooperative-tasks-evidence"
+      - name: Preserve cooperative tasks VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cooperative-tasks-vm-evidence
+          path: ${{ runner.temp }}/cooperative-tasks-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM

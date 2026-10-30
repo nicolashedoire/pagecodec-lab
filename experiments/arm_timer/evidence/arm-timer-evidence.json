@@ -1,0 +1,7 @@
+{
+  "guest_sha256": "d03175d75a6ee0e8feefbb1e7bdb79a01d038c3393c1f586bb4aa896af3f3478",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "serial": "BOOT el=1 gic=v2 virtual_timer_ppi=27 vector=el1-spx stack_alignment=16\nIRQ source=virtual-timer intid=27 count=1 ack=iar source=disabled eoi=written active=no\nRETURN pc=controlled-probe-resume x0-x30=preserved sp=preserved nzcv=preserved\nPASS controlled virtual timer IRQ\n",
+  "input": "one guest ARM virtual timer interrupt via QEMU GICv2",
+  "limitations": "controlled single-CPU IRQ probe; no preemption, scheduler or native Apple hardware"
+}
