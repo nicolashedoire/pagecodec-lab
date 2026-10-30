@@ -395,6 +395,39 @@ jobs:
             ${{ runner.temp }}/graph-interaction-evidence/
             ${{ runner.temp }}/graph-interaction-legacy-evidence/
           if-no-files-found: ignore
+      - name: Build and check integrated kernel in QEMU
+        working-directory: experiments/kernel_integrated
+        run: |
+          cargo build --release --locked --offline
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/kernel-integrated-demo \
+            --output-dir "$RUNNER_TEMP/kernel-integrated-evidence"
+      - name: Preserve integrated kernel VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: kernel-integrated-vm-evidence
+          path: ${{ runner.temp }}/kernel-integrated-evidence/
+          if-no-files-found: ignore
+      - name: Build and check unified graphical guest in QEMU
+        working-directory: experiments/graph_unified
+        run: |
+          cargo build --release --locked
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/graph-unified-demo \
+            --output-dir "$RUNNER_TEMP/graph-unified-evidence"
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/graph-unified-demo \
+            --output-dir "$RUNNER_TEMP/graph-unified-legacy-evidence" --transport legacy
+      - name: Preserve unified graphical VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: graph-unified-vm-evidence
+          path: |
+            ${{ runner.temp }}/graph-unified-evidence/
+            ${{ runner.temp }}/graph-unified-legacy-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM

@@ -34,6 +34,8 @@ The [dynamic multi-actor pointer router](experiments/dynamic_input/README.md) dr
 
 The [interactive graphics prototype](experiments/graph_interaction/README.md) adds synthetic clickable controls and independent logical focus. The [EL0 guest experiment](experiments/user_mode/README.md) tests a controlled user-mode call and a denied kernel-page access; it does not establish complete process isolation. See the [user-mode research](docs/USER_MODE_RESEARCH.md) for the implementation and remaining work.
 
+The [unified graphical guest](experiments/graph_unified/README.md) combines interactive controls and synthetic two-slot snapshots. A separate [integrated kernel guest](experiments/kernel_integrated/README.md) exercises MMU, EL0, SVC and an EL1 timer in one VM; the graphics DMA HAL has not yet been integrated with that MMU configuration. See the [kernel integration research](docs/KERNEL_INTEGRATION_RESEARCH.md).
+
 ![Three experimental pointers rendered by the Rust guest in QEMU](assets/dual-pointer-vm.png)
 
 ## New: adaptive compaction follow-up
