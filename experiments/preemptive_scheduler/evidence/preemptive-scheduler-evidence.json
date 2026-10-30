@@ -1,0 +1,7 @@
+{
+  "guest_sha256": "ee8031c917774c08825525d69cf922877d401015446939a51068cfabcdf14bab",
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "serial": "CHECK empty_ready=none idle=not-implemented\nBOOT qemu-gicv2 timer=virtual-ppi27 tasks=2 scheduler=ready-ring yields=0\nIRQ tick=1 task=0 count=38546740 next=1 pc=task-loop\nIRQ tick=2 task=1 count=37217358 next=0 pc=task-loop\nIRQ tick=3 task=0 count=67363112 next=1 pc=task-loop\nIRQ tick=4 task=1 count=76941032 next=0 pc=task-loop\nIRQ tick=5 task=0 count=107260572 next=1 pc=task-loop\nIRQ tick=6 task=1 count=116424324 next=0 pc=task-loop\nIRQ tick=7 task=0 count=142232827 next=1 pc=task-loop\nIRQ tick=8 task=1 count=142692108 next=finish pc=task-loop\nCHECK terminal_snapshot=consistent ready=0 previously_running=1\nCHECK tasks_progress=both gpr=x0-x30_except_counter spsr=expected stacks=distinct timer=disabled gic=inactive\nPASS timer driven ready scheduling\n",
+  "input": "eight guest virtual-timer IRQs selecting two assembly loops from a fixed ready ring",
+  "limitations": "single-CPU QEMU integer-only test; no blocking, idle task, processes, FP/SIMD or native Apple hardware"
+}

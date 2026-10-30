@@ -296,6 +296,39 @@ jobs:
           name: preemptive-demo-vm-evidence
           path: ${{ runner.temp }}/preemptive-demo-evidence/
           if-no-files-found: ignore
+      - name: Build and check preemptive scheduler prototype in QEMU
+        working-directory: experiments/preemptive_scheduler
+        run: |
+          cargo build --release --locked --offline
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/preemptive-scheduler-demo \
+            --output-dir "$RUNNER_TEMP/preemptive-scheduler-evidence"
+      - name: Preserve preemptive scheduler VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: preemptive-scheduler-vm-evidence
+          path: ${{ runner.temp }}/preemptive-scheduler-evidence/
+          if-no-files-found: ignore
+      - name: Build and check graphical persistence in QEMU
+        working-directory: experiments/graph_persistence
+        run: |
+          cargo build --release --locked
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/graph-persistence-demo \
+            --output-dir "$RUNNER_TEMP/graph-persistence-evidence"
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/graph-persistence-demo \
+            --output-dir "$RUNNER_TEMP/graph-persistence-legacy-evidence" --transport legacy
+      - name: Preserve graphical persistence VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: graph-persistence-vm-evidence
+          path: |
+            ${{ runner.temp }}/graph-persistence-evidence/
+            ${{ runner.temp }}/graph-persistence-legacy-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM
