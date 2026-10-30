@@ -16,6 +16,10 @@ The proposed user interface includes a [floating voice assistant](docs/VOICE_ASS
 
 Development of the proposed system now uses [Rust and a VM-first test plan](docs/RUST_SYSTEM.md). The first [workspace core](experiments/system_core/README.md) is user-space code; it is not a bootable operating system.
 
+The [dual-pointer VM experiment](experiments/dual_pointer_display/README.md) boots a minimal Rust guest, draws its own screen, receives virtual tablet input and exposes a small MCP server for moving the second pointer. The panels are graphical mockups, not isolated workspaces or applications. A [reproducible QEMU run](experiments/dual_pointer_display/README.md#repeat-the-end-to-end-demonstration) records synthetic input and the MCP exchange. [Native Apple Silicon boot research](docs/NATIVE_BOOT_RESEARCH.md) documents the work still needed before any physical installation.
+
+![Two experimental pointers rendered by the Rust guest in QEMU](assets/dual-pointer-vm.png)
+
 ## New: adaptive compaction follow-up
 
 An adaptive rule selects segments with trailing holes first, but falls back to

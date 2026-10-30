@@ -1,0 +1,10 @@
+[package]
+name = "vm-mcp-client"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT"
+description = "Local Rust client for the experimental VM MCP pointer service"
+
+[dependencies]
+serde_json = "=1.0.154"

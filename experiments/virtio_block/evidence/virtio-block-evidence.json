@@ -1,0 +1,22 @@
+{
+  "guest_sha256": "e3e4cf80681a8d0ab8e0c0c4f7c8a9371afd235883e440a4db988edffdaffac0",
+  "fixture": "freshly created disposable synthetic 1 MiB images",
+  "trials": [
+    {
+      "readonly": false,
+      "serial": "DEVICE capacity_sectors=2048\nREAD sectors=4..5 initial=zeros\nWRITE sectors=4..5 bytes=1024 pattern=(offset*37+11)%256\nFLUSH ok\nREADBACK bytes=1024 exact=yes neighboring_sectors=zero\nPASS synthetic virtio block read write flush\n",
+      "disk_sha256": "2db964a6ed3606569131a46d7cf6e6d302ce41f8c6cbe588a3fa390a3180627a",
+      "disk_bytes": 1048576,
+      "expected_contents_verified": true
+    },
+    {
+      "readonly": true,
+      "serial": "DEVICE capacity_sectors=2048\nREAD sectors=4..5 initial=zeros\nFAIL write\n",
+      "disk_sha256": "30e14955ebf1352266dc2ff8067e68104607e750abb9d3b36582b8af909fcb58",
+      "disk_bytes": 1048576,
+      "expected_contents_verified": true
+    }
+  ],
+  "raw_host_block_devices_attached": false,
+  "host_storage": "temporary disposable image files on the host filesystem"
+}

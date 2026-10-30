@@ -1,0 +1,217 @@
+{
+  "scenario": "polished QEMU guest pointer MCP exchange",
+  "recorded_utc": "2026-10-30T19:25:17.688310+00:00",
+  "human_input_source": "Synthetic QMP absolute pointer event reported by the VM operator; observed guest coordinates match. No physical pointer identity is established.",
+  "qmp_input": {
+    "execute": "input-send-event",
+    "arguments": {
+      "events": [
+        {
+          "type": "abs",
+          "data": {
+            "axis": "x",
+            "value": 18000
+          }
+        },
+        {
+          "type": "abs",
+          "data": {
+            "axis": "y",
+            "value": 21000
+          }
+        }
+      ]
+    }
+  },
+  "qemu_version": "QEMU emulator version 11.1.3",
+  "guest": {
+    "machine": "virt",
+    "cpu": "cortex-a57",
+    "acceleration": "tcg",
+    "network": false,
+    "disk": false
+  },
+  "guest_image_sha256_after_start": "172db5677e532c175a25bcfa20378bfcf74090afec39d6c2d57c1a1e8c5f92a3",
+  "guest_hash_note": "Image hash measured after VM start; the VM operator reports that it was not rebuilt since launch.",
+  "client_executable_sha256": "7cd0810321bbd4c42c099707ab70519ef748a2ed905df1a81e28ca2d06947e8c",
+  "client_source_sha256": "473f85033ffb55e557d73264e363d21c1f50dc244cfe9a369878cd25fec751d3",
+  "client_lock_sha256": "8b5d7f41d812872f609a4c2d8a33e24611b5065a822480eed99d77e7c3ad4848",
+  "result": {
+    "after": "human=223,390; ai=650,260",
+    "before": "human=223,390; ai=620,320",
+    "ok": true,
+    "protocol": "2025-11-25",
+    "scope": "guest demo only; no authenticated capability or host UI control",
+    "trace": [
+      {
+        "request": {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "method": "initialize",
+          "params": {
+            "capabilities": {},
+            "clientInfo": {
+              "name": "vm-mcp-client",
+              "version": "0.1.0"
+            },
+            "protocolVersion": "2025-11-25"
+          }
+        },
+        "response": {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "result": {
+            "capabilities": {
+              "tools": {}
+            },
+            "protocolVersion": "2025-11-25",
+            "serverInfo": {
+              "name": "dual-pointer-vm",
+              "version": "0.1.0"
+            }
+          }
+        }
+      },
+      {
+        "notification": {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        }
+      },
+      {
+        "request": {
+          "id": 2,
+          "jsonrpc": "2.0",
+          "method": "tools/list",
+          "params": {}
+        },
+        "response": {
+          "id": 2,
+          "jsonrpc": "2.0",
+          "result": {
+            "tools": [
+              {
+                "description": "Move AI pointer within its right-hand QEMU workspace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 773,
+                      "minimum": 400,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 573,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_ai"
+              },
+              {
+                "description": "Read the two pointer coordinates in this guest only.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "pointer_state"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "id": 3,
+          "jsonrpc": "2.0",
+          "method": "tools/call",
+          "params": {
+            "arguments": {},
+            "name": "pointer_state"
+          }
+        },
+        "response": {
+          "id": 3,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "human=223,390; ai=620,320",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "id": 4,
+          "jsonrpc": "2.0",
+          "method": "tools/call",
+          "params": {
+            "arguments": {
+              "x": 650,
+              "y": 260
+            },
+            "name": "move_ai"
+          }
+        },
+        "response": {
+          "id": 4,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "moved AI pointer to 650,260",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "id": 5,
+          "jsonrpc": "2.0",
+          "method": "tools/call",
+          "params": {
+            "arguments": {},
+            "name": "pointer_state"
+          }
+        },
+        "response": {
+          "id": 5,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "human=223,390; ai=650,260",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      }
+    ],
+    "transport": "local Unix socket to QEMU serial"
+  },
+  "limitations": [
+    "Experimental guest and MCP subset; not a production security boundary.",
+    "The guest pointer state and graphics are a virtual demo, not separate physical Mac cursors.",
+    "A QMP acknowledgement was not independently retained by this client."
+  ],
+  "qmp_ack_reported": {
+    "return": {}
+  },
+  "qmp_ack_note": "The VM operator reported this response; a separate QMP transcript and injection timestamp were not retained."
+}

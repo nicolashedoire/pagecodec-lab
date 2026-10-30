@@ -1,0 +1,324 @@
+{
+  "guest_sha256": "172db5677e532c175a25bcfa20378bfcf74090afec39d6c2d57c1a1e8c5f92a3",
+  "client_sha256": "7cd0810321bbd4c42c099707ab70519ef748a2ed905df1a81e28ca2d06947e8c",
+  "qemu_version": {
+    "qemu": {
+      "micro": 3,
+      "minor": 1,
+      "major": 11
+    },
+    "package": ""
+  },
+  "human_input": "synthetic QMP virtio-tablet event",
+  "qmp_event": {
+    "execute": "input-send-event",
+    "arguments": {
+      "events": [
+        {
+          "type": "abs",
+          "data": {
+            "axis": "x",
+            "value": 18000
+          }
+        },
+        {
+          "type": "abs",
+          "data": {
+            "axis": "y",
+            "value": 21000
+          }
+        }
+      ]
+    }
+  },
+  "qmp_response": {
+    "return": {}
+  },
+  "probe": {
+    "initialization": {
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2025-11-25",
+          "capabilities": {},
+          "clientInfo": {
+            "name": "vm-demo-probe",
+            "version": "0.1"
+          }
+        }
+      },
+      "response": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": {
+          "capabilities": {
+            "tools": {}
+          },
+          "protocolVersion": "2025-11-25",
+          "serverInfo": {
+            "name": "dual-pointer-vm",
+            "version": "0.1.0"
+          }
+        }
+      }
+    },
+    "out_of_bounds": {
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+          "name": "move_ai",
+          "arguments": {
+            "x": 399,
+            "y": 260
+          }
+        }
+      },
+      "response": {
+        "id": 2,
+        "jsonrpc": "2.0",
+        "result": {
+          "content": [
+            {
+              "text": "invalid or out-of-bounds coordinates",
+              "type": "text"
+            }
+          ],
+          "isError": true
+        }
+      }
+    },
+    "after_rejection": {
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+          "name": "pointer_state",
+          "arguments": {}
+        }
+      },
+      "response": {
+        "id": 3,
+        "jsonrpc": "2.0",
+        "result": {
+          "content": [
+            {
+              "text": "human=120,180; ai=560,330",
+              "type": "text"
+            }
+          ],
+          "isError": false
+        }
+      }
+    },
+    "input_poll": [
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "method": "tools/call",
+          "params": {
+            "name": "pointer_state",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 4,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "human=223,390; ai=560,330",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      }
+    ]
+  },
+  "mcp_client": {
+    "after": "human=223,390; ai=650,260",
+    "before": "human=223,390; ai=560,330",
+    "ok": true,
+    "protocol": "2025-11-25",
+    "scope": "guest demo only; no authenticated capability or host UI control",
+    "trace": [
+      {
+        "request": {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "method": "initialize",
+          "params": {
+            "capabilities": {},
+            "clientInfo": {
+              "name": "vm-mcp-client",
+              "version": "0.1.0"
+            },
+            "protocolVersion": "2025-11-25"
+          }
+        },
+        "response": {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "result": {
+            "capabilities": {
+              "tools": {}
+            },
+            "protocolVersion": "2025-11-25",
+            "serverInfo": {
+              "name": "dual-pointer-vm",
+              "version": "0.1.0"
+            }
+          }
+        }
+      },
+      {
+        "notification": {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        }
+      },
+      {
+        "request": {
+          "id": 2,
+          "jsonrpc": "2.0",
+          "method": "tools/list",
+          "params": {}
+        },
+        "response": {
+          "id": 2,
+          "jsonrpc": "2.0",
+          "result": {
+            "tools": [
+              {
+                "description": "Move AI pointer within its right-hand QEMU workspace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 773,
+                      "minimum": 400,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 573,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_ai"
+              },
+              {
+                "description": "Read the two pointer coordinates in this guest only.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "pointer_state"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "id": 3,
+          "jsonrpc": "2.0",
+          "method": "tools/call",
+          "params": {
+            "arguments": {},
+            "name": "pointer_state"
+          }
+        },
+        "response": {
+          "id": 3,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "human=223,390; ai=560,330",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "id": 4,
+          "jsonrpc": "2.0",
+          "method": "tools/call",
+          "params": {
+            "arguments": {
+              "x": 650,
+              "y": 260
+            },
+            "name": "move_ai"
+          }
+        },
+        "response": {
+          "id": 4,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "moved AI pointer to 650,260",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "id": 5,
+          "jsonrpc": "2.0",
+          "method": "tools/call",
+          "params": {
+            "arguments": {},
+            "name": "pointer_state"
+          }
+        },
+        "response": {
+          "id": 5,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "human=223,390; ai=650,260",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      }
+    ],
+    "transport": "local Unix socket to QEMU serial"
+  },
+  "framebuffer_before": {
+    "file": "framebuffer-before.ppm",
+    "sha256": "d8ec8ee55a7cccc3fcb100fb2636ab3711f2a4538f2a08a4075c1eb902c21b64"
+  },
+  "framebuffer_after": {
+    "file": "framebuffer.ppm",
+    "sha256": "d46f4a71dbe9ce5388273d878ca1c72fa3c82cd195d7249f597c34ae858bcb6d"
+  },
+  "framebuffer_claim": "hashes demonstrate a change, not pointer geometry",
+  "limitations": "experimental VM; no authentication, real workspaces or host OS control"
+}

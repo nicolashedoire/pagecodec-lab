@@ -35,6 +35,37 @@ jobs:
         run: |
           cargo build --release --locked --offline
           python3 run_vm.py --qemu qemu-system-aarch64
+      - name: Build and exercise graphical guest and MCP pointer in QEMU
+        run: |
+          (cd experiments/dual_pointer_display && cargo build --release --locked)
+          (cd experiments/vm_mcp_client && cargo build --release --locked)
+          python3 experiments/dual_pointer_display/run_demo.py \
+            --qemu qemu-system-aarch64 \
+            --guest "$PWD/experiments/dual_pointer_display/target/aarch64-unknown-none-softfloat/release/dual-pointer-display" \
+            --client "$PWD/experiments/vm_mcp_client/target/release/vm-mcp-client" \
+            --output-dir "$RUNNER_TEMP/dual-pointer-evidence" \
+            --startup-wait 5
+      - name: Preserve dual-pointer VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dual-pointer-vm-evidence
+          path: ${{ runner.temp }}/dual-pointer-evidence/
+          if-no-files-found: ignore
+      - name: Build and check synthetic VirtIO block guest in QEMU
+        working-directory: experiments/virtio_block
+        run: |
+          cargo build --release --locked
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest target/aarch64-unknown-none-softfloat/release/virtio-block-lab \
+            --output-dir "$RUNNER_TEMP/virtio-block-evidence"
+      - name: Preserve block VM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: virtio-block-vm-evidence
+          path: ${{ runner.temp }}/virtio-block-evidence/
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM
