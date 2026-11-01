@@ -402,13 +402,31 @@ def main():
    if g.call('process_pair_start',{'a':'left.elf','b':'right.elf'})!={'started':True}:raise RuntimeError('pair after single admission failed')
    after_solo_pair=g.wait_pair(expected_markers=(0xc1c1,0xd2d2))
    if after_solo_pair.get('run_id')!=single['run_id']+1 or min(after_solo_pair['incarnations'])<=single['incarnations'][0]:raise RuntimeError('pair after single reused an identity')
-   for name in ('left.elf','right.elf','solo.elf'):
+   for name in ('left.elf','right.elf'):
     if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('process fixture cleanup failed')
+   if not g.call('file_put',{'name':'fixture.pause','data':'1'}).get('readback_verified'):raise RuntimeError('pause configuration was not saved')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
   g=Guest(a.qemu,guest,disk,tmp,26,out,a.transport)
   try:
-   g.progress('pending-write outcomes after restart',timeout_image=True,expected_exit_code=0)
+   # The exact startup file value pauses new fixtures before any ELF fixture
+   # admission, while the original two built-in tasks are allowed to finish.
+   for _ in range(60):
+    fixture=g.call('fixtures_status',{})
+    if fixture.get('admission_ready') is True:break
+    time.sleep(.2)
+   else:raise RuntimeError('paused fixture state never became idle: '+str(fixture))
+   if fixture.get('pause_requested') is not True or fixture.get('fixture_active') is not False or fixture.get('initial_tasks_done') is not True or fixture.get('image_count')!=0:raise RuntimeError('startup pause did not stop fixture admissions: '+str(fixture))
+   if g.call('fixtures_pause',{})!=fixture:raise RuntimeError('repeated fixture pause changed idle state')
+   if g.call('process_start',{'name':'solo.elf'})!={'started':True}:raise RuntimeError('external ELF during startup pause was not admitted')
+   paused_single=g.wait_single()
+   fixture_after=g.call('fixtures_status',{})
+   if fixture_after.get('pause_requested') is not True or fixture_after.get('image_count')!=0 or fixture_after.get('fixture_active') is not False:raise RuntimeError('fixtures advanced during external task: '+str(fixture_after))
+   for name in ('fixture.pause','solo.elf'):
+    if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('startup pause configuration cleanup failed')
+   resumed=g.call('fixtures_resume',{})
+   if resumed.get('pause_requested') is not False:raise RuntimeError('fixture resume did not clear pause')
+   g.progress('fixtures after external task and resume',timeout_image=True,expected_exit_code=0)
    for i,(name,old,new) in enumerate((('a-doc',b'SING',b'SING'),('b-doc',b'BBBB',b'DDDD'))):
     expected=old if cancelled[i] else new
     if g.call('file_get',{'name':name})!={'name':name,'hex':expected.hex()}:raise RuntimeError('pending-write outcome did not survive restart')
@@ -461,6 +479,8 @@ def main():
    try:
     status=g.call('storage_status',{})
     if status.get('restore')!='invalid' or status.get('restore_slots')!=['invalid','invalid'] or status.get('write_blocked') is not True:raise RuntimeError('invalid restoration not reported and blocked')
+    ready=g.call('fixtures_status',{})
+    if ready.get('storage_write_blocked') is not True or ready.get('admission_ready') is not False:raise RuntimeError('blocked storage advertised external admission: '+str(ready))
     if g.call('document_snapshot',{})!=blank or g.call('file_list',{})!=[]:raise RuntimeError('unexpected degraded in-memory view')
     reject(g,'file_put',{'name':'unsafe.txt','data':'must-not-write'},'storage write blocked until restart')
     status2=g.call('storage_status',{});task=g.call('el0_status',{})

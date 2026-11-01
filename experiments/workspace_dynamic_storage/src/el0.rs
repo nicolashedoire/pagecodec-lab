@@ -39,6 +39,10 @@ static mut EXIT_MARKERS:[u64;2]=[0;2];
 static mut FIRST_FRAME_A:usize=0;
 static mut SPAWN_ADMITTED:bool=false;
 static mut IMAGE_COUNT:u8=0;
+// Pausing admits no new historical ELF; an already running one is allowed to
+// finish. This flag never changes the recorded fixture progress.
+static mut FIXTURE_PAUSE_REQUESTED:bool=false;
+static mut INITIAL_TASKS_RECLAIMED:bool=false;
 static mut IMAGE1_EXITED:bool=false;
 static mut IMAGE2_EXITED:bool=false;
 static mut IMAGE1_RECLAIMED:bool=false;
@@ -711,6 +715,28 @@ fn reclaim_code_frame() {
  unsafe{write_volatile(addr_of_mut!(CODE_FRAME),0);write_volatile(addr_of_mut!(FRAME_BITMAP),used&!bit);write_volatile(addr_of_mut!(CODE_FRAME_SCRUBBED),true)}
 }
 
+/// Request a pause or resumption of future fixture admissions. This is a
+/// service-boundary operation on the sole CPU; running work is never killed.
+pub fn set_fixture_pause(paused:bool) {unsafe{write_volatile(addr_of_mut!(FIXTURE_PAUSE_REQUESTED),paused)}}
+fn external_admission_ready()->bool {
+ let ipc=unsafe{&*addr_of!(IPC)};
+ let fixture_policy=unsafe{read_volatile(addr_of!(IMAGE_COUNT))}>=4 || unsafe{read_volatile(addr_of!(FIXTURE_PAUSE_REQUESTED))};
+ fixture_policy && unsafe{read_volatile(addr_of!(INITIAL_TASKS_RECLAIMED))}
+  && !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} && !unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))}
+  && unsafe{read_volatile(addr_of!(TASK_STATE))}==[3,3] && unsafe{read_volatile(addr_of!(FRAME_BITMAP))}==0
+  && unsafe{read_volatile(addr_of!(TASK_FRAMES))}==[0,0] && unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES))}==[0,0]
+  && unsafe{read_volatile(addr_of!(GENERIC_IO))}.iter().all(Option::is_none)
+  && ipc.full_consumed && ipc.len==0 && ipc.completions[7..9].iter().all(|c|c.id==0)
+  && super::mmu::active_root()==super::mmu::root(0)
+}
+pub fn fixture_status()->Value {json!({
+ "pause_requested":unsafe{read_volatile(addr_of!(FIXTURE_PAUSE_REQUESTED))},
+ "fixture_active":!unsafe{read_volatile(addr_of!(INITIAL_TASKS_RECLAIMED))} || unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))},
+ "initial_tasks_done":unsafe{read_volatile(addr_of!(INITIAL_TASKS_RECLAIMED))},
+ "image_count":unsafe{read_volatile(addr_of!(IMAGE_COUNT))},
+ "admission_ready":external_admission_ready()
+})}
+
 // A separate bounded experiment on the existing two roots. Each process may
 // use the shared synchronous file service, subject to its fixture namespace;
 // the barrier is fixture-only and is not a general IPC primitive.
@@ -718,11 +744,7 @@ pub fn start_pair(a:&[u8],b:&[u8])->Result<(), &'static str> {start_programs(a,S
 pub fn start_single(a:&[u8])->Result<(), &'static str> {start_programs(a,None)}
 fn start_programs(a:&[u8],b:Option<&[u8]>)->Result<(), &'static str> {
  if unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} {return Err("pair already started")}
- if unsafe{read_volatile(addr_of!(TASK_STATE))}!=[3,3] || unsafe{read_volatile(addr_of!(IMAGE_COUNT))}<4 || unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} || unsafe{read_volatile(addr_of!(FRAME_BITMAP))}!=0 || unsafe{read_volatile(addr_of!(TASK_FRAMES))}!=[0,0] || super::mmu::active_root()!=super::mmu::root(0) {return Err("pair requires idle slots")}
- let ipc=unsafe{&*addr_of!(IPC)};
- if ipc.len!=0 || ipc.completions[7..9].iter().any(|c|c.id!=0)
-  || unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES))}!=[0;2]
-  || unsafe{read_volatile(addr_of!(GENERIC_IO))}.iter().any(Option::is_some) {return Err("pair requires idle slots")}
+ if !external_admission_ready() {return Err("pair requires idle slots")}
  let run_id=unsafe{read_volatile(addr_of!(PAIR_RUN_ID))}.checked_add(1).ok_or("pair run exhausted")?;
  let count=if b.is_some() {2}else{1};
  let error=if count==2 {"invalid pair ELF"} else {"invalid ELF"};
@@ -869,6 +891,11 @@ fn reclaim_exited(actor:usize) {
  }
  let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};check(used&bit!=0,"frame already free");
  unsafe{write_volatile(addr_of_mut!(EXIT_MARKERS).cast::<u64>().add(actor),marker);write_volatile(p,0);write_volatile(addr_of_mut!(FRAME_BITMAP),used&!bit)}
+ if image_number==0 && unsafe{read_volatile(addr_of!(IMAGE_COUNT))}==0
+  && unsafe{read_volatile(addr_of!(TASK_FRAMES))}==[0,0]
+  && unsafe{read_volatile(addr_of!(FRAME_BITMAP))}==0 {
+  unsafe{write_volatile(addr_of_mut!(INITIAL_TASKS_RECLAIMED),true)}
+ }
  if image_number==1 {unsafe{write_volatile(addr_of_mut!(IMAGE1_RECLAIMED),true)}}
  else if image_number==2 {unsafe{write_volatile(addr_of_mut!(IMAGE2_RECLAIMED),true)}}
  else if image_number==3 {unsafe{write_volatile(addr_of_mut!(IMAGE3_RECLAIMED),true)}}
@@ -951,7 +978,7 @@ pub fn run_slice(programs:[Option<&[u8]>;4]) {
  let mut states_before=unsafe{read_volatile(addr_of!(TASK_STATE))};
  if states_before==[3,3] {
   let index=unsafe{read_volatile(addr_of!(IMAGE_COUNT))} as usize;
-  if index>=4 {return}
+  if index>=4 || unsafe{read_volatile(addr_of!(FIXTURE_PAUSE_REQUESTED))} {return}
   let Some(bytes)=programs[index] else {unsafe{write_volatile(addr_of_mut!(LOADER_REJECTED),true)};return};
   let Some(image)=super::loader::parse(bytes) else {unsafe{write_volatile(addr_of_mut!(LOADER_REJECTED),true)};return};
   unsafe{write_volatile(addr_of_mut!(LOADER_REJECTED),false)};

@@ -468,6 +468,14 @@ fn delete_file<T:Transport>(disk:&mut VirtIOBlk<VmHal,T>,doc:&DocumentDemo,files
 fn tool_json(id: Value, data: Value) {
     send(&json!({"jsonrpc":"2.0","id":id,"result":{"content":[{"type":"text","text":format!("{}",data)}],"isError":false}}));
 }
+fn public_fixture_status()->Value {
+    let mut status=el0::fixture_status();
+    let blocked=STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed);
+    let ready=status.get("admission_ready").and_then(Value::as_bool).unwrap_or(false) && !blocked;
+    status["storage_write_blocked"]=json!(blocked);
+    status["admission_ready"]=json!(ready);
+    status
+}
 fn origin_name(origin: Origin) -> &'static str {
     match origin { Origin::Base=>"base", Origin::Human=>"human", Origin::Assistant=>"assistant", Origin::Both=>"both" }
 }
@@ -573,6 +581,9 @@ pub extern "C" fn graph_main() -> ! {
     unsafe { draw(core::slice::from_raw_parts_mut(frame_ptr, FRAME_BYTES),
                   cursor(&router, &human), cursor(&router, &ai), cursor(&router, &remote), hclick, &interaction); }
     if gpu.flush().is_err() { halt() }
+    // Explicit guest-only startup configuration; only the exact byte "1"
+    // pauses the built-in fixtures. No host configuration is changed.
+    if files.get("fixture.pause").is_ok_and(|v|v==b"1") {el0::set_fixture_pause(true)}
     el0::prepare_slices();
     // A complete 512-byte binary file requires 1,024 hexadecimal characters
     // plus the bounded JSON-RPC envelope; oversized lines remain rejected.
@@ -757,6 +768,9 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"process_pair_status","description":"Inspect the experimental pair of guest tasks.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"process_start","description":"Admit one named bounded ELF guest task; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}},
                                         {"name":"process_status","description":"Inspect the latest bounded guest task admission.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"fixtures_pause","description":"Pause new built-in fixture admissions after the current fixture finishes.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"fixtures_resume","description":"Resume built-in fixture admissions.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"fixtures_status","description":"Inspect fixture admission and pause state.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"move_remote","description":"Move the visible pointer for a synthetic logical actor; no window or authenticated identity.","inputSchema":{"type":"object","properties":{"x":{"type":"integer","minimum":0,"maximum":799},"y":{"type":"integer","minimum":0,"maximum":599}},"required":["x","y"],"additionalProperties":false}},
                                         {"name":"remote_state","description":"Read the third synthetic actor's logical position.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"exercise_human_moves","description":"Run 1101 synthetic human moves in this VM; overwrites older bounded trace entries.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
@@ -852,6 +866,18 @@ pub extern "C" fn graph_main() -> ! {
                                                 let args=params.and_then(|p|p.get("arguments"));
                                                 if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"process_status requires empty arguments");}
                                                 else {tool_json(id,el0::pair_status());}
+                                            }
+                                            Some("fixtures_pause") | Some("fixtures_resume") | Some("fixtures_status") => {
+                                                let args=params.and_then(|p|p.get("arguments"));
+                                                if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"fixtures control requires empty arguments");}
+                                                else {
+                                                    match name {
+                                                        Some("fixtures_pause")=>el0::set_fixture_pause(true),
+                                                        Some("fixtures_resume")=>el0::set_fixture_pause(false),
+                                                        _=>(),
+                                                    }
+                                                    tool_json(id,public_fixture_status());
+                                                }
                                             }
                                             #[cfg(feature="storage-fault-test")]
                                             Some("debug_fail_postcommit") => {

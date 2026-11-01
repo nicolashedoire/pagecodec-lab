@@ -123,6 +123,24 @@ restarts the virtual disk to check its committed write. Concurrent admission
 while the single task is active has not been forced in this scenario.
 This remains a fixed two-slot experimental guest, not a general process API.
 
+## Fixture arbitration
+
+`fixtures_pause` requests that no further built-in ELF fixture be admitted;
+the initial tasks and any already running fixture can finish. `fixtures_status`
+reports the pause request, fixture activity, initial-task completion, admitted
+image count, storage blockage and external admission readiness. A pause request
+does not claim a running fixture has already stopped. `fixtures_resume` permits
+remaining fixtures to resume without terminating an external task.
+
+The QEMU scenario stores the exact bytes `1` in `fixture.pause` on its
+synthetic virtual disk before a restart. On startup this explicit guest-only
+configuration requests pause before fixture scheduling. The scenario waits
+for the two initial tasks to finish, starts a named external ELF while the
+fixture image count remains zero, deletes the configuration file, resumes,
+and checks all four existing fixtures in the same boot. Other file contents do
+not activate this configuration. A pause requested while a fixture is already
+executing is not exercised by this scenario.
+
 `init.bin`, `fault.bin`, `badsvc.bin` and `next.bin` are reserved boot-image names: `file_delete` refuses
 their removal, so a confirmed deletion cannot be silently undone by boot-time
 seeding. A PUT can still replace their bytes. The loader validates a narrow ELF
