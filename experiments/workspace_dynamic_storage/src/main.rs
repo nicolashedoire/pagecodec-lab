@@ -767,6 +767,7 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"process_pair_start","description":"Admit two named bounded ELF guest tasks (empty arguments use pair-a.bin and pair-b.bin); no authentication.","inputSchema":{"type":"object","properties":{"a":{"type":"string"},"b":{"type":"string"}},"oneOf":[{"maxProperties":0},{"required":["a","b"]}],"additionalProperties":false}},
                                         {"name":"process_pair_status","description":"Inspect the experimental pair of guest tasks.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"process_start","description":"Admit one named bounded ELF guest task; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}},
+                                        {"name":"process_spawn","description":"Admit a named ELF into a free independent task slot; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}},
                                         {"name":"process_status","description":"Inspect the latest bounded guest task admission.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"fixtures_pause","description":"Pause new built-in fixture admissions after the current fixture finishes.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"fixtures_resume","description":"Resume built-in fixture admissions.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
@@ -856,6 +857,21 @@ pub extern "C" fn graph_main() -> ! {
                                                     match files.read_for_load(name,512) {
                                                         Ok(program)=>match el0::start_single(program) {
                                                             Ok(())=>tool_json(id,json!({"started":true})),
+                                                            Err(error)=>tool_error(id,error),
+                                                        },
+                                                        Err(_)=>tool_error(id,"program unavailable"),
+                                                    }
+                                                }
+                                            }
+                                            Some("process_spawn") => {
+                                                let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
+                                                let name=args.filter(|o|o.len()==1).and_then(|o|o.get("name")).and_then(Value::as_str);
+                                                if name.is_none() {tool_error(id,"invalid process_spawn arguments");}
+                                                else if STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed) {tool_error(id,"storage write blocked until restart");}
+                                                else if let Some(name)=name {
+                                                    match files.read_for_load(name,512) {
+                                                        Ok(program)=>match el0::start_independent(program) {
+                                                            Ok((slot,incarnation))=>tool_json(id,json!({"started":true,"slot":slot,"incarnation":incarnation})),
                                                             Err(error)=>tool_error(id,error),
                                                         },
                                                         Err(_)=>tool_error(id,"program unavailable"),

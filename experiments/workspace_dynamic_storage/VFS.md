@@ -141,6 +141,25 @@ and checks all four existing fixtures in the same boot. Other file contents do
 not activate this configuration. A pause requested while a fixture is already
 executing is not exercised by this scenario.
 
+## Independently admitted processes
+
+`process_spawn` accepts a named ELF and returns the selected free slot and its
+new incarnation. `process_status` reports each slot's state, identity, I/O,
+exit and frame cleanup. Two independent tasks share a single virtual CPU;
+admission is refused if both slots are occupied or another execution mode is
+active. The experimental `a-` and `b-` namespace conventions follow the
+assigned slot. They are not a general permissions system.
+
+In the integrated VM scenario, A and B wait on separate VFS files. The service
+admits B while A is still running, releases A and starts a new A in its slot
+while B continues making file-read progress, then releases both. Each program
+checks its private marker internally before exit; the status interface does
+not disclose those private bytes. This does not establish multicore operation
+or general-purpose process management. Independent tasks currently have no
+external stop command or time budget: a task that loops can occupy its slot
+until the guest is restarted. The scenario does not force an I/O request to be
+in flight when its neighbor is reclaimed.
+
 `init.bin`, `fault.bin`, `badsvc.bin` and `next.bin` are reserved boot-image names: `file_delete` refuses
 their removal, so a confirmed deletion cannot be silently undone by boot-time
 seeding. A PUT can still replace their bytes. The loader validates a narrow ELF

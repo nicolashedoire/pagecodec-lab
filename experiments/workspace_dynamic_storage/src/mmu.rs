@@ -75,6 +75,26 @@ pub fn map_task_code(actor:usize,frame:usize) {
  } else {assert!(other_desc==0 && other_result&1!=0)}
  switch_root(root(0));
 }
+/// Verify one slot's mappings with a possibly live peer. This is run only at
+/// a masked service boundary on the sole CPU; it is not an SMP page-table API.
+pub fn verify_slot(actor:usize,data:usize,code:usize,peer:Option<(usize,usize)>)->bool {
+ if actor>=2 || active_root()!=root(0) || data%PAGE!=0 || code%PAGE!=0 || data==code {return false}
+ if let Some((pd,pc))=peer {if pd%PAGE!=0 || pc%PAGE!=0 || pd==pc || [pd,pc].contains(&data) || [pd,pc].contains(&code) {return false}}
+ switch_root(root(actor));
+ let d=query(ALIAS,false,true);let dw=query(ALIAS,true,true);let c=query(USER_CODE,false,true);
+ let mut ok=d&1==0 && dw&1==0 && d&PA_MASK==data as u64 && dw&PA_MASK==data as u64
+  && c&1==0 && c&PA_MASK==code as u64 && query(USER_CODE,true,true)&1!=0
+  && query(data,false,true)&1!=0 && query(code,false,true)&1!=0;
+ if let Some((pd,pc))=peer {ok &= query(pd,false,true)&1!=0 && query(pc,false,true)&1!=0}
+ switch_root(root(1-actor));
+ ok &= query(data,false,true)&1!=0 && query(code,false,true)&1!=0;
+ if let Some((pd,pc))=peer {
+  let d=query(ALIAS,false,true);let dw=query(ALIAS,true,true);let c=query(USER_CODE,false,true);
+  ok &= d&1==0 && dw&1==0 && d&PA_MASK==pd as u64 && dw&PA_MASK==pd as u64
+   && c&1==0 && c&PA_MASK==pc as u64 && query(USER_CODE,true,true)&1!=0;
+ } else {ok &= query(ALIAS,false,true)&1!=0 && query(USER_CODE,false,true)&1!=0}
+ switch_root(root(0));ok
+}
 /// Verify the single loaded task owns both frames and the idle root cannot
 /// access either user alias or either physical identity mapping.
 pub fn verify_single(data:usize,code:usize)->bool {

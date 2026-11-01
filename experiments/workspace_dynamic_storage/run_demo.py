@@ -431,6 +431,53 @@ def main():
     expected=old if cancelled[i] else new
     if g.call('file_get',{'name':name})!={'name':name,'hex':expected.hex()}:raise RuntimeError('pending-write outcome did not survive restart')
     if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('pair data cleanup failed')
+   # Independent ELFs wait on separate VFS gates. Release A, readmit its
+   # slot, and only then release B; no timing-based overlap is assumed.
+   for side in ('a','b'):
+    if not g.call('file_put',{'name':side+'-gate','data':'0'}).get('readback_verified'):raise RuntimeError('independent gate not saved')
+    code=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/('independent-'+side+'.hex')).read_text().strip())
+    if not g.call('file_put_hex',{'name':side+'-ind.elf','hex':independent_elf(next_hex,code)}).get('readback_verified'):raise RuntimeError('independent ELF not saved')
+   if not g.call('file_put',{'name':'fixture.pause','data':'1'}).get('readback_verified'):raise RuntimeError('independent pause configuration not saved')
+   traces.append(g.trace);states.append(g.call('storage_status',{}))
+  finally:g.close()
+  g=Guest(a.qemu,guest,disk,tmp,27,out,a.transport)
+  try:
+   for _ in range(60):
+    fixture=g.call('fixtures_status',{})
+    if fixture.get('admission_ready') is True:break
+    time.sleep(.2)
+   else:raise RuntimeError('independent startup pause did not become idle: '+str(fixture))
+   if fixture.get('pause_requested') is not True or fixture.get('image_count')!=0:raise RuntimeError('independent scenario did not pause fixtures')
+   task_a=g.call('process_spawn',{'name':'a-ind.elf'})
+   if task_a.get('started') is not True or task_a.get('slot')!=0 or not isinstance(task_a.get('incarnation'),int):raise RuntimeError('first independent admission failed: '+str(task_a))
+   state=g.wait_independent(lambda s:s.get('slot_states',[None,None])[0]=='ready' and s.get('io_completed',[0,0])[0]>0,'A live and reading')
+   if state.get('incarnations',[None,None])[0]!=task_a['incarnation']:raise RuntimeError('A identity changed before B admission')
+   b=g.call('process_spawn',{'name':'b-ind.elf'})
+   if b.get('started') is not True or b.get('slot')!=1 or not isinstance(b.get('incarnation'),int) or b['incarnation']<=task_a['incarnation']:raise RuntimeError('second independent admission failed: '+str(b))
+   state=g.wait_independent(lambda s:s.get('slot_states')==['ready','ready'] and min(s.get('io_completed',[0,0]))>0,'A and B live and reading')
+   if state.get('incarnations')!=[task_a['incarnation'],b['incarnation']] or state.get('frame_pool_assigned')!=4:raise RuntimeError('independent tasks not isolated concurrently: '+str(state))
+   b_reads=state['io_completed'][1]
+   reject(g,'process_spawn',{'name':'a-ind.elf'},'no free process slot')
+   if not g.call('file_put',{'name':'a-gate','data':'1'}).get('readback_verified'):raise RuntimeError('A gate release failed')
+   state=g.wait_independent(lambda s:s.get('slot_states')==['exited','ready'] and s.get('io_completed',[0,0])[1]>b_reads,'A exited while B continued reading')
+   if state.get('incarnations')!=[task_a['incarnation'],b['incarnation']] or state.get('exit_codes',[None,None])[0]!=0 or state.get('data_scrubbed',[False,False])[0] is not True or state.get('code_scrubbed',[False,False])[0] is not True or state.get('frame_pool_assigned')!=2:raise RuntimeError('A teardown disturbed B: '+str(state))
+   b_reads=state['io_completed'][1]
+   if not g.call('file_put',{'name':'a-gate','data':'0'}).get('readback_verified'):raise RuntimeError('A gate reset failed')
+   a2=g.call('process_spawn',{'name':'a-ind.elf'})
+   if a2.get('started') is not True or a2.get('slot')!=0 or not isinstance(a2.get('incarnation'),int) or a2['incarnation']<=b['incarnation']:raise RuntimeError('A readmission invalid: '+str(a2))
+   state=g.wait_independent(lambda s:s.get('slot_states')==['ready','ready'] and s.get('io_completed',[0,0])[0]>0 and s.get('io_completed',[0,0])[1]>b_reads,'A readmitted while B continued reading')
+   if state.get('incarnations')!=[a2['incarnation'],b['incarnation']] or state.get('frame_pool_assigned')!=4:raise RuntimeError('A readmission disturbed B: '+str(state))
+   if not g.call('file_put',{'name':'a-gate','data':'1'}).get('readback_verified'):raise RuntimeError('A second release failed')
+   state=g.wait_independent(lambda s:s.get('slot_states')==['exited','ready'],'readmitted A exited while B live')
+   if state.get('incarnations')!=[a2['incarnation'],b['incarnation']] or state.get('exit_codes',[None,None])[0]!=0 or state.get('frame_pool_assigned')!=2:raise RuntimeError('second A teardown disturbed B: '+str(state))
+   if not g.call('file_put',{'name':'b-gate','data':'1'}).get('readback_verified'):raise RuntimeError('B gate release failed')
+   state=g.wait_independent(lambda s:s.get('slot_states')==['exited','exited'],'both tasks exited')
+   if state.get('exit_codes')!=[0,0] or state.get('data_scrubbed')!=[True,True] or state.get('code_scrubbed')!=[True,True] or state.get('frame_pool_assigned')!=0:raise RuntimeError('independent task cleanup failed: '+str(state))
+   for name in ('a-gate','b-gate','a-ind.elf','b-ind.elf','fixture.pause'):
+    if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('independent fixture cleanup failed')
+   if g.call('fixtures_resume',{}).get('pause_requested') is not False:raise RuntimeError('independent fixture resume failed')
+   after=g.progress('fixtures resumed after independent processes',timeout_image=True,expected_exit_code=0)
+   if after.get('private_values')!=[0xa1a1,0xb2b2]:raise RuntimeError('independent mode changed historical fixture status')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
   if a.exercise_storage_fault:

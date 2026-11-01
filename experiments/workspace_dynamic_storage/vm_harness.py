@@ -189,6 +189,12 @@ class Guest:
         if not isinstance(ticks,list) or len(ticks)!=2 or not isinstance(ticks[0],int) or ticks[0]<=0 or ticks[1]!=0:raise RuntimeError('single task preemption invalid: '+str(state))
         if state.get('io_submitted')!=[4,0] or state.get('io_completed')!=[4,0]:raise RuntimeError('single task I/O invalid: '+str(state))
         return state
+    def wait_independent(self,predicate,label):
+        for _ in range(60):
+            state=self.call('process_status',{})
+            if state.get('mode')=='independent' and predicate(state):return state
+            time.sleep(.1)
+        raise RuntimeError('independent tasks did not reach '+label+': '+str(state))
     def input(self,events):
         self.qmp_command({'execute':'input-send-event','arguments':{'events':events}})
     def screenshot(self,path):
