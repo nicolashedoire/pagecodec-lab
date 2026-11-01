@@ -840,7 +840,7 @@ def main():
    state=g.wait_independent(lambda s:s.get('slot_states')==['exited','ready'],'first IPC exchange and A exit')
    if state.get('exit_codes',[None,None])[0]!=0 or state.get('outcomes',[None,None])[0]!=1 or state.get('incarnations')!=[first['incarnation'],second['incarnation']] or state.get('frame_pool_assigned')!=3:raise RuntimeError('first IPC exchange failed: '+str(state))
    channel=g.call('ipc_direct_status',{})
-   if set(channel)!={'bound','channel_id','incarnations','queued','sent','received','dropped','scrubbed','full_rejections','peer_unbound'} or channel.get('bound') is not False or channel.get('queued')!=[0,0] or channel.get('sent')!=[2,2] or channel.get('received')!=[2,2] or channel.get('scrubbed') is not True:raise RuntimeError('direct IPC closure or first exchange invalid: '+str(channel))
+   if set(channel)!={'bound','channel_id','incarnations','queued','sent','received','dropped','scrubbed','full_rejections','peer_unbound','waiting','wait_count','wake_message','wake_close'} or channel.get('bound') is not False or channel.get('queued')!=[0,0] or channel.get('sent')!=[2,2] or channel.get('received')!=[2,2] or channel.get('scrubbed') is not True:raise RuntimeError('direct IPC closure or first exchange invalid: '+str(channel))
    replacement=g.call('process_spawn_staged',{'id':upload_id})
    if replacement.get('slot')!=0 or replacement.get('incarnation',0)<=second['incarnation'] or replacement.get('boot_id')!=first['boot_id']:raise RuntimeError('IPC sender readmission invalid')
    reject(g,'ipc_direct_bind',args,'stale process incarnation')
@@ -882,6 +882,46 @@ def main():
    after=g.call('ipc_direct_status',{})
    if after.get('bound') is not False or after.get('queued')!=[0,0] or after.get('scrubbed') is not True:raise RuntimeError('second IPC channel not clean: '+str(after))
    g.call('upload_reset',{'id':queue_upload})
+   # Receiver really sleeps in the kernel; the other actor continues issuing
+   # VFS reads solely as a host-controlled gate, not as an IPC mailbox.
+   if any(entry.get('name')=='a-wgate' for entry in files_before):raise RuntimeError('wait fixture name already exists')
+   if not g.call('file_put',{'name':'a-wgate','data':'0'}).get('readback_verified'):raise RuntimeError('wait fixture setup failed')
+   wait_elf=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-ipc-wait.hex').read_text().strip())
+   wait_upload=stage_program(g,wait_elf)
+   for stopped_waiter in (False,True):
+    if stopped_waiter and not g.call('file_put',{'name':'a-wgate','data':'0'}).get('readback_verified'):raise RuntimeError('wait gate reset failed')
+    sender=g.call('process_spawn_staged',{'id':wait_upload});receiver=g.call('process_spawn_staged',{'id':wait_upload})
+    if sender.get('slot')!=0 or receiver.get('slot')!=1 or sender.get('boot_id')!=receiver.get('boot_id'):raise RuntimeError('wait fixture admission failed')
+    g.wait_independent(lambda x:x.get('slot_states')==['ready','ready'],'wait actors ready')
+    wait_args={'a_slot':0,'a_incarnation':sender['incarnation_text'],'b_slot':1,'b_incarnation':receiver['incarnation_text'],'boot_id':sender['boot_id']}
+    channel_id=g.call('ipc_direct_bind',wait_args)['channel_id']
+    sleeping=wait_direct(lambda x:x.get('waiting',[False,False])[1] is True,'receiver blocked')
+    progress=g.call('process_status',{}).get('io_completed',[0,0])[0]
+    for _ in range(30):
+     activity=g.call('process_status',{})
+     if activity.get('io_completed',[0,0])[0]>progress:break
+     time.sleep(.2)
+    else:raise RuntimeError('sender did not progress while receiver blocked: '+str(activity))
+    if g.call('ipc_direct_status',{}).get('waiting',[False,False])[1] is not True:raise RuntimeError('receiver did not remain asleep')
+    if not g.call('file_put',{'name':'a-wgate','data':'1'}).get('readback_verified'):raise RuntimeError('wait release failed')
+    awake=wait_direct(lambda x:x.get('waiting')==[True,True] and x.get('wake_message',[0,0])[1]>sleeping.get('wake_message',[0,0])[1],'receiver woke on message and both blocked')
+    if awake.get('received',[0,0])[1]!=1:raise RuntimeError('woken receiver did not receive message: '+str(awake))
+    if stopped_waiter:
+     stopped=g.call('process_stop',{'slot':1,'incarnation':receiver['incarnation_text'],'boot_id':receiver['boot_id']})
+     if stopped.get('stopped') is not True:raise RuntimeError('could not stop sleeping receiver')
+     state=g.wait_independent(lambda x:x.get('slot_states')==['exited','exited'],'waiter stopped and sleeping neighbor woke')
+     if state.get('outcomes')!=[1,4] or state.get('exit_codes')!=[0,None]:raise RuntimeError('stopping waiter disturbed sender: '+str(state))
+    else:
+     if g.call('ipc_direct_close',{'channel_id':channel_id,'boot_id':sender['boot_id']})!={'closed':True}:raise RuntimeError('could not wake blocked tasks on close')
+     state=g.wait_independent(lambda x:x.get('slot_states')==['exited','exited'],'both blocked tasks woke on close')
+     if state.get('outcomes')!=[1,1] or state.get('exit_codes')!=[0,0]:raise RuntimeError('wait close wake failed: '+str(state))
+    closed_wait=g.call('ipc_direct_status',{})
+    if closed_wait.get('wake_close',[0,0])[0]<=awake.get('wake_close',[0,0])[0] or (not stopped_waiter and closed_wait.get('wake_close',[0,0])[1]<=awake.get('wake_close',[0,0])[1]):raise RuntimeError('missing kernel close wakes: '+str(closed_wait))
+    if state.get('data_scrubbed')!=[True,True] or state.get('code_scrubbed')!=[True,True] or state.get('stack_scrubbed')!=[True,True] or state.get('frame_pool_assigned')!=0:raise RuntimeError('wait task resources not cleaned: '+str(state))
+    stopped_channel=g.call('ipc_direct_status',{})
+    if stopped_channel.get('bound') is not False or stopped_channel.get('waiting')!=[False,False] or stopped_channel.get('scrubbed') is not True:raise RuntimeError('wait channel cleanup invalid: '+str(stopped_channel))
+   g.call('upload_reset',{'id':wait_upload})
+   if not g.call('file_delete',{'name':'a-wgate'}).get('readback_verified') or g.call('file_list',{})!=files_before:raise RuntimeError('wait fixture cleanup failed')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
   # No NIC: the same Rust program must see -19 without requiring a peer.

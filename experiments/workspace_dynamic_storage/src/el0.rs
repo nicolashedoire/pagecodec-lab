@@ -33,6 +33,7 @@ static mut PROBE_DONE:u64=0;
 #[no_mangle] static mut SLICE_TOTAL:u64=0;
 #[no_mangle] static mut SLICE_DISPATCHES:u64=0;
 #[no_mangle] static mut SLICE_EXITS:u64=0;
+#[no_mangle] static mut SLICE_BLOCKS:u64=0;
 static mut FRAME_SCRUBBED:[bool;2]=[false;2];
 static mut ALIAS_REMOVED:[bool;2]=[false;2];
 static mut EXIT_MARKERS:[u64;2]=[0;2];
@@ -198,6 +199,30 @@ struct DirectMessage {sender:u64,sender_inc:u64,dest_inc:u64,channel_id:u64,len:
 const DIRECT_EMPTY:DirectMessage=DirectMessage{sender:0,sender_inc:0,dest_inc:0,channel_id:0,len:0,bytes:[0;32]};
 struct DirectChannel {bound:bool,channel_id:u64,next_id:u64,incarnations:[u64;2],queues:[[DirectMessage;2];2],head:[usize;2],len:[usize;2],sent:[u64;2],received:[u64;2],dropped:[u64;2],full_rejections:[u64;2],peer_unbound:[u64;2],scrubbed:bool}
 static mut DIRECT:DirectChannel=DirectChannel{bound:false,channel_id:0,next_id:1,incarnations:[0;2],queues:[[DIRECT_EMPTY;2];2],head:[0;2],len:[0;2],sent:[0;2],received:[0;2],dropped:[0;2],full_rejections:[0;2],peer_unbound:[0;2],scrubbed:true};
+// Waiting records identities only: never retain an EL0 pointer across a sleep.
+static mut DIRECT_WAIT_CHANNEL:[u64;2]=[0;2];
+static mut DIRECT_WAIT_INC:[u64;2]=[0;2];
+static mut DIRECT_WAIT_COUNT:[u64;2]=[0;2];
+static mut DIRECT_WAKE_MESSAGE:[u64;2]=[0;2];
+static mut DIRECT_WAKE_CLOSE:[u64;2]=[0;2];
+fn clear_direct_wait(actor:usize) {unsafe{write_volatile(addr_of_mut!(DIRECT_WAIT_CHANNEL).cast::<u64>().add(actor),0);write_volatile(addr_of_mut!(DIRECT_WAIT_INC).cast::<u64>().add(actor),0)}}
+// Called only at masked single-CPU exception/service boundaries. No user
+// pointer is accessed: the only modified frame is owned by this incarnation.
+fn wake_direct(actor:usize,channel:u64,inc:u64,code:i64) {
+ let states=unsafe{read_volatile(addr_of!(TASK_STATE))};
+ if states[actor]!=4 || unsafe{read_volatile(addr_of!(DIRECT_WAIT_CHANNEL).cast::<u64>().add(actor))}!=channel || unsafe{read_volatile(addr_of!(DIRECT_WAIT_INC).cast::<u64>().add(actor))}!=inc || incarnation(actor)!=inc {return}
+ let saved=unsafe{read_volatile(addr_of!(SAVED).cast::<u64>().add(actor))} as *mut Frame;
+ if saved.is_null() {halt()}
+ unsafe {
+  (*saved).regs[0]=code as u64;
+  clear_direct_wait(actor);
+  let counter=if code==0 {addr_of_mut!(DIRECT_WAKE_MESSAGE)}else{addr_of_mut!(DIRECT_WAKE_CLOSE)}.cast::<u64>().add(actor);
+  write_volatile(counter,read_volatile(counter).saturating_add(1));
+  write_volatile(addr_of_mut!(TASK_STATE).cast::<u64>().add(actor),1);
+  let current=read_volatile(addr_of!(CURRENT)) as usize;
+  if current>=2 || !matches!(states[current],1|2) {write_volatile(addr_of_mut!(CURRENT),actor as u64)}
+ }
+}
 fn direct_result(f:&mut Frame,code:i64) {f.regs[0]=code as u64}
 /// Establish exactly one channel between the two current independent tasks.
 /// The boot ID is a public freshness value, not client authentication.
@@ -224,12 +249,12 @@ pub fn bind_direct(a:usize,ai:u64,b:usize,bi:u64,boot:[u8;16])->Result<u64, &'st
 /// Exposes metadata only; message bytes and virtual addresses remain private.
 pub fn direct_status()->Value {
  let c=unsafe{&*addr_of!(DIRECT)};
- json!({"bound":c.bound,"channel_id":c.channel_id,"incarnations":c.incarnations,"queued":c.len,"sent":c.sent,"received":c.received,"dropped":c.dropped,"full_rejections":c.full_rejections,"peer_unbound":c.peer_unbound,"scrubbed":c.scrubbed})
+ json!({"bound":c.bound,"channel_id":c.channel_id,"incarnations":c.incarnations,"queued":c.len,"sent":c.sent,"received":c.received,"dropped":c.dropped,"full_rejections":c.full_rejections,"peer_unbound":c.peer_unbound,"scrubbed":c.scrubbed,"waiting":unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|s|s==4),"wait_count":unsafe{read_volatile(addr_of!(DIRECT_WAIT_COUNT))},"wake_message":unsafe{read_volatile(addr_of!(DIRECT_WAKE_MESSAGE))},"wake_close":unsafe{read_volatile(addr_of!(DIRECT_WAKE_CLOSE))}})
 }
 fn direct_live(c:&DirectChannel,actor:usize)->bool {
  if actor>=2 || !c.bound || c.channel_id==0 || !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} || unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {return false}
  let peer=1-actor;let states=unsafe{read_volatile(addr_of!(TASK_STATE))};
- matches!(states[actor],1|2) && matches!(states[peer],1|2)
+ matches!(states[actor],1|2|4) && matches!(states[peer],1|2|4)
   && c.incarnations[actor]!=0 && c.incarnations[peer]!=0
   && incarnation(actor)==c.incarnations[actor] && incarnation(peer)==c.incarnations[peer]
 }
@@ -252,7 +277,24 @@ fn direct_send(f:&mut Frame,actor:usize) {
  let mut message=DirectMessage{sender:actor as u64,sender_inc:c.incarnations[actor],dest_inc:c.incarnations[peer],channel_id:c.channel_id,len,bytes:[0;32]};
  for i in 0..len {message.bytes[i]=unsafe{readbyte(address+i as u64)}}
  let index=(c.head[peer]+c.len[peer])%2;c.queues[peer][index]=message;c.len[peer]+=1;
- c.sent[actor]=c.sent[actor].saturating_add(1);c.scrubbed=false;direct_result(f,0)
+ c.sent[actor]=c.sent[actor].saturating_add(1);c.scrubbed=false;wake_direct(peer,c.channel_id,c.incarnations[peer],0);direct_result(f,0)
+}
+// Return 2 to the exception stub only after atomically checking an empty
+// queue and recording a channel+incarnation. IRQs remain masked throughout.
+fn direct_wait(f:&mut Frame,actor:usize)->u64 {
+ if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {direct_result(f,-38);return 0}
+ let c=unsafe{&mut *addr_of_mut!(DIRECT)};
+ if !direct_live(c,actor) {direct_result(f,-107);return 0}
+ if f.regs[0]!=c.channel_id {direct_result(f,-116);return 0}
+ if c.len[actor]!=0 {direct_result(f,0);return 0}
+ if unsafe{read_volatile(addr_of!(TASK_STATE).cast::<u64>().add(actor))}!=2 {halt()}
+ unsafe {
+  write_volatile(addr_of_mut!(DIRECT_WAIT_CHANNEL).cast::<u64>().add(actor),c.channel_id);
+  write_volatile(addr_of_mut!(DIRECT_WAIT_INC).cast::<u64>().add(actor),c.incarnations[actor]);
+  let count=addr_of_mut!(DIRECT_WAIT_COUNT).cast::<u64>().add(actor);
+  write_volatile(count,read_volatile(count).saturating_add(1));
+ }
+ direct_result(f,0);2
 }
 fn clear_direct_message(m:&mut DirectMessage) {
  for byte in &mut m.bytes {unsafe{write_volatile(byte,0)}}
@@ -292,6 +334,7 @@ fn close_direct_for(actor:usize) {
  retire_direct(c)
 }
 fn retire_direct(c:&mut DirectChannel) {
+ for actor in 0..2 {wake_direct(actor,c.channel_id,c.incarnations[actor],-107)}
  for dest in 0..2 {
   c.dropped[dest]=c.dropped[dest].saturating_add(c.len[dest] as u64);
   for message in &mut c.queues[dest] {clear_direct_message(message)}
@@ -303,7 +346,7 @@ fn retire_direct(c:&mut DirectChannel) {
 /// Current two-process identities for the isolated VM Ethernet service.
 pub fn network_identities()->Option<[u64;2]> {
  if !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} || unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {return None}
- let state=unsafe{read_volatile(addr_of!(TASK_STATE))};if !state.iter().all(|s|matches!(*s,1|2)) {return None}
+ let state=unsafe{read_volatile(addr_of!(TASK_STATE))};if !state.iter().all(|s|matches!(*s,1|2|4)) {return None}
  let ids=unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS))};
  if ids[0]==0 || ids[1]==0 || ids[0]!=incarnation(0) || ids[1]!=incarnation(1) {return None}Some(ids)
 }
@@ -386,7 +429,7 @@ pub fn pop_request()->Option<Request> {
 pub fn request_is_live(request:&Request)->bool {
  if request.actor>=2 || request.incarnation!=incarnation(request.actor) {return false}
  let state=unsafe{read_volatile(addr_of!(TASK_STATE).cast::<u64>().add(request.actor))};
- if state!=1 && state!=2 {return false}
+ if !matches!(state,1|2|4) {return false}
  let s=unsafe{&*addr_of!(IPC)};
  let Some(i)=completion_slot(request.actor,request.id) else{return false};let c=&s.completions[i];
  c.actor==request.actor && c.incarnation==request.incarnation && c.id==request.id && c.popped && !c.applied
@@ -612,6 +655,7 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
    0x160=>{direct_peer(f,actor);return 0},
    0x161=>{direct_send(f,actor);return 0},
    0x162=>{direct_recv(f,actor);return 0},
+   0x163=>{return direct_wait(f,actor)},
    0x140=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_read(f,state,actor);return 0},
    0x141=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_write(f,state,actor);return 0},
    0x123=>{unsafe{write_volatile(addr_of_mut!(PAIR_EXIT_CODES).cast::<Option<u64>>().add(actor),Some(f.regs[0]));write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(actor),1)};return 1},
@@ -1105,12 +1149,13 @@ pub fn stop_independent(slot:usize,expected:u64,boot_id:[u8;16])->Result<(), &'s
  let reported=unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS).cast::<u64>().add(slot))};
  if expected==0 || expected!=incarnation || expected!=reported {return Err("stale process incarnation")}
  let states=unsafe{read_volatile(addr_of!(TASK_STATE))};
- if states[slot]!=1 {return Err("process is not ready")}
+ if !matches!(states[slot],1|4) {return Err("process is not ready")}
  let peer=1-slot;let current=unsafe{read_volatile(addr_of!(CURRENT))} as usize;
- if current>=2 || states[current]!=1 || !matches!(states[peer],1|3)
+ if current>=2 || !matches!(states[current],1|4) || !matches!(states[peer],1|3|4)
   || unsafe{read_volatile(addr_of!(TASK_FRAMES).cast::<usize>().add(slot))}==0
   || unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES).cast::<usize>().add(slot))}==0 {return Err("process stop requires service boundary")}
  unsafe {
+  clear_direct_wait(slot);
   write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(slot),4);
   write_volatile(addr_of_mut!(PAIR_EXIT_CODES).cast::<Option<u64>>().add(slot),None);
   write_volatile(addr_of_mut!(TASK_STATE).cast::<u64>().add(slot),3);
@@ -1126,7 +1171,7 @@ pub fn pair_status()->Value {json!({
  "boot_identity_ready":super::boot_identity::identifier().is_some(),"mode":match unsafe{read_volatile(addr_of!(PAIR_MODE))} {1=>"single",2=>"pair",3=>"independent",_=>"none"},"started":unsafe{read_volatile(addr_of!(PAIR_STARTED))},"done":unsafe{read_volatile(addr_of!(PAIR_DONE))},"run_id":unsafe{read_volatile(addr_of!(PAIR_RUN_ID))},"stale_completion_rejected":unsafe{read_volatile(addr_of!(PAIR_STALE_REJECTED))},"old_incarnation_same_id_rejected":unsafe{read_volatile(addr_of!(PAIR_OLD_INCARNATION_REJECTED))},
  "incarnations":unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS))},"mappings_verified":unsafe{read_volatile(addr_of!(PAIR_MAPPINGS_VERIFIED))},
  "slot_mappings_verified":unsafe{read_volatile(addr_of!(SLOT_MAPPINGS_VERIFIED))},
- "slot_states":unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|v|match v {1=>"ready",2=>"running",3=>"exited",_=>"invalid"}),
+ "slot_states":unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|v|match v {1=>"ready",2=>"running",3=>"exited",4=>"waiting",_=>"invalid"}),
  "io_submitted":unsafe{read_volatile(addr_of!(PAIR_IO_SUBMITTED))},"io_completed":unsafe{read_volatile(addr_of!(PAIR_IO_COMPLETED))},"io_cancelled_before_apply":unsafe{read_volatile(addr_of!(PAIR_IO_CANCELLED))},"irq_counts":unsafe{read_volatile(addr_of!(PAIR_IRQS))},"exit_codes":unsafe{read_volatile(addr_of!(PAIR_EXIT_CODES))},"outcomes":unsafe{read_volatile(addr_of!(PAIR_OUTCOMES))},"barrier_seen":unsafe{read_volatile(addr_of!(PAIR_BARRIER_SEEN))},"live_markers":if unsafe{read_volatile(addr_of!(PAIR_MODE))}==3 {None}else{Some(unsafe{read_volatile(addr_of!(PAIR_LIVE_MARKERS))})},
  "markers":if unsafe{read_volatile(addr_of!(PAIR_MODE))}==3 {None}else{Some(unsafe{read_volatile(addr_of!(PAIR_MARKERS))})},"data_scrubbed":unsafe{read_volatile(addr_of!(PAIR_DATA_SCRUBBED))},
  "code_scrubbed":unsafe{read_volatile(addr_of!(PAIR_CODE_SCRUBBED))},"stack_scrubbed":unsafe{read_volatile(addr_of!(PAIR_STACK_SCRUBBED))},"rw_init_verified":unsafe{read_volatile(addr_of!(PAIR_RW_INIT_VERIFIED))},"two_segment":unsafe{read_volatile(addr_of!(PAIR_TWO_SEGMENT))},"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()
@@ -1327,12 +1372,17 @@ pub fn run_slice(programs:[Option<&[u8]>;4]) {
   unsafe{write_volatile(addr_of_mut!(LOADER_REJECTED),false)};
   admit_spawned_task(image.code,image.entry_offset);states_before=unsafe{read_volatile(addr_of!(TASK_STATE))};
  }
- check(states_before.iter().all(|v|*v==1 || *v==3),"invalid service-boundary task states");
- let current=unsafe{read_volatile(addr_of!(CURRENT))};check(current<2 && states_before[current as usize]==1,"slice actor");
+ check(states_before.iter().all(|v|matches!(*v,1|3|4)),"invalid service-boundary task states");
+ if !states_before.contains(&1) {return} // service keeps processing MCP/device events
+ let mut current=unsafe{read_volatile(addr_of!(CURRENT))};
+ if current>=2 || states_before[current as usize]!=1 {
+  current=if states_before[0]==1 {0}else{1};unsafe{write_volatile(addr_of_mut!(CURRENT),current)}
+ }
+ check(states_before[current as usize]==1,"slice actor");
  let pair_before=unsafe{read_volatile(addr_of!(PAIR_ACTIVE))};
  let loaded_before=unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} || pair_before;
  let frame=unsafe{read_volatile(addr_of!(SAVED).cast::<u64>().add(current as usize))} as *const Frame;
- let before=unsafe{read_volatile(addr_of!(SLICE_TOTAL))};let dispatches=unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))};let exits=unsafe{read_volatile(addr_of!(SLICE_EXITS))};let delta=unsafe{read_volatile(addr_of!(SLICE_DELTA))};check(delta!=0,"slice not initialized");
+ let before=unsafe{read_volatile(addr_of!(SLICE_TOTAL))};let dispatches=unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))};let exits=unsafe{read_volatile(addr_of!(SLICE_EXITS))};let blocks=unsafe{read_volatile(addr_of!(SLICE_BLOCKS))};let delta=unsafe{read_volatile(addr_of!(SLICE_DELTA))};check(delta!=0,"slice not initialized");
 
  let counts_before=[unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>())},unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>().add(1))}];
  let allocations_before=super::heap::allocation_attempts();
@@ -1346,9 +1396,10 @@ pub fn run_slice(programs:[Option<&[u8]>;4]) {
  }
  let after=unsafe{read_volatile(addr_of!(SLICE_TOTAL))};let ticks=after.checked_sub(before).unwrap_or_else(||halt());
  let exited=unsafe{read_volatile(addr_of!(SLICE_EXITS))}.checked_sub(exits).unwrap_or_else(||halt());
- check(ticks<=2 && exited<=1 && (1..=2).contains(&(ticks+exited)),"slice end count");
+ let blocked=unsafe{read_volatile(addr_of!(SLICE_BLOCKS))}.checked_sub(blocks).unwrap_or_else(||halt());
+ check(ticks<=2 && exited<=1 && blocked<=1 && (1..=2).contains(&(ticks+exited+blocked)),"slice end count");
  let states_after=unsafe{read_volatile(addr_of!(TASK_STATE))};
- check(dispatches.checked_add(ticks+exited)==Some(unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))}) && states_after.iter().all(|v|*v==1 || *v==3),"slice task state transitions");
+ check(dispatches.checked_add(ticks+exited+blocked)==Some(unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))}) && states_after.iter().all(|v|matches!(*v,1|3|4)),"slice task state transitions");
  let counts_after=[unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>())},unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>().add(1))}];
  let selected=current as usize;
  if !loaded_before {check(counts_after[selected]>counts_before[selected] || states_after[selected]==3,"EL0 slice progress")}
@@ -1366,7 +1417,7 @@ pub fn status()->Value {
  let counts:Vec<u64>=(0..2).map(|i|unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>().add(i))}).collect();
  let slice_ticks=unsafe{read_volatile(addr_of!(SLICE_TOTAL))};
  let values=if unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} && unsafe{read_volatile(addr_of!(PAIR_MODE))}==3 {None}else{Some([marker(0),marker(1)])};
- let states=unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|s|match s {1=>"ready",2=>"running",3=>"exited",_=>"invalid"});
+ let states=unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|s|match s {1=>"ready",2=>"running",3=>"exited",4=>"waiting",_=>"invalid"});
  let outcomes=unsafe{read_volatile(addr_of!(IMAGE_OUTCOMES))}.map(|v|match v {0=>"pending",1=>"success",2=>"fault",3=>"bad_svc",4=>"file_error",5=>"timeout",6=>"exit_error",_=>"invalid"});
  let reclaimed=[unsafe{read_volatile(addr_of!(IMAGE1_RECLAIMED))},unsafe{read_volatile(addr_of!(IMAGE2_RECLAIMED))},unsafe{read_volatile(addr_of!(IMAGE3_RECLAIMED))},unsafe{read_volatile(addr_of!(IMAGE4_RECLAIMED))}];
  json!({"validated":done,"ticks":8,"el":"EL0","events":events,"timer":"disabled","interrupts":"masked","slice_ticks":slice_ticks,"slice_counts":counts,"mode":"service-boundary","private_values":values,"service_asid":super::mmu::active_root()>>48,"cross_code_read_denied":unsafe{read_volatile(addr_of!(CROSS_READ_DENIED))},"task_states":states,"frame_scrubbed":unsafe{read_volatile(addr_of!(FRAME_SCRUBBED))},"alias_removed":unsafe{read_volatile(addr_of!(ALIAS_REMOVED))},"dispatches":unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))},"loader_rejected":unsafe{read_volatile(addr_of!(LOADER_REJECTED))},"image_loaded":unsafe{read_volatile(addr_of!(IMAGE_LOADED))},"code_alias_removed":unsafe{read_volatile(addr_of!(CODE_ALIAS_REMOVED))},"code_frame_scrubbed":unsafe{read_volatile(addr_of!(CODE_FRAME_SCRUBBED))},"image_outcomes":outcomes,"image_exit_codes":unsafe{read_volatile(addr_of!(IMAGE_EXIT_CODES))},"image_irq_x19_max_seen":unsafe{read_volatile(addr_of!(IMAGE_IRQ_X19_MAX_SEEN))},"images_reclaimed":reclaimed,"completions_revoked":unsafe{read_volatile(addr_of!(COMPLETIONS_REVOKED))},"pending_cancelled":unsafe{read_volatile(addr_of!(PENDING_CANCELLED))},"stale_response_blocked":unsafe{read_volatile(addr_of!(STALE_RESPONSE_BLOCKED))},"image_incarnations":unsafe{read_volatile(addr_of!(IMAGE_INCARNATIONS))},"stale_generation_rejected":unsafe{read_volatile(addr_of!(STALE_GENERATION_REJECTED))},"image_count":unsafe{read_volatile(addr_of!(IMAGE_COUNT))},"image1_exited":unsafe{read_volatile(addr_of!(IMAGE1_EXITED))},"image2_exited":unsafe{read_volatile(addr_of!(IMAGE2_EXITED))},"image1_reclaimed":unsafe{read_volatile(addr_of!(IMAGE1_RECLAIMED))},"image2_reclaimed":unsafe{read_volatile(addr_of!(IMAGE2_RECLAIMED))},"spawn_admitted":unsafe{read_volatile(addr_of!(SPAWN_ADMITTED))},"spawn_executed":unsafe{read_volatile(addr_of!(SPAWN_EXECUTED))},"spawn_failed":unsafe{read_volatile(addr_of!(SPAWN_FAILED))},"spawn_exited":unsafe{read_volatile(addr_of!(SPAWN_EXITED))},"spawn_interrupts":unsafe{read_volatile(addr_of!(SPAWN_TICKS))},"spawn_irq_x19_max_seen":unsafe{read_volatile(addr_of!(SPAWN_IRQ_X19_MAX_SEEN))},"spawn_reused_frame":unsafe{read_volatile(addr_of!(SPAWN_REUSED))},"frame_pool_capacity":6,"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()})
@@ -1860,9 +1911,12 @@ slice_count_update:
     ldr x5, [x4, x2, lsl #3]
     cmp x5, #1
     b.eq 21f
-    // The other task has exited: continue this READY task if necessary.
+    // The other task exited or is waiting: continue this READY task.
     cmp x5, #3
+    b.eq 23f
+    cmp x5, #4
     b.ne irq_schedule_fail
+23:
     eor x2, x2, #1
     ldr x5, [x4, x2, lsl #3]
     cmp x5, #1
@@ -2177,10 +2231,55 @@ lower_el_svc:
     mrs x1, ESR_EL1
     mov x0, sp
     bl ipc_dispatch
+    cmp x0, #2
+    b.eq svc_wait
     cbnz x0, svc_exit
     mov x0, sp
     add sp, sp, #272
     b svc_restore_frame
+svc_wait:
+    // Preserve all EL0 registers before giving the service loop control.
+    // The timer and pending interrupt are stopped exactly as on exit, but no
+    // frames or process resources are reclaimed for a sleeping task.
+    adrp x9, CURRENT
+    add x9, x9, :lo12:CURRENT
+    ldr x10, [x9]
+    cmp x10, #1
+    b.hi irq_fatal
+    adrp x11, SAVED
+    add x11, x11, :lo12:SAVED
+    ldr x11, [x11, x10, lsl #3]
+    cbz x11, irq_fatal
+    mov x12, sp
+    mov x13, #34
+24: ldr x14, [x12], #8
+    str x14, [x11], #8
+    subs x13, x13, #1
+    b.ne 24b
+    msr CNTV_CTL_EL0, xzr
+    isb
+    mov x11, #0x08000000
+    mov w12, #0x08000000
+    str w12, [x11, #0x280]
+    dsb sy
+    adrp x11, TASK_STATE
+    add x11, x11, :lo12:TASK_STATE
+    ldr x12, [x11, x10, lsl #3]
+    cmp x12, #2
+    b.ne irq_fatal
+    mov x12, #4
+    str x12, [x11, x10, lsl #3]
+    eor x10, x10, #1
+    ldr x12, [x11, x10, lsl #3]
+    cmp x12, #1
+    b.ne 25f
+    str x10, [x9]
+25: adrp x11, SLICE_BLOCKS
+    add x11, x11, :lo12:SLICE_BLOCKS
+    ldr x12, [x11]
+    add x12, x12, #1
+    str x12, [x11]
+    b slice_return_kernel
 svc_exit:
     // Exit is immediate: never restore this EL0 frame. Stop the timer and
     // clear its pending interrupt, retire the current task, then return EL1.

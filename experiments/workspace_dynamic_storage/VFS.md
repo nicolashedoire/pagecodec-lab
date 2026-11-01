@@ -524,3 +524,20 @@ The experimental direct-IPC ABI has changed: `0x160` also returns the channel
 ID in x2; `0x161` requires that ID in x4; `0x162` takes it in x2 and replaces
 x2 with the source incarnation on success. Older IPC programs must be rebuilt
 against this ABI; they cannot safely reuse the old register contract.
+
+A blocking wait is available through SVC `0x163`: the caller supplies the
+current direct-channel ID in x0 and sleeps until a message is queued. It returns
+0 when data is available; the program then uses the existing receive SVC. A
+closed channel wakes the waiter with -107, while a stale channel ID returns
+-116. There is no deadline: without a message or closure, a task can wait
+indefinitely. The controller can close the channel or stop the task. Waiting
+is a kernel scheduling state, not an EL0 retry loop.
+
+The integrated fixture checks a blocked receiver, progress by its neighbor,
+message wake and receive, reblocking, wake on close, and separate cancellation
+of a sleeping process. A small VFS gate controls when the sender acts; it does
+not carry the IPC message. These are bounded VM scenarios on one CPU, not a
+claim of general scheduling fairness.
+The fixture additionally submits a GET before sleeping and checks its result
+after wake. The scenario does not force the exact instant of service completion,
+so it does not by itself prove that the GET completed while the task was asleep.
