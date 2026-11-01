@@ -4,10 +4,10 @@
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use serde_json::{json, Value};
 
-const MAX_FILES: usize = 8;
+const MAX_FILES: usize = 10;
 const MAX_NAME: usize = 32;
 const MAX_FILE: usize = 512;
-const MAX_TOTAL: usize = 800;
+const MAX_TOTAL: usize = 1100;
 
 #[derive(Clone, Default)]
 pub struct Files {

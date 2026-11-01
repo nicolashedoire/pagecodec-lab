@@ -4,13 +4,13 @@ The same EL1 service that owns the synthetic workspace also owns a flat catalog
 of named files. `file_put`, `file_put_hex`, `file_get`, `file_list` and `file_delete` are experimental MCP tools on the
 existing unauthenticated local guest serial interface. File names are 1–32
 ASCII letters, digits, `.`, `_`, or `-`, excluding `.` and `..`; slashes and
-directories are not supported. There are at most 8 files, at most 512 bytes
-each, and at most 800 bytes in total. `file_put` accepts UTF-8 strings;
+directories are not supported. There are at most 10 files, at most 512 bytes
+each, and at most 1,100 bytes in total. `file_put` accepts UTF-8 strings;
 `file_put_hex` accepts even-length lowercase hexadecimal so arbitrary binary
 bytes can be stored; reads return hexadecimal bytes. These limits are not a full filesystem
 and requests can also fail if the shared 3,584-byte snapshot payload is full.
 
-`init.bin` and `next.bin` are reserved boot-image names: `file_delete` refuses
+`init.bin`, `fault.bin`, `badsvc.bin` and `next.bin` are reserved boot-image names: `file_delete` refuses
 their removal, so a confirmed deletion cannot be silently undone by boot-time
 seeding. A PUT can still replace their bytes. The loader validates a narrow ELF
 format but does not authenticate code; a conforming replacement may execute.
@@ -53,13 +53,34 @@ name is limited to 16 UTF-8 bytes. This task reuses logical actor slot 0: it
 does not have independent identity or authority and does not establish a
 general file API, third user, access-control model, or process isolation.
 After this task exits and its code/data pages have been removed and scrubbed,
-the service loads `next.bin` as a second ELF image into a fresh admission using
-the same logical actor slot. That program writes a private marker and exits;
-the guest verifies its pages are reclaimed independently. The scenario checks
-two distinct file contents and both completions, not concurrent execution or
-independent identities.
+the service loads `fault.bin`, `badsvc.bin`, then `next.bin` sequentially in
+fresh admissions using the same logical actor slot. The first two intentionally
+trigger an invalid EL0 memory access and an unknown SVC, respectively; their
+task pages are reclaimed before the following admission. The last program
+writes a private marker and exits. The scenario checks all four distinct file
+contents, the separate fault outcomes, and reclamation, not concurrent
+execution or independent identities.
 
-At boot, after a blank or valid restore, the service creates the two demo ELF
+Before its invalid read, `fault.bin` submits a file PUT. Depending on timing,
+the request can be serviced or cancelled when that task faults. Its completion
+is revoked and scrubbed on exit. `badsvc.bin` explicitly checks that it sees no
+completion from the previous incarnation before triggering its own fault. This
+is a narrow reuse check for this queue and actor slot, not general identity
+authentication or a complete IPC cancellation protocol. Only requests still
+queued at task exit are cancelled: revoking a completion does not undo a disk
+write already performed by the service. The nominal `note=hello` PUT is
+idempotent in this scenario. Fault handling and cleanup are for this one-CPU
+QEMU guest; they are not evidence of multicore isolation or general recovery.
+
+The integrated scenario also replaces `badsvc.bin` with an ELF whose entry is
+an infinite AArch64 branch to itself. The guest permits 256 timer interrupts for
+one loaded incarnation and terminates it on the 257th, then reclaims its pages
+and runs `next.bin`. This is an IRQ-count limit, not a guaranteed wall-clock
+deadline; it depends on timer delivery and does not cover every way a VM can
+hang. The stale-completion probe is checked in the other boots, because the
+looping image replaces that probe in this one.
+
+At boot, after a blank or valid restore, the service creates the four demo ELF
 files in the in-memory catalog only when absent. The exact previously published
 raw `init.bin` is the sole migration exception: it is replaced in memory by its
 ELF equivalent, and the next normal workspace save persists the migration.
@@ -85,7 +106,7 @@ are no directories, filesystem API, authenticated users, concurrent clients,
 general process access, permissions, or guaranteed recovery from a failed
 write, power loss, or malicious tampering.
 
-The same scenario also fills all eight catalog entries without `note`, then
+The same scenario also fills all ten catalog entries without `note`, then
 boots the approved program. Its PUT fails because the catalog is full; the
 process reports failure and exits, and the guest checks both code and data
 aliases are removed and both frames scrubbed and released. This covers that

@@ -443,7 +443,7 @@ fn put_file<T:Transport>(disk:&mut VirtIOBlk<VmHal,T>,doc:&DocumentDemo,files:&m
 fn delete_file<T:Transport>(disk:&mut VirtIOBlk<VmHal,T>,doc:&DocumentDemo,files:&mut vfs::Files,name:&str)->Result<(usize,u64),&'static str> {
     // Keep the boot image name reserved: deleting it and reseeding it on the
     // next boot would violate the persistent-delete contract.
-    if matches!(name,"init.bin"|"next.bin") {return Err("reserved file")}
+    if matches!(name,"init.bin"|"fault.bin"|"badsvc.bin"|"next.bin") {return Err("reserved file")}
     let mut next=files.clone();
     next.remove(name)?;
     let commit=save_snapshot(disk,doc,&next)?;
@@ -532,10 +532,10 @@ pub extern "C" fn graph_main() -> ! {
     }
     // Seed absent programs and migrate only the exact previously published
     // raw image. Unknown existing bytes are never silently replaced.
-    let mut program_bootstrap=["unavailable";2];
+    let mut program_bootstrap=["unavailable";4];
     if matches!(restore_status,"blank"|"restored") {
         let migrate=files.get("init.bin").is_ok_and(|p|p==el0::legacy_program());
-        for (which,name) in [(0,"init.bin"),(1,"next.bin")] {
+        for (which,name) in [(0,"init.bin"),(1,"fault.bin"),(2,"badsvc.bin"),(3,"next.bin")] {
             let absent=matches!(files.get(name),Err("file not found"));
             if absent || (which==0 && migrate) {
                 program_bootstrap[which]=if let Some(program)=el0::approved_program(which) {
@@ -571,7 +571,7 @@ pub extern "C" fn graph_main() -> ! {
     let mut service_polls=SERVICE_POLLS;
     loop {
         if service_polls>=SERVICE_POLLS {
-            el0::run_slice([files.read_for_load("init.bin",512).ok(),files.read_for_load("next.bin",512).ok()]);
+            el0::run_slice([files.read_for_load("init.bin",512).ok(),files.read_for_load("fault.bin",512).ok(),files.read_for_load("badsvc.bin",512).ok(),files.read_for_load("next.bin",512).ok()]);
             // No EL0 task runs while this sole service owns the document.
             // Two entries at most can have been queued before this slice ends.
             for _ in 0..2 {
