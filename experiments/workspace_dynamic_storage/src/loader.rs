@@ -6,7 +6,10 @@ use crate::mmu::USER_CODE;
 const HEADER:usize=64;
 const PHDR:usize=56;
 const OFFSET:usize=HEADER+PHDR;
-const MAX_FILE:usize=512;
+// A loaded image owns one RX frame. The ELF header and program header are
+// not copied into that frame; only the validated code segment is copied.
+const MAX_CODE:usize=4096;
+const MAX_FILE:usize=OFFSET+MAX_CODE;
 
 pub struct Image<'a> { pub code:&'a [u8], pub entry_offset:usize }
 fn u16le(data:&[u8],i:usize)->Option<u16> {Some(u16::from_le_bytes(data.get(i..i.checked_add(2)?)?.try_into().ok()?))}
@@ -24,7 +27,7 @@ pub fn parse(data:&[u8])->Option<Image<'_>> {
  if u32le(data,64)?!=1 || u32le(data,68)?!=5 || u64le(data,72)?!=OFFSET as u64
     || u64le(data,80)?!=USER_CODE as u64 || u64le(data,88)?!=0 || u64le(data,112)?!=4 {return None}
  let size=usize::try_from(u64le(data,96)?).ok()?;
- if size==0 || size%4!=0 || u64le(data,104)?!=size as u64 || OFFSET.checked_add(size)?!=data.len() {return None}
+ if size==0 || size>MAX_CODE || size%4!=0 || u64le(data,104)?!=size as u64 || OFFSET.checked_add(size)?!=data.len() {return None}
  let entry_offset=usize::try_from(entry.checked_sub(USER_CODE as u64)?).ok()?;
  if entry_offset%4!=0 || entry_offset.checked_add(4)?>size {return None}
  Some(Image{code:data.get(OFFSET..)?,entry_offset})
@@ -33,7 +36,7 @@ pub fn parse(data:&[u8])->Option<Image<'_>> {
 /// Build demo files from two linked instruction sequences. This is not used by
 /// `parse` to decide whether an arbitrary ELF is valid.
 pub fn wrap(code:&[u8])->Option<Vec<u8>> {
- if code.is_empty() || code.len()%4!=0 || OFFSET.checked_add(code.len())?>MAX_FILE {return None}
+ if code.is_empty() || code.len()>MAX_CODE || code.len()%4!=0 || OFFSET.checked_add(code.len())?>MAX_FILE {return None}
  let mut out=alloc::vec![0u8;OFFSET];
  out[..16].copy_from_slice(b"\x7fELF\x02\x01\x01\0\0\0\0\0\0\0\0\0");
  out[16..18].copy_from_slice(&2u16.to_le_bytes());out[18..20].copy_from_slice(&183u16.to_le_bytes());

@@ -6,6 +6,7 @@ mod el0;
 mod loader;
 mod vfs;
 mod boot_identity;
+mod staging;
 extern crate alloc;
 use alloc::format;
 use alloc::string::String;
@@ -494,6 +495,10 @@ fn parse_boot_id(text:&str)->Option<[u8;16]> {
     fn nibble(b:u8)->Option<u8> {match b {b'0'..=b'9'=>Some(b-b'0'),b'a'..=b'f'=>Some(b-b'a'+10),_=>None}}
     let mut out=[0u8;16];for i in 0..16 {out[i]=nibble(b[i*2])?<<4|nibble(b[i*2+1])?}Some(out)
 }
+fn parse_checksum(text:&str)->Option<u64> {
+    if text.len()!=16 || !text.bytes().all(|b|b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {return None}
+    u64::from_str_radix(text,16).ok()
+}
 fn origin_name(origin: Origin) -> &'static str {
     match origin { Origin::Base=>"base", Origin::Human=>"human", Origin::Assistant=>"assistant", Origin::Both=>"both" }
 }
@@ -558,6 +563,7 @@ pub extern "C" fn graph_main() -> ! {
     // The bounded journal overwrites its oldest entries without per-move allocation.
     let mut document = DocumentDemo::new();
     let mut files=vfs::Files::default();
+    let mut upload=staging::Staging::new();
     let restore_before=document.snapshot();
     let mut restore_status="unavailable";
     let mut restore_generation:Option<u64>=None;
@@ -789,6 +795,12 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"process_pair_status","description":"Inspect the experimental pair of guest tasks.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"process_start","description":"Admit one named bounded ELF guest task; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}},
                                         {"name":"process_spawn","description":"Admit a named ELF into a free independent task slot; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}},
+                                        {"name":"upload_begin","description":"Begin one temporary bounded ELF upload with 16-digit lowercase FNV-1a-64 checksum; no authentication.","inputSchema":{"type":"object","properties":{"size":{"type":"integer","minimum":1,"maximum":4216},"checksum":{"type":"string","pattern":"^[0-9a-f]{16}$"}},"required":["size","checksum"],"additionalProperties":false}},
+                                        {"name":"upload_chunk","description":"Append a contiguous lowercase-hex chunk (up to 512 bytes) to a temporary ELF upload.","inputSchema":{"type":"object","properties":{"id":{"type":"string"},"offset":{"type":"integer","minimum":0},"hex":{"type":"string"}},"required":["id","offset","hex"],"additionalProperties":false}},
+                                        {"name":"upload_seal","description":"Check complete upload length, checksum and ELF before admission.","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}},
+                                        {"name":"upload_reset","description":"Clear the specified temporary upload.","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}},
+                                        {"name":"upload_status","description":"Inspect temporary upload metadata without returning its bytes.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"process_spawn_staged","description":"Admit a sealed temporary ELF into a free independent task slot; no authentication.","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}},
                                         {"name":"process_stop","description":"Stop one independent guest task by slot, exact decimal incarnation and boot ID; no authentication.","inputSchema":{"type":"object","properties":{"slot":{"type":"integer","minimum":0,"maximum":1},"incarnation":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20},"boot_id":{"type":"string","pattern":"^[0-9a-f]{32}$"}},"required":["slot","incarnation","boot_id"],"additionalProperties":false}},
                                         {"name":"process_status","description":"Inspect the latest bounded guest task admission.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"fixtures_pause","description":"Pause new built-in fixture admissions after the current fixture finishes.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
@@ -884,6 +896,46 @@ pub extern "C" fn graph_main() -> ! {
                                                         Err(_)=>tool_error(id,"program unavailable"),
                                                     }
                                                 }
+                                            }
+                                            Some("upload_begin") => {
+                                                let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
+                                                let parsed=args.filter(|o|o.len()==2).and_then(|o|Some((usize::try_from(o.get("size")?.as_u64()?).ok()?,parse_checksum(o.get("checksum")?.as_str()?)?)));
+                                                if let Some((size,checksum))=parsed {
+                                                    match upload.begin(size,checksum) {Ok(upload_id)=>tool_json(id,json!({"id":format!("{}",upload_id)})),Err(error)=>tool_error(id,error)}
+                                                } else {tool_error(id,"invalid upload_begin arguments");}
+                                            }
+                                            Some("upload_chunk") => {
+                                                let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
+                                                let parsed=args.filter(|o|o.len()==3).and_then(|o|Some((parse_incarnation(o.get("id")?.as_str()?)?,usize::try_from(o.get("offset")?.as_u64()?).ok()?,o.get("hex")?.as_str()?)));
+                                                if let Some((upload_id,offset,hex))=parsed {
+                                                    match vfs::decode_hex(hex).and_then(|chunk|upload.append(upload_id,offset,&chunk)) {
+                                                        Ok(received)=>tool_json(id,json!({"received":received})),Err(error)=>tool_error(id,error),
+                                                    }
+                                                } else {tool_error(id,"invalid upload_chunk arguments");}
+                                            }
+                                            Some("upload_seal") | Some("upload_reset") | Some("process_spawn_staged") => {
+                                                let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
+                                                let upload_id=args.filter(|o|o.len()==1).and_then(|o|parse_incarnation(o.get("id")?.as_str()?));
+                                                if let Some(upload_id)=upload_id {
+                                                    match name {
+                                                        Some("upload_seal")=>match upload.seal(upload_id) {Ok(())=>tool_json(id,json!({"sealed":true})),Err(error)=>tool_error(id,error)},
+                                                        Some("upload_reset")=>match upload.reset(upload_id) {Ok(())=>tool_json(id,json!({"reset":true})),Err(error)=>tool_error(id,error)},
+                                                        _=>if STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed) {tool_error(id,"storage write blocked until restart")}else{
+                                                            match upload.image(upload_id).and_then(el0::start_independent) {
+                                                                Ok((slot,incarnation))=>match boot_identity::identifier() {
+                                                                    Some(boot_id)=>tool_json(id,json!({"started":true,"slot":slot,"incarnation":incarnation,"incarnation_text":format!("{}",incarnation),"boot_id":boot_id_text(boot_id)})),
+                                                                    None=>halt(),
+                                                                },
+                                                                Err(error)=>tool_error(id,error),
+                                                            }
+                                                        },
+                                                    }
+                                                } else {tool_error(id,"invalid upload id arguments");}
+                                            }
+                                            Some("upload_status") => {
+                                                let args=params.and_then(|p|p.get("arguments"));
+                                                if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"upload_status requires empty arguments");}
+                                                else {tool_json(id,upload.status());}
                                             }
                                             Some("process_spawn") => {
                                                 let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);

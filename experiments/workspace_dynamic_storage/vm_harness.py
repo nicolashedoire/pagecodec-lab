@@ -100,6 +100,11 @@ class Guest:
         diagnostic=self.log.read().decode('utf-8',errors='replace')
         if diagnostic:print('QEMU diagnostic: '+diagnostic,file=sys.stderr)
     def exchange(self,req):
+        # One initialized notification also consumes the guest's 64-line
+        # budget. Stop locally before reaching the hard limit, rather than
+        # provoking its terminal error and halting the guest.
+        if isinstance(req.get('id'),int) and req['id']>=63:
+            raise RuntimeError('runner message budget exhausted before guest limit')
         self.stream.write(json.dumps(req,separators=(',',':')).encode()+b'\n')
         raw=self.stream.readline()
         try:reply=json.loads(raw)
@@ -136,10 +141,10 @@ class Guest:
                 return response
     def progress(self,label,timeout_image=False,expected_exit_code=None):
         before=self.last_progress
-        for _ in range(20):
+        for _ in range(8):
             current=self.call('el0_status',{})
             if current.get('task_states')==['exited','exited'] and current.get('spawn_exited') is True and current.get('image_count')==4 and current.get('images_reclaimed')==[True]*4:break
-            time.sleep(.2)
+            time.sleep(.5)
         else:raise RuntimeError('tasks did not finish across '+label)
         if current.get('mode')!='service-boundary' or current.get('slice_ticks',0)<before.get('slice_ticks',0):raise RuntimeError('EL0 slices regressed across '+label)
         if current.get('private_values')!=[0xa1a1,0xb2b2] or current.get('service_asid')!=1:raise RuntimeError('private markers or service ASID changed across '+label)
@@ -165,10 +170,10 @@ class Guest:
         self.last_progress=current
         return current
     def wait_pair(self,expected_markers=(0xa1a1,0xb2b2)):
-        for _ in range(60):
+        for _ in range(5):
             pair=self.call('process_pair_status',{})
             if pair.get('done') is True:break
-            time.sleep(.2)
+            time.sleep(2.4)
         else:raise RuntimeError('two ELF tasks did not finish: '+str(pair))
         identities=pair.get('incarnations')
         if not isinstance(identities,list) or len(identities)!=2 or any(not isinstance(x,int) or x<=0 for x in identities) or identities[0]==identities[1]:raise RuntimeError('pair identities invalid: '+str(pair))
@@ -178,10 +183,10 @@ class Guest:
         if pair.get('outcomes')!=[1,1] or pair.get('exit_codes')!=[0,0] or pair.get('markers')!=list(expected_markers) or pair.get('data_scrubbed')!=[True,True] or pair.get('code_scrubbed')!=[True,True] or pair.get('frame_pool_assigned')!=0:raise RuntimeError('pair exit or frame cleanup invalid: '+str(pair))
         return pair
     def wait_single(self):
-        for _ in range(60):
+        for _ in range(5):
             state=self.call('process_status',{})
             if state.get('done') is True:break
-            time.sleep(.2)
+            time.sleep(2.4)
         else:raise RuntimeError('single ELF task did not finish: '+str(state))
         identities=state.get('incarnations')
         if state.get('mode')!='single' or state.get('started') is not True or state.get('mappings_verified') is not True or not isinstance(identities,list) or len(identities)!=2 or not isinstance(identities[0],int) or identities[0]<=0 or identities[1]!=0:raise RuntimeError('single task identity or mapping invalid: '+str(state))
@@ -191,16 +196,16 @@ class Guest:
         if state.get('io_submitted')!=[4,0] or state.get('io_completed')!=[4,0]:raise RuntimeError('single task I/O invalid: '+str(state))
         return state
     def wait_independent(self,predicate,label):
-        for _ in range(60):
+        for _ in range(5):
             state=self.call('process_status',{})
             if state.get('mode')=='independent' and predicate(state):return state
-            time.sleep(.1)
+            time.sleep(1.2)
         raise RuntimeError('independent tasks did not reach '+label+': '+str(state))
     def wait_boot_identity(self):
-        for _ in range(60):
+        for _ in range(5):
             status=self.call('process_status',{})
             if status.get('boot_identity_ready') is True:return
-            time.sleep(.1)
+            time.sleep(1.2)
         raise RuntimeError('boot entropy did not become available')
     def input(self,events):
         self.qmp_command({'execute':'input-send-event','arguments':{'events':events}})

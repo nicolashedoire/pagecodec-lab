@@ -20,9 +20,14 @@ def independent_elf(reference_hex,code):
  # Reuse only the bounded ELF header; instructions are supplied by the
  # launcher, persisted in VFS, and not linked into the kernel image.
  reference=bytes.fromhex(reference_hex)
- if len(reference)<120 or reference[:4]!=b'\x7fELF' or not code or len(code)%4 or len(code)>392:raise RuntimeError('invalid external program template')
+ if len(reference)<120 or reference[:4]!=b'\x7fELF' or not code or len(code)%4 or len(code)>4096:raise RuntimeError('invalid external program template')
  elf=bytearray(reference[:120]);elf[96:104]=len(code).to_bytes(8,'little');elf[104:112]=len(code).to_bytes(8,'little')
  return (elf+code).hex()
+
+def fnv64(data):
+ value=0xcbf29ce484222325
+ for byte in data:value=((value^byte)*0x100000001b3)&0xffffffffffffffff
+ return f'{value:016x}'
 
 def independent_exit_elf(reference_hex,exit_code):
  if not 0<=exit_code<=65535:raise RuntimeError('invalid external exit code')
@@ -411,10 +416,10 @@ def main():
   try:
    # The exact startup file value pauses new fixtures before any ELF fixture
    # admission, while the original two built-in tasks are allowed to finish.
-   for _ in range(60):
+   for _ in range(8):
     fixture=g.call('fixtures_status',{})
     if fixture.get('admission_ready') is True:break
-    time.sleep(.2)
+    time.sleep(1.5)
    else:raise RuntimeError('paused fixture state never became idle: '+str(fixture))
    if fixture.get('pause_requested') is not True or fixture.get('fixture_active') is not False or fixture.get('initial_tasks_done') is not True or fixture.get('image_count')!=0:raise RuntimeError('startup pause did not stop fixture admissions: '+str(fixture))
    if g.call('fixtures_pause',{})!=fixture:raise RuntimeError('repeated fixture pause changed idle state')
@@ -442,10 +447,10 @@ def main():
   finally:g.close()
   g=Guest(a.qemu,guest,disk,tmp,27,out,a.transport)
   try:
-   for _ in range(60):
+   for _ in range(8):
     fixture=g.call('fixtures_status',{})
     if fixture.get('admission_ready') is True:break
-    time.sleep(.2)
+    time.sleep(1.5)
    else:raise RuntimeError('independent startup pause did not become idle: '+str(fixture))
    if fixture.get('pause_requested') is not True or fixture.get('image_count')!=0:raise RuntimeError('independent scenario did not pause fixtures')
    g.wait_boot_identity()
@@ -493,10 +498,10 @@ def main():
   # Only the fresh boot ID distinguishes it from the earlier stop request.
   g=Guest(a.qemu,guest,disk,tmp,28,out,a.transport)
   try:
-   for _ in range(60):
+   for _ in range(8):
     fixture=g.call('fixtures_status',{})
     if fixture.get('admission_ready') is True:break
-    time.sleep(.2)
+    time.sleep(1.5)
    else:raise RuntimeError('replay boot did not reach paused admission')
    g.wait_boot_identity()
    replay=g.call('process_spawn',{'name':'a-ind.elf'})
@@ -526,14 +531,82 @@ def main():
    if not g.call('file_delete',{'name':'a-ind.elf'}).get('readback_verified'):raise RuntimeError('no-entropy fixture cleanup failed')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
+  # Upload a real compiled Rust no_std program larger than the persistent
+  # per-file limit; the staging area is not part of the virtual disk catalog.
+  rust_code=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-no-std.hex').read_text().strip())
+  if not 392<len(rust_code)<=4096 or len(rust_code)%4:raise RuntimeError('Rust code size not suitable for page-boundary test')
+  # Pad unreachable code with AArch64 NOPs to exercise the full RX page.
+  rust_code+=bytes.fromhex('1f2003d5')*((4096-len(rust_code))//4)
+  rust_elf=bytes.fromhex(independent_elf(next_hex,rust_code))
+  if len(rust_elf)!=4216:raise RuntimeError('Rust ELF does not fill the maximum code page')
+  g=Guest(a.qemu,guest,disk,tmp,30,out,a.transport)
+  try:
+   g.progress('before staged Rust ELF',timeout_image=True,expected_exit_code=0)
+   reject(g,'upload_begin',{'size':4217,'checksum':'0000000000000000'},'upload size outside bound')
+   # A coherent RX segment larger than one page cannot enter staging.
+   too_large=bytearray(rust_elf)+bytes.fromhex('1f2003d5')
+   too_large[96:104]=(4100).to_bytes(8,'little');too_large[104:112]=(4100).to_bytes(8,'little')
+   reject(g,'upload_begin',{'size':len(too_large),'checksum':fnv64(too_large)},'upload size outside bound')
+   checksum=fnv64(rust_elf)
+   damaged=bytearray(rust_elf);damaged[-1]^=1
+   bad_id=g.call('upload_begin',{'size':len(damaged),'checksum':checksum})['id']
+   for offset in range(0,len(damaged),512):
+    if g.call('upload_chunk',{'id':bad_id,'offset':offset,'hex':damaged[offset:offset+512].hex()})!={'received':min(offset+512,len(damaged))}:raise RuntimeError('damaged upload chunk accounting invalid')
+   reject(g,'upload_seal',{'id':bad_id},'upload checksum mismatch')
+   if g.call('upload_reset',{'id':bad_id})!={'reset':True}:raise RuntimeError('damaged upload reset failed')
+   invalid=bytearray.fromhex(independent_elf(next_hex,bytes.fromhex('1f2003d5')))
+   invalid[104:112]=(4097).to_bytes(8,'little') # impossible > one-page segment
+   invalid_id=g.call('upload_begin',{'size':len(invalid),'checksum':fnv64(invalid)})['id']
+   reject(g,'upload_chunk',{'id':invalid_id,'offset':0,'hex':'00'*(len(invalid)+1)},'upload exceeds declared size')
+   reject(g,'upload_chunk',{'id':invalid_id,'offset':0,'hex':''},'upload chunk outside bound')
+   g.call('upload_chunk',{'id':invalid_id,'offset':0,'hex':invalid.hex()})
+   reject(g,'upload_seal',{'id':invalid_id},'invalid staged ELF')
+   g.call('upload_reset',{'id':invalid_id})
+   traces.append(g.trace);states.append(g.call('storage_status',{}))
+  finally:g.close()
+  # Start a fresh guest for the valid upload: staging is intentionally
+  # volatile, and this leaves headroom in the 64-message per-boot budget.
+  g=Guest(a.qemu,guest,disk,tmp,32,out,a.transport)
+  try:
+   g.progress('before valid staged Rust ELF',timeout_image=True,expected_exit_code=0)
+   g.wait_boot_identity()
+   original_catalog=g.call('file_list',{})
+   upload_id=g.call('upload_begin',{'size':len(rust_elf),'checksum':checksum})['id']
+   reject(g,'upload_seal',{'id':upload_id},'upload incomplete')
+   reject(g,'process_spawn_staged',{'id':upload_id},'upload not sealed')
+   reject(g,'upload_chunk',{'id':invalid_id,'offset':0,'hex':'00'},'stale upload id')
+   reject(g,'upload_chunk',{'id':upload_id,'offset':1,'hex':'00'},'upload offset mismatch')
+   reject(g,'upload_chunk',{'id':upload_id,'offset':0,'hex':'00'*513},'file too large')
+   for offset in range(0,len(rust_elf),512):
+    if g.call('upload_chunk',{'id':upload_id,'offset':offset,'hex':rust_elf[offset:offset+512].hex()})!={'received':min(offset+512,len(rust_elf))}:raise RuntimeError('Rust upload chunk accounting invalid')
+    if offset==0:reject(g,'upload_chunk',{'id':upload_id,'offset':0,'hex':'00'},'upload offset mismatch')
+   if g.call('upload_seal',{'id':upload_id})!={'sealed':True}:raise RuntimeError('Rust upload seal failed')
+   reject(g,'upload_chunk',{'id':upload_id,'offset':len(rust_elf),'hex':'00'},'upload already sealed')
+   if g.call('file_list',{})!=original_catalog:raise RuntimeError('temporary upload modified VFS')
+   rust=g.call('process_spawn_staged',{'id':upload_id})
+   if rust.get('started') is not True or rust.get('slot')!=0:raise RuntimeError('staged Rust admission failed')
+   state=g.wait_independent(lambda s:s.get('slot_states',[None,None])[0]=='exited','staged Rust ELF exited')
+   if state.get('incarnations',[None,None])[0]!=rust.get('incarnation') or state.get('outcomes',[None,None])[0]!=1 or state.get('exit_codes',[None,None])[0]!=0 or state.get('data_scrubbed',[False,False])[0] is not True or state.get('code_scrubbed',[False,False])[0] is not True or state.get('frame_pool_assigned')!=0:raise RuntimeError('staged Rust ELF exit or cleanup invalid: '+str(state))
+   if g.call('file_get',{'name':'a-rust'})!={'name':'a-rust','hex':'52'}:raise RuntimeError('Rust program did not perform its file write')
+   if g.call('upload_status',{}).get('sealed') is not True:raise RuntimeError('sealed Rust upload vanished before reboot')
+   traces.append(g.trace);states.append(g.call('storage_status',{}))
+  finally:g.close()
+  g=Guest(a.qemu,guest,disk,tmp,31,out,a.transport)
+  try:
+   g.progress('after staged Rust ELF reboot',timeout_image=True,expected_exit_code=0)
+   if g.call('upload_status',{}).get('active') is not False:raise RuntimeError('temporary upload survived reboot')
+   if g.call('file_get',{'name':'a-rust'})!={'name':'a-rust','hex':'52'}:raise RuntimeError('Rust file effect not persisted')
+   if not g.call('file_delete',{'name':'a-rust'}).get('readback_verified'):raise RuntimeError('Rust fixture cleanup failed')
+   traces.append(g.trace);states.append(g.call('storage_status',{}))
+  finally:g.close()
   if a.exercise_storage_fault:
    # In the same integrated guest, fail confirmation after the commit flush.
    # The kernel must preserve the old in-memory view and deny further writes.
    g=Guest(a.qemu,guest,disk,tmp,10,out,a.transport)
    try:
-    for _ in range(20):
+    for _ in range(10):
      if g.call('ipc_status',{}).get('finished') is True:break
-     time.sleep(.1)
+     time.sleep(.2)
     else:raise RuntimeError('fault-injection guest tasks did not finish')
     baseline=g.call('file_put',{'name':'baseline.txt','data':'safe'})
     if not baseline.get('readback_verified'):raise RuntimeError('baseline save failed')
@@ -553,9 +626,9 @@ def main():
    validate_slot(data[offset:offset+4096],expected_generation,final,{**catalog,'uncertain.txt':b'committed'.hex()})
    g=Guest(a.qemu,guest,disk,tmp,11,out,a.transport)
    try:
-    for _ in range(20):
+    for _ in range(10):
      if g.call('ipc_status',{}).get('finished') is True:break
-     time.sleep(.1)
+     time.sleep(.2)
     else:raise RuntimeError('restart guest tasks did not finish')
     status=g.call('storage_status',{})
     if status.get('restore_generation')!=expected_generation or status.get('write_blocked') is not False:raise RuntimeError('restart did not reconcile committed slot')

@@ -150,6 +150,34 @@ admission is refused if both slots are occupied or another execution mode is
 active. The experimental `a-` and `b-` namespace conventions follow the
 assigned slot. They are not a general permissions system.
 
+## Temporary ELF uploads
+
+The persistent VFS retains its 512-byte per-file bound. A separate in-memory
+staging area accepts one ELF of at most 4,216 bytes (a 120-byte header and up
+to 4,096 bytes of code) through `upload_begin`, sequential `upload_chunk`
+requests of at most 512 bytes, then `upload_seal`. The caller supplies the
+size and a canonical 16-digit FNV-1a-64 checksum. Sealing checks exact length,
+checksum and the restricted ELF format; `process_spawn_staged` accepts only a
+sealed image. An upload ID rejects accidental mixing of chunks from different
+uploads; `upload_reset` discards the current one. Upload bytes are temporary
+and disappear on reboot, and the normal VFS is not modified by staging.
+
+FNV detects common accidental corruption, not malicious tampering. Upload IDs
+are sequential and restart after a reboot, so they prevent accidental mixing
+only within a boot; an old request can collide with a new upload after reboot.
+They are not credentials, and the serial MCP endpoint is unauthenticated.
+The existing bump allocator never reclaims allocations, so a 64-message limit
+per boot also bounds operations. The runner splits the invalid-upload checks
+and the valid upload across fresh boots and spaces out status polling to leave
+headroom; it recreates the volatile staging state after restart. The VM scenario uses a real compiled Rust `no_std`
+program padded with unreachable ARM64 NOPs to fill the 4,096-byte code page.
+It checks partial, stale, out-of-order, oversized, corrupt and invalid ELF
+refusals, including an oversized and internally inconsistent segment. A
+coherent 4,100-byte code image is refused by the upload-size limit before the
+ELF parser sees it. The accepted upload runs and its separate VFS write is
+verified after reboot. The restricted loader is not a full native executable
+environment.
+
 `process_stop` accepts an exact identity such as
 `{"slot":0,"incarnation":"42","boot_id":"0123456789abcdef0123456789abcdef"}`.
 The incarnation must be a canonical,
@@ -232,7 +260,9 @@ nonblank invalid slots leaves all disk bytes unchanged. Both images are
 temporary QEMU disks; the injection is absent from normal builds. Recorded
 synthetic traces are available for [modern](evidence/storage-fault-modern.json)
 and [legacy](evidence/storage-fault-legacy.json) VirtIO. Both include the
-pair-to-single-to-pair execution on the current guest. This tests a specific
+pair-to-single-to-pair execution on the current guest. The modern fault trace
+was recorded before the runner split upload checks across boots; the legacy
+fault trace uses that split. This tests a specific
 reported-error window, not power-loss durability or rollback.
 
 The versioned payload has exactly `format`, `document`, and `files` keys. Its
