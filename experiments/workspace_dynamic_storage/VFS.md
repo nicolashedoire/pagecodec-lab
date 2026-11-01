@@ -1,7 +1,7 @@
 # Bounded named files in the integrated workspace guest
 
 The same EL1 service that owns the synthetic workspace also owns a flat catalog
-of named files. `file_put` and `file_get` are experimental MCP tools on the
+of named files. `file_put`, `file_get`, `file_list` and `file_delete` are experimental MCP tools on the
 existing unauthenticated local guest serial interface. File names are 1–32
 ASCII letters, digits, `.`, `_`, or `-`, excluding `.` and `..`; slashes and
 directories are not supported. There are at most 8 files, at most 512 bytes
@@ -9,10 +9,14 @@ each, and at most 800 bytes in total. The MCP insertion interface accepts UTF-8
 strings; reads return hexadecimal bytes. These limits are not a full filesystem
 and requests can also fail if the shared 3,584-byte snapshot payload is full.
 
-`file_put` prepares a bounded candidate catalog, writes it with the current
+`file_put` and `file_delete` prepare a bounded candidate catalog, write it with the current
 workspace to the inactive VirtIO slot, flushes, commits, flushes, and verifies
 the exact slot bytes by readback. Only then does it publish the candidate in
-memory and return success. A failure may occur after a slot was written: no
+memory and return success. `file_list` reports names and byte lengths in sorted
+order. Invalid names, absent files, and catalog limits return explicit errors
+without changing the in-memory catalog. The UART request line is also bounded
+to 512 bytes, including JSON overhead, so its usable content limit may be
+smaller than the 512-byte per-file storage limit. A failure may occur after a slot was written: no
 rollback or atomicity is promised. Readback may come from a volatile device
 cache and does not prove persistence across a power cut; the driver may also
 complete `flush` without a negotiated FLUSH feature.
@@ -25,8 +29,9 @@ Both types retain the same existing two-slot header, generation, checksum and
 commit marker. A subsequent successful save writes the versioned format to the
 other slot; the legacy slot is not modified by that migration save.
 
-The integrated QEMU scenario writes and reads `notes.txt`, restarts and reads
-it again, corrupts the newest slot while the VM is stopped, restores the older
+The integrated QEMU scenario writes and reads `notes.txt`, creates, lists and
+deletes another file, verifies refused requests, restarts and checks that the
+deletion persists, then corrupts the newest slot while the VM is stopped and restores the older
 valid copy including that file, and saves again. A further boot starts with a
 synthetic legacy snapshot and checks that migration preserves the old slot.
 All disks are freshly created host temporary files; no physical devices or
@@ -34,3 +39,7 @@ host folders are exposed to the guest. This is a QEMU-only experiment: there
 are no directories, filesystem API, authenticated users, concurrent clients,
 general process access, permissions, or guaranteed recovery from a failed
 write, power loss, or malicious tampering.
+
+The EL1 guard page is active only after the MMU is enabled. If the EL1 stack
+has already overflowed into it, exception handling may itself fail; the guard
+does not guarantee a diagnostic or recovery.

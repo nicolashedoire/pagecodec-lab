@@ -32,6 +32,10 @@ static mut PROBE_DONE:u64=0;
 #[no_mangle] static mut SLICE_IRQS:u64=0;
 #[no_mangle] static mut SLICE_TOTAL:u64=0;
 #[no_mangle] static mut SLICE_DISPATCHES:u64=0;
+#[no_mangle] static mut SLICE_EXITS:u64=0;
+static mut FRAME_SCRUBBED:[bool;2]=[false;2];
+static mut ALIAS_REMOVED:[bool;2]=[false;2];
+static mut EXIT_MARKERS:[u64;2]=[0;2];
 #[no_mangle] static mut SLICE_COUNTS:[u64;2]=[0;2];
 #[no_mangle] static mut USER_TOPS:[u64;2]=[0;2];
 #[no_mangle] static mut SLICE_DELTA:u64=0;
@@ -85,7 +89,7 @@ pub fn ipc_status()->Value {
  json!({"finished":finished,"capacity":2,"queue_len":s.len,"accepted":&s.accepted[..s.accepted_len],"applied":&s.applied[..s.applied_len],"consumed":&s.consumed[..s.consumed_len],"full_rejected":s.full,"full_consumed":s.full_consumed,"range_rejected":s.range,"overflow_rejected":s.overflow,"duplicate_rejected":s.duplicate,"utf8_rejected":s.utf8,"spoof_rejected":s.spoof,"save_denied":s.save_denied,"denial_consumed":s.denial_consumed,"source":"synthetic descriptors and bytes constructed by EL0"})
 }
 #[no_mangle]
-extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64) {
+extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
  let f=unsafe{&mut *frame};let actor=unsafe{read_volatile(addr_of!(CURRENT))} as usize;
  if actor>=2 || super::mmu::active_root()!=super::mmu::root(actor) || f.spsr&0xf!=0 {halt()}
  if esr>>26==0x24 {
@@ -96,12 +100,12 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64) {
   if esr&(1<<25)==0 || esr&0x3f!=0x0f || esr&(1<<6)!=0 || esr&(1<<10)!=0 || f.elr!=pc || far!=target || f.regs[2]!=target {halt()}
   let flag=unsafe{addr_of_mut!(CROSS_READ_DENIED).cast::<bool>().add(actor)};
   if unsafe{read_volatile(flag)} {halt()}
-  unsafe{write_volatile(flag,true)};f.elr+=4;f.regs[2]=0;return
+  unsafe{write_volatile(flag,true)};f.elr+=4;f.regs[2]=0;return 0
  }
  if esr>>26!=0x15 || esr&(1<<25)==0 {halt()}
  let (lo,hi)=if actor==0 {(addr_of!(task_a_loop) as u64,addr_of!(task_a_end) as u64)} else {(addr_of!(task_b_loop) as u64,addr_of!(task_b_end) as u64)};
  if f.elr<lo || f.elr>=hi {halt()}
- if unsafe{read_volatile(addr_of!(SLICE_MODE))}==0 {return}
+ if unsafe{read_volatile(addr_of!(SLICE_MODE))}==0 {return 0}
  let s=unsafe{&mut *addr_of_mut!(IPC)};let op=esr&0xffff;
  match op {
   0x100 if actor==0 && s.completions[0].id==0 => {if let Some(r)=descriptor(actor,0,1){if !submit(s,r){halt()}}else{halt()}},
@@ -154,6 +158,10 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64) {
    let r=Request{actor,id:4,save:true,key:[0;16],key_len:0,value:[0;32],value_len:0};
    if !submit(s,r) {halt()}
   },
+  0x120 if s.consumed_len==4 && s.denial_consumed && s.len==0 => {
+   // The task asks to exit only after the integrated work has completed.
+   return 1;
+  },
   0x103 => {
     if !s.completions.iter().any(|c|c.actor==actor && c.delivered && !c.consumed) {
      if let Some(c)=s.completions.iter_mut().find(|c|c.id!=0 && c.actor==actor && c.applied && !c.delivered) {
@@ -170,6 +178,7 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64) {
   },
   _=>{}
  }
+ 0
 }
 // Only reached from a saved, full 272-byte IRQ frame; addresses are guest
 // values from this synthetic fixture. This path never returns to the guest.
@@ -265,6 +274,30 @@ pub fn start()->! {
  }
 }
 
+// The service runs with IRQs masked. Revoke the alias and invalidate the TLB
+// before zeroing and returning the frame to this bounded boot pool.
+fn reclaim_exited(actor:usize) {
+ let p=unsafe{addr_of_mut!(TASK_FRAMES).cast::<usize>().add(actor)};
+ let frame=unsafe{read_volatile(p)};if frame==0{return}
+ check(unsafe{read_volatile(addr_of!(TASK_STATE).cast::<u64>().add(actor))}==3,"reclaim running task");
+ let marker=unsafe{read_volatile(frame as *const u64)};
+ super::mmu::unmap_task_alias(actor,frame);
+ unsafe{write_volatile(addr_of_mut!(ALIAS_REMOVED).cast::<bool>().add(actor),true)};
+ for i in 0..PAGE {unsafe{write_volatile((frame as *mut u8).add(i),0)}}
+ for i in 0..PAGE {check(unsafe{read_volatile((frame as *const u8).add(i))}==0,"frame scrub")}
+ unsafe{write_volatile(addr_of_mut!(FRAME_SCRUBBED).cast::<bool>().add(actor),true)};
+ let base=addr_of_mut!(USER_FRAMES) as usize;
+ let offset=frame.checked_sub(base).unwrap_or_else(||halt());
+ check(offset%PAGE==0 && offset/PAGE<4,"frame outside pool");
+ let bit=1u8<<(offset/PAGE);let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
+ check(used&bit!=0,"frame already free");
+ unsafe{write_volatile(addr_of_mut!(EXIT_MARKERS).cast::<u64>().add(actor),marker);write_volatile(p,0);write_volatile(addr_of_mut!(FRAME_BITMAP),used&!bit)}
+}
+fn marker(actor:usize)->u64 {
+ let frame=unsafe{read_volatile(addr_of!(TASK_FRAMES).cast::<usize>().add(actor))};
+ if frame==0 {unsafe{read_volatile(addr_of!(EXIT_MARKERS).cast::<u64>().add(actor))}} else {unsafe{read_volatile(frame as *const u64)}}
+}
+
 /// Explicit service-boundary yielding, never arbitrary EL1 preemption.
 pub fn prepare_slices() {
  // Test-only fault injection: corrupt x5 in both fixed saved EL0 frames so
@@ -290,10 +323,13 @@ pub fn prepare_slices() {
 pub fn run_slice() {
  let mut daif:u64;unsafe{asm!("mrs {},DAIF",out(reg) daif);}check(daif&(1<<7)!=0,"service IRQ unmasked");
  check(super::mmu::active_root()==super::mmu::root(0),"service root");
- let current=unsafe{read_volatile(addr_of!(CURRENT))};check(current<2,"slice actor");
+ let states_before=unsafe{read_volatile(addr_of!(TASK_STATE))};
+ if states_before==[3,3] {return}
+ check(states_before.iter().all(|v|*v==1 || *v==3),"invalid service-boundary task states");
+ let current=unsafe{read_volatile(addr_of!(CURRENT))};check(current<2 && states_before[current as usize]==1,"slice actor");
  let frame=unsafe{read_volatile(addr_of!(SAVED).cast::<u64>().add(current as usize))} as *const Frame;
- let before=unsafe{read_volatile(addr_of!(SLICE_TOTAL))};let dispatches=unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))};let delta=unsafe{read_volatile(addr_of!(SLICE_DELTA))};check(delta!=0,"slice not initialized");
- check(unsafe{read_volatile(addr_of!(TASK_STATE))}==[1,1],"tasks not ready at service boundary");
+ let before=unsafe{read_volatile(addr_of!(SLICE_TOTAL))};let dispatches=unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))};let exits=unsafe{read_volatile(addr_of!(SLICE_EXITS))};let delta=unsafe{read_volatile(addr_of!(SLICE_DELTA))};check(delta!=0,"slice not initialized");
+
  let counts_before=[unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>())},unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>().add(1))}];
  let allocations_before=super::HEAP_NEXT.load(Ordering::Relaxed);
  let mut sentinel=[0u64;2];let p=sentinel.as_mut_ptr();let ptr=physical(p as usize);
@@ -304,24 +340,29 @@ pub fn run_slice() {
   write_volatile(addr_of_mut!(SLICE_IRQS),0);asm!("msr CNTV_TVAL_EL0, {}",in(reg) delta);asm!("msr CNTV_CTL_EL0, {}",in(reg) 1u64);asm!("isb");
   check(slice_probe(frame)==1,"kernel call context");
  }
- let after=unsafe{read_volatile(addr_of!(SLICE_TOTAL))};check(before.checked_add(2)==Some(after),"slice IRQ count");
- check(dispatches.checked_add(2)==Some(unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))}) && unsafe{read_volatile(addr_of!(TASK_STATE))}==[1,1],"slice task state transitions");
+ let after=unsafe{read_volatile(addr_of!(SLICE_TOTAL))};let ticks=after.checked_sub(before).unwrap_or_else(||halt());
+ let exited=unsafe{read_volatile(addr_of!(SLICE_EXITS))}.checked_sub(exits).unwrap_or_else(||halt());
+ check(ticks<=2 && exited<=1 && (1..=2).contains(&(ticks+exited)),"slice end count");
+ let states_after=unsafe{read_volatile(addr_of!(TASK_STATE))};
+ check(dispatches.checked_add(ticks+exited)==Some(unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))}) && states_after.iter().all(|v|*v==1 || *v==3),"slice task state transitions");
  let counts_after=[unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>())},unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>().add(1))}];
- check(counts_after[0]>counts_before[0] && counts_after[1]>counts_before[1],"EL0 slice progress");
+ let selected=current as usize;
+ check(counts_after[selected]>counts_before[selected] || states_after[selected]==3,"EL0 slice progress");
  check(super::HEAP_NEXT.load(Ordering::Relaxed)==allocations_before,"IRQ allocation");
  check(unsafe{read_volatile(p)}==0x1122_3344_5566_7788 && unsafe{read_volatile(p.add(1))}==0x0102_0304_0506_0708,"service stack sentinel");
  let mut timer:u64;unsafe{asm!("mrs {},CNTV_CTL_EL0",out(reg) timer);asm!("mrs {},DAIF",out(reg) daif);}
  check(timer&1==0 && daif&(1<<7)!=0 && super::mmu::active_root()==super::mmu::root(0),"slice timer, IRQ mask or service root");
- check(unsafe{read_volatile(task_frame(0) as *const u64)}==0xa1a1 && unsafe{read_volatile(task_frame(1) as *const u64)}==0xb2b2,"private task data");
+ check(marker(0)==0xa1a1 && marker(1)==0xb2b2,"private task data");
+ for actor in 0..2 {if states_after[actor]==3 {reclaim_exited(actor)}}
 }
 pub fn status()->Value {
  let done=unsafe{read_volatile(addr_of!(PROBE_DONE))}==1;
  let events:Vec<Value>=(0..8).map(|i|{let e=unsafe{read_volatile(addr_of!(EVENTS).cast::<Event>().add(i))};json!({"task":e.actor,"count":e.count,"next":e.next})}).collect();
  let counts:Vec<u64>=(0..2).map(|i|unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>().add(i))}).collect();
  let slice_ticks=unsafe{read_volatile(addr_of!(SLICE_TOTAL))};
- let values=[unsafe{read_volatile(task_frame(0) as *const u64)},unsafe{read_volatile(task_frame(1) as *const u64)}];
- let states=unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|s|match s {1=>"ready",2=>"running",_=>"invalid"});
- json!({"validated":done,"ticks":8,"el":"EL0","events":events,"timer":"disabled","interrupts":"masked","slice_ticks":slice_ticks,"slice_counts":counts,"mode":"service-boundary","private_values":values,"service_asid":super::mmu::active_root()>>48,"cross_code_read_denied":unsafe{read_volatile(addr_of!(CROSS_READ_DENIED))},"task_states":states,"dispatches":unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))},"frame_pool_capacity":4,"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()})
+ let values=[marker(0),marker(1)];
+ let states=unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|s|match s {1=>"ready",2=>"running",3=>"exited",_=>"invalid"});
+ json!({"validated":done,"ticks":8,"el":"EL0","events":events,"timer":"disabled","interrupts":"masked","slice_ticks":slice_ticks,"slice_counts":counts,"mode":"service-boundary","private_values":values,"service_asid":super::mmu::active_root()>>48,"cross_code_read_denied":unsafe{read_volatile(addr_of!(CROSS_READ_DENIED))},"task_states":states,"frame_scrubbed":unsafe{read_volatile(addr_of!(FRAME_SCRUBBED))},"alias_removed":unsafe{read_volatile(addr_of!(ALIAS_REMOVED))},"dispatches":unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))},"frame_pool_capacity":4,"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()})
 }
 
 global_asm!(r#"
@@ -728,12 +769,19 @@ slice_check_pc:
     mov x5, #1
     str x5, [x4, x2, lsl #3]
     eor x2, x2, #1
-    str x2, [x0]
-    cmp x6, #2
-    b.eq slice_return_kernel
+    ldr x5, [x4, x2, lsl #3]
+    cmp x5, #1
+    b.eq 21f
+    // The other task has exited: continue this READY task if necessary.
+    cmp x5, #3
+    b.ne irq_schedule_fail
+    eor x2, x2, #1
     ldr x5, [x4, x2, lsl #3]
     cmp x5, #1
     b.ne irq_schedule_fail
+21: str x2, [x0]
+    cmp x6, #2
+    b.eq slice_return_kernel
     mov x5, #2
     str x5, [x4, x2, lsl #3]
     adrp x4, SLICE_DISPATCHES
@@ -1041,9 +1089,42 @@ lower_el_svc:
     mrs x1, ESR_EL1
     mov x0, sp
     bl ipc_dispatch
+    cbnz x0, svc_exit
     mov x0, sp
     add sp, sp, #272
     b svc_restore_frame
+svc_exit:
+    // Exit is immediate: never restore this EL0 frame. Stop the timer and
+    // clear its pending interrupt, retire the current task, then return EL1.
+    msr CNTV_CTL_EL0, xzr
+    isb
+    mov x9, #0x08000000
+    mov w10, #0x08000000
+    str w10, [x9, #0x280]
+    dsb sy
+    adrp x9, CURRENT
+    add x9, x9, :lo12:CURRENT
+    ldr x10, [x9]
+    cmp x10, #1
+    b.hi irq_fatal
+    adrp x11, TASK_STATE
+    add x11, x11, :lo12:TASK_STATE
+    ldr x12, [x11, x10, lsl #3]
+    cmp x12, #2
+    b.ne irq_fatal
+    mov x12, #3
+    str x12, [x11, x10, lsl #3]
+    eor x10, x10, #1
+    ldr x12, [x11, x10, lsl #3]
+    cmp x12, #1
+    b.ne 22f
+    str x10, [x9]             // next service slice uses the remaining task
+22: adrp x11, SLICE_EXITS
+    add x11, x11, :lo12:SLICE_EXITS
+    ldr x12, [x11]
+    add x12, x12, #1
+    str x12, [x11]
+    b slice_return_kernel     // releases this 272-byte frame on return
 svc_restore_frame:
     mov x30, x0
     ldr x1, [x30, #248]
@@ -1240,6 +1321,7 @@ task_a_init_end:
 10: ldr x2, [x0]
     mov x3, #0
     svc #0x105
+    svc #0x120
     svc #0x1ff
     add x19, x19, #1
     b task_a_loop
@@ -1426,6 +1508,7 @@ task_b_init_end:
 10: ldr x2, [x0]
     mov x3, #0
     svc #0x105
+    svc #0x120
     svc #0x1ff
     add x19, x19, #1
     b task_b_loop

@@ -1,5 +1,5 @@
 {
-  "guest_sha256": "cd63260530a63560136dad28454ca314077646905a48fadd9a44064ea2d6ecd9",
+  "guest_sha256": "74f9f45b493261308f2e4ee7ac2575b920a5a4e3661399480c4d037b2a98288e",
   "qemu_version": "QEMU emulator version 11.1.3",
   "transport": "modern",
   "states": [
@@ -92,13 +92,13 @@
         }
       },
       "restore": "restored",
-      "restore_generation": 2,
+      "restore_generation": 4,
       "restore_slots": [
         "valid",
         "valid"
       ],
       "save": {
-        "generation": 3,
+        "generation": 5,
         "readback_verified": true,
         "slot": 0,
         "snapshot": {
@@ -151,13 +151,13 @@
         }
       },
       "restore": "restored",
-      "restore_generation": 2,
+      "restore_generation": 4,
       "restore_slots": [
         "invalid",
         "valid"
       ],
       "save": {
-        "generation": 3,
+        "generation": 5,
         "readback_verified": true,
         "slot": 0,
         "snapshot": {
@@ -510,6 +510,31 @@
                 "name": "file_put"
               },
               {
+                "description": "List synthetic file names and sizes; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "file_list"
+              },
+              {
+                "description": "Remove one synthetic file and save the workspace snapshot; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "name": "file_delete"
+              },
+              {
                 "description": "Read the bounded FIFO and task completion status.",
                 "inputSchema": {
                   "additionalProperties": false,
@@ -613,7 +638,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"cross_code_read_denied\":[true,true],\"dispatches\":10,\"el\":\"EL0\",\"events\":[{\"count\":1445,\"next\":1,\"task\":0},{\"count\":1183,\"next\":0,\"task\":1},{\"count\":2956,\"next\":1,\"task\":0},{\"count\":2480,\"next\":0,\"task\":1},{\"count\":4574,\"next\":1,\"task\":0},{\"count\":3734,\"next\":0,\"task\":1},{\"count\":6194,\"next\":1,\"task\":0},{\"count\":5049,\"next\":2,\"task\":1}],\"frame_pool_assigned\":2,\"frame_pool_capacity\":4,\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[9252,8219],\"slice_ticks\":10,\"task_states\":[\"ready\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,false],\"cross_code_read_denied\":[true,true],\"dispatches\":10,\"el\":\"EL0\",\"events\":[{\"count\":1311,\"next\":1,\"task\":0},{\"count\":1352,\"next\":0,\"task\":1},{\"count\":2746,\"next\":1,\"task\":0},{\"count\":2473,\"next\":0,\"task\":1},{\"count\":4229,\"next\":1,\"task\":0},{\"count\":3668,\"next\":0,\"task\":1},{\"count\":5749,\"next\":1,\"task\":0},{\"count\":4831,\"next\":2,\"task\":1}],\"frame_pool_assigned\":1,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,false],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[8130,7650],\"slice_ticks\":9,\"task_states\":[\"exited\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -675,6 +700,30 @@
           "id": 7,
           "method": "tools/call",
           "params": {
+            "name": "file_list",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 7,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "[]",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 8,
+          "method": "tools/call",
+          "params": {
             "name": "file_put",
             "arguments": {
               "name": "notes.txt",
@@ -683,7 +732,7 @@
           }
         },
         "response": {
-          "id": 7,
+          "id": 8,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -699,7 +748,163 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 8,
+          "id": 9,
+          "method": "tools/call",
+          "params": {
+            "name": "file_put",
+            "arguments": {
+              "name": "temp.txt",
+              "data": "discard"
+            }
+          }
+        },
+        "response": {
+          "id": 9,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"generation\":3,\"readback_verified\":true,\"slot\":0}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 10,
+          "method": "tools/call",
+          "params": {
+            "name": "file_list",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 10,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "[{\"name\":\"notes.txt\",\"size\":26},{\"name\":\"temp.txt\",\"size\":7}]",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 11,
+          "method": "tools/call",
+          "params": {
+            "name": "file_delete",
+            "arguments": {
+              "name": "temp.txt"
+            }
+          }
+        },
+        "response": {
+          "id": 11,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"generation\":4,\"readback_verified\":true,\"slot\":1}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 12,
+          "method": "tools/call",
+          "params": {
+            "name": "file_delete",
+            "arguments": {
+              "name": "temp.txt"
+            }
+          }
+        },
+        "response": {
+          "id": 12,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "file not found",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 13,
+          "method": "tools/call",
+          "params": {
+            "name": "file_put",
+            "arguments": {
+              "name": "../bad",
+              "data": "no"
+            }
+          }
+        },
+        "response": {
+          "id": 13,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "invalid filename",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 14,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        },
+        "response": {
+          "id": 14,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "invalid filename",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 15,
           "method": "tools/call",
           "params": {
             "name": "file_get",
@@ -709,7 +914,7 @@
           }
         },
         "response": {
-          "id": 8,
+          "id": 15,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -725,7 +930,31 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 9,
+          "id": 16,
+          "method": "tools/call",
+          "params": {
+            "name": "file_list",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 16,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "[{\"name\":\"notes.txt\",\"size\":26}]",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 17,
           "method": "tools/call",
           "params": {
             "name": "document_snapshot",
@@ -733,7 +962,7 @@
           }
         },
         "response": {
-          "id": 9,
+          "id": 17,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -749,7 +978,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 10,
+          "id": 18,
           "method": "tools/call",
           "params": {
             "name": "document_merge",
@@ -757,7 +986,7 @@
           }
         },
         "response": {
-          "id": 10,
+          "id": 18,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -773,7 +1002,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 11,
+          "id": 19,
           "method": "tools/call",
           "params": {
             "name": "document_edit",
@@ -785,14 +1014,14 @@
             "code": -32602,
             "message": "unknown tool"
           },
-          "id": 11,
+          "id": 19,
           "jsonrpc": "2.0"
         }
       },
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 12,
+          "id": 20,
           "method": "tools/call",
           "params": {
             "name": "document_load",
@@ -804,14 +1033,14 @@
             "code": -32602,
             "message": "unknown tool"
           },
-          "id": 12,
+          "id": 20,
           "jsonrpc": "2.0"
         }
       },
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 13,
+          "id": 21,
           "method": "tools/call",
           "params": {
             "name": "document_save",
@@ -823,14 +1052,14 @@
             "code": -32602,
             "message": "unknown tool"
           },
-          "id": 13,
+          "id": 21,
           "jsonrpc": "2.0"
         }
       },
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 14,
+          "id": 22,
           "method": "tools/call",
           "params": {
             "name": "document_snapshot",
@@ -838,7 +1067,7 @@
           }
         },
         "response": {
-          "id": 14,
+          "id": 22,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -854,7 +1083,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 15,
+          "id": 23,
           "method": "tools/call",
           "params": {
             "name": "pointer_state",
@@ -862,7 +1091,7 @@
           }
         },
         "response": {
-          "id": 15,
+          "id": 23,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -878,7 +1107,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 16,
+          "id": 24,
           "method": "tools/call",
           "params": {
             "name": "interaction_state",
@@ -886,7 +1115,7 @@
           }
         },
         "response": {
-          "id": 16,
+          "id": 24,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -902,7 +1131,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 17,
+          "id": 25,
           "method": "tools/call",
           "params": {
             "name": "interaction_state",
@@ -910,7 +1139,7 @@
           }
         },
         "response": {
-          "id": 17,
+          "id": 25,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -926,7 +1155,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 18,
+          "id": 26,
           "method": "tools/call",
           "params": {
             "name": "move_ai",
@@ -937,7 +1166,7 @@
           }
         },
         "response": {
-          "id": 18,
+          "id": 26,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -953,7 +1182,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 19,
+          "id": 27,
           "method": "tools/call",
           "params": {
             "name": "click_ai",
@@ -961,7 +1190,7 @@
           }
         },
         "response": {
-          "id": 19,
+          "id": 27,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -977,7 +1206,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 20,
+          "id": 28,
           "method": "tools/call",
           "params": {
             "name": "document_snapshot",
@@ -985,7 +1214,7 @@
           }
         },
         "response": {
-          "id": 20,
+          "id": 28,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -1001,7 +1230,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 21,
+          "id": 29,
           "method": "tools/call",
           "params": {
             "name": "el0_status",
@@ -1009,12 +1238,36 @@
           }
         },
         "response": {
-          "id": 21,
+          "id": 29,
           "jsonrpc": "2.0",
           "result": {
             "content": [
               {
-                "text": "{\"cross_code_read_denied\":[true,true],\"dispatches\":50,\"el\":\"EL0\",\"events\":[{\"count\":1445,\"next\":1,\"task\":0},{\"count\":1183,\"next\":0,\"task\":1},{\"count\":2956,\"next\":1,\"task\":0},{\"count\":2480,\"next\":0,\"task\":1},{\"count\":4574,\"next\":1,\"task\":0},{\"count\":3734,\"next\":0,\"task\":1},{\"count\":6194,\"next\":1,\"task\":0},{\"count\":5049,\"next\":2,\"task\":1}],\"frame_pool_assigned\":2,\"frame_pool_capacity\":4,\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[23342,21396],\"slice_ticks\":50,\"task_states\":[\"ready\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":11,\"el\":\"EL0\",\"events\":[{\"count\":1311,\"next\":1,\"task\":0},{\"count\":1352,\"next\":0,\"task\":1},{\"count\":2746,\"next\":1,\"task\":0},{\"count\":2473,\"next\":0,\"task\":1},{\"count\":4229,\"next\":1,\"task\":0},{\"count\":3668,\"next\":0,\"task\":1},{\"count\":5749,\"next\":1,\"task\":0},{\"count\":4831,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[8130,7650],\"slice_ticks\":9,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 30,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 30,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":11,\"el\":\"EL0\",\"events\":[{\"count\":1311,\"next\":1,\"task\":0},{\"count\":1352,\"next\":0,\"task\":1},{\"count\":2746,\"next\":1,\"task\":0},{\"count\":2473,\"next\":0,\"task\":1},{\"count\":4229,\"next\":1,\"task\":0},{\"count\":3668,\"next\":0,\"task\":1},{\"count\":5749,\"next\":1,\"task\":0},{\"count\":4831,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[8130,7650],\"slice_ticks\":9,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -1228,6 +1481,31 @@
                 "name": "file_put"
               },
               {
+                "description": "List synthetic file names and sizes; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "file_list"
+              },
+              {
+                "description": "Remove one synthetic file and save the workspace snapshot; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "name": "file_delete"
+              },
+              {
                 "description": "Read the bounded FIFO and task completion status.",
                 "inputSchema": {
                   "additionalProperties": false,
@@ -1331,7 +1609,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"cross_code_read_denied\":[true,true],\"dispatches\":10,\"el\":\"EL0\",\"events\":[{\"count\":1531,\"next\":1,\"task\":0},{\"count\":1474,\"next\":0,\"task\":1},{\"count\":3161,\"next\":1,\"task\":0},{\"count\":2944,\"next\":0,\"task\":1},{\"count\":4738,\"next\":1,\"task\":0},{\"count\":4222,\"next\":0,\"task\":1},{\"count\":6426,\"next\":1,\"task\":0},{\"count\":5754,\"next\":2,\"task\":1}],\"frame_pool_assigned\":2,\"frame_pool_capacity\":4,\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[9869,9016],\"slice_ticks\":10,\"task_states\":[\"ready\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,false],\"cross_code_read_denied\":[true,true],\"dispatches\":10,\"el\":\"EL0\",\"events\":[{\"count\":1477,\"next\":1,\"task\":0},{\"count\":1056,\"next\":0,\"task\":1},{\"count\":2958,\"next\":1,\"task\":0},{\"count\":2413,\"next\":0,\"task\":1},{\"count\":4228,\"next\":1,\"task\":0},{\"count\":3525,\"next\":0,\"task\":1},{\"count\":5691,\"next\":1,\"task\":0},{\"count\":4671,\"next\":2,\"task\":1}],\"frame_pool_assigned\":1,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,false],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[8159,7443],\"slice_ticks\":9,\"task_states\":[\"exited\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -1379,7 +1657,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"after\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}},\"before\":{\"assistant\":{\"common\":\"seed\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"title\":\"base\"}},\"restore\":\"restored\",\"restore_generation\":2,\"restore_slots\":[\"valid\",\"valid\"],\"save\":{\"generation\":3,\"readback_verified\":true,\"slot\":0,\"snapshot\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}}}",
+                "text": "{\"after\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}},\"before\":{\"assistant\":{\"common\":\"seed\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"title\":\"base\"}},\"restore\":\"restored\",\"restore_generation\":4,\"restore_slots\":[\"valid\",\"valid\"],\"save\":{\"generation\":5,\"readback_verified\":true,\"slot\":0,\"snapshot\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}}}",
                 "type": "text"
               }
             ],
@@ -1419,12 +1697,62 @@
           "id": 8,
           "method": "tools/call",
           "params": {
-            "name": "document_snapshot",
+            "name": "file_list",
             "arguments": {}
           }
         },
         "response": {
           "id": 8,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "[{\"name\":\"notes.txt\",\"size\":26}]",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 9,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "temp.txt"
+            }
+          }
+        },
+        "response": {
+          "id": 9,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "file not found",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 10,
+          "method": "tools/call",
+          "params": {
+            "name": "document_snapshot",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 10,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -1440,7 +1768,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 9,
+          "id": 11,
           "method": "tools/call",
           "params": {
             "name": "document_merge",
@@ -1448,7 +1776,7 @@
           }
         },
         "response": {
-          "id": 9,
+          "id": 11,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -1464,7 +1792,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 10,
+          "id": 12,
           "method": "tools/call",
           "params": {
             "name": "document_edit",
@@ -1476,14 +1804,14 @@
             "code": -32602,
             "message": "unknown tool"
           },
-          "id": 10,
+          "id": 12,
           "jsonrpc": "2.0"
         }
       },
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 11,
+          "id": 13,
           "method": "tools/call",
           "params": {
             "name": "document_load",
@@ -1495,14 +1823,14 @@
             "code": -32602,
             "message": "unknown tool"
           },
-          "id": 11,
+          "id": 13,
           "jsonrpc": "2.0"
         }
       },
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 12,
+          "id": 14,
           "method": "tools/call",
           "params": {
             "name": "document_save",
@@ -1514,14 +1842,14 @@
             "code": -32602,
             "message": "unknown tool"
           },
-          "id": 12,
+          "id": 14,
           "jsonrpc": "2.0"
         }
       },
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 13,
+          "id": 15,
           "method": "tools/call",
           "params": {
             "name": "document_snapshot",
@@ -1529,7 +1857,7 @@
           }
         },
         "response": {
-          "id": 13,
+          "id": 15,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -1545,7 +1873,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 14,
+          "id": 16,
           "method": "tools/call",
           "params": {
             "name": "el0_status",
@@ -1553,12 +1881,36 @@
           }
         },
         "response": {
-          "id": 14,
+          "id": 16,
           "jsonrpc": "2.0",
           "result": {
             "content": [
               {
-                "text": "{\"cross_code_read_denied\":[true,true],\"dispatches\":30,\"el\":\"EL0\",\"events\":[{\"count\":1531,\"next\":1,\"task\":0},{\"count\":1474,\"next\":0,\"task\":1},{\"count\":3161,\"next\":1,\"task\":0},{\"count\":2944,\"next\":0,\"task\":1},{\"count\":4738,\"next\":1,\"task\":0},{\"count\":4222,\"next\":0,\"task\":1},{\"count\":6426,\"next\":1,\"task\":0},{\"count\":5754,\"next\":2,\"task\":1}],\"frame_pool_assigned\":2,\"frame_pool_capacity\":4,\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[16850,15335],\"slice_ticks\":30,\"task_states\":[\"ready\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":11,\"el\":\"EL0\",\"events\":[{\"count\":1477,\"next\":1,\"task\":0},{\"count\":1056,\"next\":0,\"task\":1},{\"count\":2958,\"next\":1,\"task\":0},{\"count\":2413,\"next\":0,\"task\":1},{\"count\":4228,\"next\":1,\"task\":0},{\"count\":3525,\"next\":0,\"task\":1},{\"count\":5691,\"next\":1,\"task\":0},{\"count\":4671,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[8159,7443],\"slice_ticks\":9,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 17,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 17,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":11,\"el\":\"EL0\",\"events\":[{\"count\":1477,\"next\":1,\"task\":0},{\"count\":1056,\"next\":0,\"task\":1},{\"count\":2958,\"next\":1,\"task\":0},{\"count\":2413,\"next\":0,\"task\":1},{\"count\":4228,\"next\":1,\"task\":0},{\"count\":3525,\"next\":0,\"task\":1},{\"count\":5691,\"next\":1,\"task\":0},{\"count\":4671,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[8159,7443],\"slice_ticks\":9,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -1772,6 +2124,31 @@
                 "name": "file_put"
               },
               {
+                "description": "List synthetic file names and sizes; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "file_list"
+              },
+              {
+                "description": "Remove one synthetic file and save the workspace snapshot; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "name": "file_delete"
+              },
+              {
                 "description": "Read the bounded FIFO and task completion status.",
                 "inputSchema": {
                   "additionalProperties": false,
@@ -1875,7 +2252,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"cross_code_read_denied\":[true,true],\"dispatches\":10,\"el\":\"EL0\",\"events\":[{\"count\":1570,\"next\":1,\"task\":0},{\"count\":1466,\"next\":0,\"task\":1},{\"count\":2986,\"next\":1,\"task\":0},{\"count\":2980,\"next\":0,\"task\":1},{\"count\":4645,\"next\":1,\"task\":0},{\"count\":4355,\"next\":0,\"task\":1},{\"count\":6310,\"next\":1,\"task\":0},{\"count\":5842,\"next\":2,\"task\":1}],\"frame_pool_assigned\":2,\"frame_pool_capacity\":4,\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[9795,9123],\"slice_ticks\":10,\"task_states\":[\"ready\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,false],\"cross_code_read_denied\":[true,true],\"dispatches\":10,\"el\":\"EL0\",\"events\":[{\"count\":1306,\"next\":1,\"task\":0},{\"count\":1311,\"next\":0,\"task\":1},{\"count\":2688,\"next\":1,\"task\":0},{\"count\":2640,\"next\":0,\"task\":1},{\"count\":4108,\"next\":1,\"task\":0},{\"count\":3767,\"next\":0,\"task\":1},{\"count\":5324,\"next\":1,\"task\":0},{\"count\":5175,\"next\":2,\"task\":1}],\"frame_pool_assigned\":1,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,false],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[7620,7928],\"slice_ticks\":9,\"task_states\":[\"exited\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -1923,7 +2300,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"after\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}},\"before\":{\"assistant\":{\"common\":\"seed\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"title\":\"base\"}},\"restore\":\"restored\",\"restore_generation\":2,\"restore_slots\":[\"invalid\",\"valid\"],\"save\":{\"generation\":3,\"readback_verified\":true,\"slot\":0,\"snapshot\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}}}",
+                "text": "{\"after\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}},\"before\":{\"assistant\":{\"common\":\"seed\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"title\":\"base\"}},\"restore\":\"restored\",\"restore_generation\":4,\"restore_slots\":[\"invalid\",\"valid\"],\"save\":{\"generation\":5,\"readback_verified\":true,\"slot\":0,\"snapshot\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}}}",
                 "type": "text"
               }
             ],
@@ -1963,12 +2340,62 @@
           "id": 8,
           "method": "tools/call",
           "params": {
-            "name": "document_snapshot",
+            "name": "file_list",
             "arguments": {}
           }
         },
         "response": {
           "id": 8,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "[{\"name\":\"notes.txt\",\"size\":26}]",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 9,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "temp.txt"
+            }
+          }
+        },
+        "response": {
+          "id": 9,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "file not found",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 10,
+          "method": "tools/call",
+          "params": {
+            "name": "document_snapshot",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 10,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -1984,7 +2411,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 9,
+          "id": 11,
           "method": "tools/call",
           "params": {
             "name": "document_merge",
@@ -1992,7 +2419,7 @@
           }
         },
         "response": {
-          "id": 9,
+          "id": 11,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -2008,7 +2435,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 10,
+          "id": 12,
           "method": "tools/call",
           "params": {
             "name": "document_edit",
@@ -2020,14 +2447,14 @@
             "code": -32602,
             "message": "unknown tool"
           },
-          "id": 10,
+          "id": 12,
           "jsonrpc": "2.0"
         }
       },
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 11,
+          "id": 13,
           "method": "tools/call",
           "params": {
             "name": "document_load",
@@ -2039,14 +2466,14 @@
             "code": -32602,
             "message": "unknown tool"
           },
-          "id": 11,
+          "id": 13,
           "jsonrpc": "2.0"
         }
       },
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 12,
+          "id": 14,
           "method": "tools/call",
           "params": {
             "name": "document_save",
@@ -2058,14 +2485,14 @@
             "code": -32602,
             "message": "unknown tool"
           },
-          "id": 12,
+          "id": 14,
           "jsonrpc": "2.0"
         }
       },
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 13,
+          "id": 15,
           "method": "tools/call",
           "params": {
             "name": "document_snapshot",
@@ -2073,7 +2500,7 @@
           }
         },
         "response": {
-          "id": 13,
+          "id": 15,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -2089,7 +2516,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 14,
+          "id": 16,
           "method": "tools/call",
           "params": {
             "name": "el0_status",
@@ -2097,12 +2524,36 @@
           }
         },
         "response": {
-          "id": 14,
+          "id": 16,
           "jsonrpc": "2.0",
           "result": {
             "content": [
               {
-                "text": "{\"cross_code_read_denied\":[true,true],\"dispatches\":30,\"el\":\"EL0\",\"events\":[{\"count\":1570,\"next\":1,\"task\":0},{\"count\":1466,\"next\":0,\"task\":1},{\"count\":2986,\"next\":1,\"task\":0},{\"count\":2980,\"next\":0,\"task\":1},{\"count\":4645,\"next\":1,\"task\":0},{\"count\":4355,\"next\":0,\"task\":1},{\"count\":6310,\"next\":1,\"task\":0},{\"count\":5842,\"next\":2,\"task\":1}],\"frame_pool_assigned\":2,\"frame_pool_capacity\":4,\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[16996,15622],\"slice_ticks\":30,\"task_states\":[\"ready\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":11,\"el\":\"EL0\",\"events\":[{\"count\":1306,\"next\":1,\"task\":0},{\"count\":1311,\"next\":0,\"task\":1},{\"count\":2688,\"next\":1,\"task\":0},{\"count\":2640,\"next\":0,\"task\":1},{\"count\":4108,\"next\":1,\"task\":0},{\"count\":3767,\"next\":0,\"task\":1},{\"count\":5324,\"next\":1,\"task\":0},{\"count\":5175,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[7620,7928],\"slice_ticks\":9,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 17,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 17,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":11,\"el\":\"EL0\",\"events\":[{\"count\":1306,\"next\":1,\"task\":0},{\"count\":1311,\"next\":0,\"task\":1},{\"count\":2688,\"next\":1,\"task\":0},{\"count\":2640,\"next\":0,\"task\":1},{\"count\":4108,\"next\":1,\"task\":0},{\"count\":3767,\"next\":0,\"task\":1},{\"count\":5324,\"next\":1,\"task\":0},{\"count\":5175,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[7620,7928],\"slice_ticks\":9,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -2316,6 +2767,31 @@
                 "name": "file_put"
               },
               {
+                "description": "List synthetic file names and sizes; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "file_list"
+              },
+              {
+                "description": "Remove one synthetic file and save the workspace snapshot; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "name": "file_delete"
+              },
+              {
                 "description": "Read the bounded FIFO and task completion status.",
                 "inputSchema": {
                   "additionalProperties": false,
@@ -2419,7 +2895,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"cross_code_read_denied\":[true,true],\"dispatches\":10,\"el\":\"EL0\",\"events\":[{\"count\":1578,\"next\":1,\"task\":0},{\"count\":1496,\"next\":0,\"task\":1},{\"count\":3233,\"next\":1,\"task\":0},{\"count\":3007,\"next\":0,\"task\":1},{\"count\":4881,\"next\":1,\"task\":0},{\"count\":4312,\"next\":0,\"task\":1},{\"count\":6541,\"next\":1,\"task\":0},{\"count\":5634,\"next\":2,\"task\":1}],\"frame_pool_assigned\":2,\"frame_pool_capacity\":4,\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[9853,8637],\"slice_ticks\":10,\"task_states\":[\"ready\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,false],\"cross_code_read_denied\":[true,true],\"dispatches\":10,\"el\":\"EL0\",\"events\":[{\"count\":1279,\"next\":1,\"task\":0},{\"count\":1340,\"next\":0,\"task\":1},{\"count\":2707,\"next\":1,\"task\":0},{\"count\":2628,\"next\":0,\"task\":1},{\"count\":4038,\"next\":1,\"task\":0},{\"count\":3680,\"next\":0,\"task\":1},{\"count\":5425,\"next\":1,\"task\":0},{\"count\":4959,\"next\":2,\"task\":1}],\"frame_pool_assigned\":1,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,false],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[7716,7781],\"slice_ticks\":9,\"task_states\":[\"exited\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -2620,7 +3096,31 @@
           "result": {
             "content": [
               {
-                "text": "{\"cross_code_read_denied\":[true,true],\"dispatches\":28,\"el\":\"EL0\",\"events\":[{\"count\":1578,\"next\":1,\"task\":0},{\"count\":1496,\"next\":0,\"task\":1},{\"count\":3233,\"next\":1,\"task\":0},{\"count\":3007,\"next\":0,\"task\":1},{\"count\":4881,\"next\":1,\"task\":0},{\"count\":4312,\"next\":0,\"task\":1},{\"count\":6541,\"next\":1,\"task\":0},{\"count\":5634,\"next\":2,\"task\":1}],\"frame_pool_assigned\":2,\"frame_pool_capacity\":4,\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[16249,14562],\"slice_ticks\":28,\"task_states\":[\"ready\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":11,\"el\":\"EL0\",\"events\":[{\"count\":1279,\"next\":1,\"task\":0},{\"count\":1340,\"next\":0,\"task\":1},{\"count\":2707,\"next\":1,\"task\":0},{\"count\":2628,\"next\":0,\"task\":1},{\"count\":4038,\"next\":1,\"task\":0},{\"count\":3680,\"next\":0,\"task\":1},{\"count\":5425,\"next\":1,\"task\":0},{\"count\":4959,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[7716,7781],\"slice_ticks\":9,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 14,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 14,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":11,\"el\":\"EL0\",\"events\":[{\"count\":1279,\"next\":1,\"task\":0},{\"count\":1340,\"next\":0,\"task\":1},{\"count\":2707,\"next\":1,\"task\":0},{\"count\":2628,\"next\":0,\"task\":1},{\"count\":4038,\"next\":1,\"task\":0},{\"count\":3680,\"next\":0,\"task\":1},{\"count\":5425,\"next\":1,\"task\":0},{\"count\":4959,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[7716,7781],\"slice_ticks\":9,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],

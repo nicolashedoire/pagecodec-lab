@@ -414,7 +414,7 @@ fn save_snapshot<T:Transport>(disk:&mut VirtIOBlk<VmHal,T>,doc:&DocumentDemo,fil
     let (a,b)=read_pair(disk)?;
     let selected=select_slots(&a,&b)?;
     let (slot,generation)=match selected {None=>(0,1),Some((slot,g,_,_))=>(1-slot,g.checked_add(1).ok_or("generation exhausted")?)};
-    let mut data=encode_snapshot(doc,files,generation).ok_or("invalid snapshot")?;
+    let mut data=encode_snapshot(doc,files,generation).ok_or("snapshot invalid or capacity exceeded")?;
     disk.write_blocks(SLOT_SECTORS[slot],&data).map_err(|_|"stage write failed")?;
     disk.flush().map_err(|_|"stage flush failed")?;
     data[24]=0xa5;
@@ -641,6 +641,8 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"storage_status","description":"Read synthetic startup restore and last SVC save status.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"file_get","description":"Read one synthetic flat file as hexadecimal bytes; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}},
                                         {"name":"file_put","description":"Save one bounded synthetic UTF-8 file with the current workspace snapshot; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"data":{"type":"string"}},"required":["name","data"],"additionalProperties":false}},
+                                        {"name":"file_list","description":"List synthetic file names and sizes; no authentication.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"file_delete","description":"Remove one synthetic file and save the workspace snapshot; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}},
                                         {"name":"ipc_status","description":"Read the bounded FIFO and task completion status.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"document_view","description":"Read a field from a synthetic document copy.","inputSchema":{"type":"object","properties":{"actor":{"type":"string","enum":["human","assistant"]},"space":{"type":"string","enum":["human-space","assistant-space"]},"key":{"type":"string","description":"Non-empty; at most 32 UTF-8 bytes."}},"required":["actor","space","key"],"additionalProperties":false}},
                                         {"name":"document_merge","description":"Merge synthetic copies and return fields, origins and conflicts.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
@@ -684,8 +686,15 @@ pub extern "C" fn graph_main() -> ! {
                                                 let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
                                                 let name=args.and_then(|o|o.get("name")).and_then(Value::as_str);
                                                 if !args.is_some_and(|o|o.len()==1) || name.is_none() {tool_error(id,"invalid file_get arguments");}
-                                                else if files.get(name.unwrap()).is_none() {tool_error(id,"file not found");}
-                                                else {tool_json(id,json!({"name":name,"hex":files.snapshot().get(name.unwrap()).cloned()}));}
+                                                else {match files.get(name.unwrap()) {
+                                                    Err(error)=>tool_error(id,error),
+                                                    Ok(_)=>tool_json(id,json!({"name":name,"hex":files.snapshot().get(name.unwrap()).cloned()})),
+                                                }}
+                                            }
+                                            Some("file_list") => {
+                                                let args=params.and_then(|p|p.get("arguments"));
+                                                if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"file_list requires empty arguments");}
+                                                else {tool_json(id,files.list());}
                                             }
                                             Some("file_put") => {
                                                 let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
@@ -694,11 +703,26 @@ pub extern "C" fn graph_main() -> ! {
                                                 if !args.is_some_and(|o|o.len()==2) || name.is_none() || data.is_none() {tool_error(id,"invalid file_put arguments");}
                                                 else {
                                                     let mut next=files.clone();
-                                                    if next.put(name.unwrap(),data.unwrap().as_bytes()).is_err() {tool_error(id,"file bounds or name rejected");}
+                                                    if let Err(error)=next.put(name.unwrap(),data.unwrap().as_bytes()) {tool_error(id,error);}
                                                     else if let Some(ref mut disk)=block {
                                                         match save_snapshot(disk,&document,&next) {
                                                             Ok((slot,generation))=>{files=next;tool_json(id,json!({"slot":slot,"generation":generation,"readback_verified":true}));},
-                                                            Err(_)=>tool_error(id,"file save failed"),
+                                                            Err(error)=>tool_error(id,error),
+                                                        }
+                                                    } else {tool_error(id,"storage unavailable");}
+                                                }
+                                            }
+                                            Some("file_delete") => {
+                                                let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
+                                                let name=args.and_then(|o|o.get("name")).and_then(Value::as_str);
+                                                if !args.is_some_and(|o|o.len()==1) || name.is_none() {tool_error(id,"invalid file_delete arguments");}
+                                                else {
+                                                    let mut next=files.clone();
+                                                    if let Err(error)=next.remove(name.unwrap()) {tool_error(id,error);}
+                                                    else if let Some(ref mut disk)=block {
+                                                        match save_snapshot(disk,&document,&next) {
+                                                            Ok((slot,generation))=>{files=next;tool_json(id,json!({"slot":slot,"generation":generation,"readback_verified":true}));},
+                                                            Err(error)=>tool_error(id,error),
                                                         }
                                                     } else {tool_error(id,"storage unavailable");}
                                                 }

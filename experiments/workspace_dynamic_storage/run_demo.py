@@ -16,6 +16,11 @@ def legacy_slot(generation,snapshot):
  slot[20:24]=fnv(slot[8:20]+payload).to_bytes(4,'little');slot[24]=0xa5
  return bytes(slot)
 
+def reject(g,tool,args,message):
+ g.call(tool,args,rejected=True)
+ result=g.trace[-1]['response']['result']
+ if result.get('content')!=[{'type':'text','text':message}]:raise RuntimeError('wrong refusal: '+str(result))
+
 def main():
  p=argparse.ArgumentParser();p.add_argument('--qemu',required=True);p.add_argument('--guest',required=True);p.add_argument('--transport',choices=['modern','legacy'],default='modern');p.add_argument('--output-dir',required=True);a=p.parse_args()
  out=Path(a.output_dir).resolve();out.mkdir(parents=True,exist_ok=True)
@@ -43,11 +48,20 @@ def main():
     else:raise RuntimeError('FIFO did not finish: '+str(ipc))
     if any(ipc.get(k)!=[1,2,3,4] for k in ('accepted','applied','consumed')) or not ipc.get('save_denied') or not ipc.get('denial_consumed') or ipc.get('queue_len')!=0 or not ipc.get('full_rejected') or not ipc.get('full_consumed') or any(ipc.get(k)!=[True,True] for k in ('range_rejected','overflow_rejected','duplicate_rejected','utf8_rejected','spoof_rejected')) or ipc.get('source')!='synthetic descriptors and bytes constructed by EL0':raise RuntimeError('IPC save and rejection invariants failed: '+str(ipc))
     storage=g.call('storage_status',{})
-    expected={'restore':'blank' if index==1 else 'restored','restore_generation':None if index==1 else 2 if index in (2,3) else 1,'restore_slots':(['blank','blank'] if index==1 else ['valid','valid'] if index==2 else ['invalid','valid'] if index==3 else ['valid','blank']),'before':blank,'after':blank if index==1 else final,'save':{'slot':0 if index in (1,2,3) else 1,'generation':1 if index==1 else 3 if index in (2,3) else 2,'readback_verified':True,'snapshot':final}}
+    expected={'restore':'blank' if index==1 else 'restored','restore_generation':None if index==1 else 4 if index in (2,3) else 1,'restore_slots':(['blank','blank'] if index==1 else ['valid','valid'] if index==2 else ['invalid','valid'] if index==3 else ['valid','blank']),'before':blank,'after':blank if index==1 else final,'save':{'slot':0 if index in (1,2,3) else 1,'generation':1 if index==1 else 5 if index in (2,3) else 2,'readback_verified':True,'snapshot':final}}
     if storage!=expected:raise RuntimeError('restore/save mismatch: '+str(storage))
     if index==1:
+     if g.call('file_list',{})!=[]:raise RuntimeError('initial file list not empty')
      if g.call('file_put',{'name':'notes.txt','data':'persisted through recovery'})!={'slot':1,'generation':2,'readback_verified':True}:raise RuntimeError('file save failed')
+     if g.call('file_put',{'name':'temp.txt','data':'discard'})!={'slot':0,'generation':3,'readback_verified':True}:raise RuntimeError('temporary file save failed')
+     if g.call('file_list',{})!=[{'name':'notes.txt','size':26},{'name':'temp.txt','size':7}]:raise RuntimeError('file list mismatch')
+     if g.call('file_delete',{'name':'temp.txt'})!={'slot':1,'generation':4,'readback_verified':True}:raise RuntimeError('file delete failed')
+     reject(g,'file_delete',{'name':'temp.txt'},'file not found')
+     reject(g,'file_put',{'name':'../bad','data':'no'},'invalid filename')
+     reject(g,'file_get',{'name':'x'*33},'invalid filename')
     if index in (1,2,3) and g.call('file_get',{'name':'notes.txt'})!={'name':'notes.txt','hex':file_hex}:raise RuntimeError('named file lost during restore')
+    if index in (1,2,3) and g.call('file_list',{})!=[{'name':'notes.txt','size':26}]:raise RuntimeError('deleted file returned or catalog changed')
+    if index in (2,3):reject(g,'file_get',{'name':'temp.txt'},'file not found')
     if g.call('document_snapshot',{})!=final:raise RuntimeError('bad document state')
     merge=g.call('document_merge',{});fields={x['key']:x for x in merge['fields']}
     if merge['conflicts'] or fields['theme']['origin']!='human' or fields['layout']['origin']!='assistant':raise RuntimeError('provenance mismatch')
@@ -74,12 +88,12 @@ def main():
    finally:g.close()
    data=disk.read_bytes()
    if index==1:
-    validate_slot(data[4*512:12*512],1,final,{})
-    validate_slot(data[12*512:20*512],2,final,{'notes.txt':file_hex})
+    validate_slot(data[4*512:12*512],3,final,{'notes.txt':file_hex,'temp.txt':b'discard'.hex()})
+    validate_slot(data[12*512:20*512],4,final,{'notes.txt':file_hex})
     if data[:4*512]!=bytes(4*512) or data[20*512:]!=bytes(SIZE-20*512):raise RuntimeError('out-of-slot writes')
     first_image=data
    elif index in (2,3):
-    validate_slot(data[4*512:12*512],3,final,{'notes.txt':file_hex})
+    validate_slot(data[4*512:12*512],5,final,{'notes.txt':file_hex})
     if data[:4*512]!=first_image[:4*512] or data[12*512:]!=first_image[12*512:]:raise RuntimeError('recovery changed other sectors')
    else:
     if data[4*512:12*512]!=legacy_slot(1,final):raise RuntimeError('legacy slot changed')
@@ -87,5 +101,5 @@ def main():
     if data[:4*512]!=bytes(4*512) or data[20*512:]!=bytes(SIZE-20*512):raise RuntimeError('migration changed unrelated sectors')
  if sha(guest.read_bytes())!=h:raise RuntimeError('image changed')
  (out/'workspace-dynamic-storage-evidence.json').write_text(json.dumps({'guest_sha256':h,'qemu_version':qemu,'transport':a.transport,'states':states,'qmp_input':qmp_events,'sessions':traces},indent=2)+'\n')
- print('PASS QEMU EL0 FIFO edits, named file, restart, corrupted-slot recovery and legacy migration')
+ print('PASS QEMU EL0 FIFO edits, file list/delete/refusals, restart, recovery and legacy migration')
 if __name__=='__main__':main()

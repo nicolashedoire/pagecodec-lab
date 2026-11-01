@@ -33,8 +33,20 @@ impl Files {
         Ok(())
     }
 
-    pub fn get(&self, name: &str) -> Option<&[u8]> {
-        self.entries.get(name).map(Vec::as_slice)
+    pub fn get(&self, name: &str) -> Result<&[u8], &'static str> {
+        if !valid_name(name) { return Err("invalid filename"); }
+        self.entries.get(name).map(Vec::as_slice).ok_or("file not found")
+    }
+
+    pub fn remove(&mut self, name: &str) -> Result<(), &'static str> {
+        if !valid_name(name) { return Err("invalid filename"); }
+        let old = self.entries.remove(name).ok_or("file not found")?;
+        self.total -= old.len();
+        Ok(())
+    }
+
+    pub fn list(&self) -> Value {
+        Value::Array(self.entries.iter().map(|(name, bytes)| json!({"name":name,"size":bytes.len()})).collect())
     }
 
     pub fn snapshot(&self) -> Value {

@@ -30,6 +30,20 @@ fn query(address:usize,write:bool,user:bool)->u64 {
 pub fn root(index:usize)->u64 {assert!(index<2);unsafe{read_volatile(addr_of!(ROOTS).cast::<u64>().add(index))}}
 pub fn active_root()->u64 {let v:u64;unsafe{asm!("mrs {}, TTBR0_EL1",out(reg) v)}v}
 pub fn switch_root(root:u64) {unsafe{asm!("dsb ishst","msr TTBR0_EL1, {r}","isb","tlbi vmalle1","dsb ish","isb",r=in(reg) root);}}
+/// Remove an exited task's private-page alias before its frame is recycled.
+/// Caller must have stopped the task and masked IRQs. This fixed two-root
+/// guest has a single CPU; this is not a general SMP address-space teardown.
+pub fn unmap_task_alias(actor:usize,expected:usize) {
+ assert!(actor<2 && active_root()==root(0));
+ let table=if actor==0 {addr_of_mut!(L3_ALIAS_A)}else{addr_of_mut!(L3_ALIAS_B)};
+ let entry=unsafe{table.cast::<u64>().add((ALIAS>>12)&511)};
+ let old=unsafe{read_volatile(entry)};
+ assert!(old&3==DESC && old&PA_MASK==(expected as u64&PA_MASK));
+ unsafe{write_volatile(entry,0);asm!("dsb ishst","tlbi vmalle1","dsb ish","isb");}
+ switch_root(root(actor));
+ assert!(query(ALIAS,false,true)&1!=0 && query(ALIAS,true,true)&1!=0);
+ switch_root(root(0));
+}
 pub fn identity_range(start:usize,len:usize)->bool {
  if len==0{return false} let Some(end)=start.checked_add(len)else{return false};let mut p=start&!(PAGE-1);
  while p<end {let result=query(p,false,false);if result&1!=0 || (result&PA_MASK)!=(p as u64&PA_MASK){return false}let Some(next)=p.checked_add(PAGE)else{return false};p=next;}true
