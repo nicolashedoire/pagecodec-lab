@@ -17,7 +17,7 @@ use core::alloc::{GlobalAlloc, Layout};
 use core::arch::{asm, global_asm};
 use core::panic::PanicInfo;
 use core::ptr::{addr_of_mut, NonNull};
-use core::sync::atomic::{AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use virtio_drivers::{device::{blk::VirtIOBlk, gpu::VirtIOGpu, input::VirtIOInput}, transport::{mmio::{MmioTransport, VirtIOHeader}, DeviceType, Transport}, BufferDirection, Hal, PhysAddr};
 
 global_asm!(r#"
@@ -68,6 +68,12 @@ static mut HEAP: PageAligned<HEAP_SIZE> = PageAligned([0; HEAP_SIZE]);
 static mut DMA: PageAligned<DMA_SIZE> = PageAligned([0; DMA_SIZE]);
 static HEAP_NEXT: AtomicUsize = AtomicUsize::new(0);
 static DMA_NEXT: AtomicUsize = AtomicUsize::new(0);
+// A failed write or confirmation can leave a newer snapshot on disk while the
+// in-memory catalog still reflects the previous one. Block subsequent writes
+// until a fresh boot has restored from the device instead of losing data.
+static STORAGE_WRITE_BLOCKED: AtomicBool = AtomicBool::new(false);
+#[cfg(feature="storage-fault-test")]
+static FAIL_NEXT_POSTCOMMIT: AtomicBool = AtomicBool::new(false);
 
 struct Bump;
 unsafe impl GlobalAlloc for Bump {
@@ -412,15 +418,21 @@ fn read_pair<T:Transport>(disk:&mut VirtIOBlk<VmHal,T>)->Result<([u8;RECORD_BYTE
     Ok((a,b))
 }
 fn save_snapshot<T:Transport>(disk:&mut VirtIOBlk<VmHal,T>,doc:&DocumentDemo,files:&vfs::Files)->Result<(usize,u64),&'static str> {
+    if STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed) { return Err("storage write blocked until restart"); }
     let (a,b)=read_pair(disk)?;
     let selected=select_slots(&a,&b)?;
     let (slot,generation)=match selected {None=>(0,1),Some((slot,g,_,_))=>(1-slot,g.checked_add(1).ok_or("generation exhausted")?)};
     let mut data=encode_snapshot(doc,files,generation).ok_or("snapshot invalid or capacity exceeded")?;
+    // From this point a failed operation can leave either slot changed. This
+    // one-CPU service serializes all writes; remain blocked on every error.
+    STORAGE_WRITE_BLOCKED.store(true,Ordering::Relaxed);
     disk.write_blocks(SLOT_SECTORS[slot],&data).map_err(|_|"stage write failed")?;
     disk.flush().map_err(|_|"stage flush failed")?;
     data[24]=0xa5;
     disk.write_blocks(SLOT_SECTORS[slot],&data[..512]).map_err(|_|"commit write failed")?;
     disk.flush().map_err(|_|"commit flush failed")?;
+    #[cfg(feature="storage-fault-test")]
+    if FAIL_NEXT_POSTCOMMIT.swap(false,Ordering::Relaxed) { return Err("injected postcommit confirmation failure"); }
     // Do not report success before checking what the device returns. Readback
     // does not prove that a volatile cache persisted through power loss.
     let mut verified=[0u8;RECORD_BYTES];
@@ -428,6 +440,7 @@ fn save_snapshot<T:Transport>(disk:&mut VirtIOBlk<VmHal,T>,doc:&DocumentDemo,fil
     if verified!=data || !matches!(decode_slot(&verified),Some((g,_,_)) if g==generation) {
         return Err("readback mismatch");
     }
+    STORAGE_WRITE_BLOCKED.store(false,Ordering::Relaxed);
     Ok((slot,generation))
 }
 
@@ -527,8 +540,12 @@ pub extern "C" fn graph_main() -> ! {
         }) {
             Ok(Some((_,generation,restored,restored_files)))=>{document=restored;files=restored_files;restore_generation=Some(generation);restore_status="restored";}
             Ok(None)=>restore_status="blank",
-            Err(_)=>restore_status="invalid",
+            // Do not let a later transiently successful disk read overwrite
+            // a valid snapshot with the fresh, unrestored in-memory state.
+            Err(_)=>{restore_status="invalid";STORAGE_WRITE_BLOCKED.store(true,Ordering::Relaxed);}
         }
+    } else {
+        STORAGE_WRITE_BLOCKED.store(true,Ordering::Relaxed);
     }
     // Seed absent programs and migrate only the exact previously published
     // raw image. Unknown existing bytes are never silently replaced.
@@ -571,11 +588,18 @@ pub extern "C" fn graph_main() -> ! {
     let mut service_polls=SERVICE_POLLS;
     loop {
         if service_polls>=SERVICE_POLLS {
+          // The fixed EL0 scripts assume a successful save and would halt on
+          // failure. Keep them suspended when storage needs reconciliation so
+          // the QEMU guest can still report its state and serve MCP reads.
+          if !STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed) {
             el0::run_slice([files.read_for_load("init.bin",512).ok(),files.read_for_load("fault.bin",512).ok(),files.read_for_load("badsvc.bin",512).ok(),files.read_for_load("next.bin",512).ok()]);
             // No EL0 task runs while this sole service owns the document.
             // Two entries at most can have been queued before this slice ends.
             for _ in 0..2 {
                 let Some(request)=el0::pop_request() else {break};
+                // Do not apply an IPC operation from a previous incarnation.
+                // This check relies on the current single-CPU service model.
+                if !el0::request_is_live(&request) {continue}
                 if request.file_op!=0 {
                     // Requests were copied from a private EL0 page by SVC;
                     // authorize again at the owner boundary before disk access.
@@ -587,7 +611,8 @@ pub extern "C" fn graph_main() -> ! {
                         match request.file_op {
                             1=>{
                                 // A restored, byte-identical committed file needs no rewrite.
-                                if files.get(key).is_ok_and(|old|old==data) {true}
+                                if STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed) {false}
+                                else if files.get(key).is_ok_and(|old|old==data) {true}
                                 else if let Some(ref mut disk)=block {put_file(disk,&document,&mut files,key,data).is_ok()}
                                 else {false}
                             }
@@ -598,7 +623,7 @@ pub extern "C" fn graph_main() -> ! {
                             _=>false,
                         }
                     } else {false};
-                    if !el0::complete_file(request.actor,request.id,success,&reply[..reply_len]) {halt()}
+                    if !el0::complete_file(&request,success,&reply[..reply_len]) {halt()}
                     continue;
                 }
                 let success=if request.save {
@@ -618,8 +643,9 @@ pub extern "C" fn graph_main() -> ! {
                         _=>false,
                     }
                 } else {false};
-                if !el0::complete(request.actor,request.id,success) {halt()}
+                if !el0::complete(&request,success) {halt()}
             }
+          }
             service_polls=0;
         }
         service_polls+=1;
@@ -690,7 +716,9 @@ pub extern "C" fn graph_main() -> ! {
                             } else {
                                 match method {
                                     Some("ping") => send(&json!({"jsonrpc":"2.0","id":id,"result":{}})),
-                                    Some("tools/list") => send(&json!({"jsonrpc":"2.0","id":id,"result":{"tools":[
+                                    Some("tools/list") => {
+                                        #[allow(unused_mut)] // The fault tool exists only in test-feature builds.
+                                        let mut response=json!({"jsonrpc":"2.0","id":id,"result":{"tools":[
                                         {"name":"move_ai","description":"Move AI pointer within its right-hand QEMU workspace.","inputSchema":{"type":"object","properties":{"x":{"type":"integer","minimum":400,"maximum":773},"y":{"type":"integer","minimum":0,"maximum":573}},"required":["x","y"],"additionalProperties":false}},
                                         {"name":"pointer_state","description":"Read the two pointer coordinates in this guest only.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"click_ai","description":"Activate the synthetic button under the AI pointer; no host click or authentication.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
@@ -710,7 +738,11 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"document_view","description":"Read a field from a synthetic document copy.","inputSchema":{"type":"object","properties":{"actor":{"type":"string","enum":["human","assistant"]},"space":{"type":"string","enum":["human-space","assistant-space"]},"key":{"type":"string","description":"Non-empty; at most 32 UTF-8 bytes."}},"required":["actor","space","key"],"additionalProperties":false}},
                                         {"name":"document_merge","description":"Merge synthetic copies and return fields, origins and conflicts.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"document_snapshot","description":"Read the synthetic base and both full copies.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
-                                    ]}})),
+                                    ]}});
+                                        #[cfg(feature="storage-fault-test")]
+                                        response["result"]["tools"].as_array_mut().unwrap().push(json!({"name":"debug_fail_postcommit","description":"Test-only: fail the next write after commit flush.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}));
+                                        send(&response);
+                                    },
                                     Some("tools/call") => {
                                         let params = msg.get("params");
                                         let name = params.and_then(|p| p.get("name")).and_then(Value::as_str);
@@ -743,7 +775,14 @@ pub extern "C" fn graph_main() -> ! {
                                             Some("storage_status") => {
                                                 let args=params.and_then(|p|p.get("arguments"));
                                                 if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"status requires empty arguments");}
-                                                else {tool_json(id,storage_state.clone());}
+                                                else {let mut status=storage_state.clone();status["write_blocked"]=json!(STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed));tool_json(id,status);}
+                                            }
+                                            #[cfg(feature="storage-fault-test")]
+                                            Some("debug_fail_postcommit") => {
+                                                let args=params.and_then(|p|p.get("arguments"));
+                                                if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"debug requires empty arguments");}
+                                                else if STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed) {tool_error(id,"storage write blocked until restart");}
+                                                else {FAIL_NEXT_POSTCOMMIT.store(true,Ordering::Relaxed);tool_json(id,json!({"armed":true}));}
                                             }
                                             Some("file_get") => {
                                                 let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);

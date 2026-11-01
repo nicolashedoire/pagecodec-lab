@@ -26,10 +26,10 @@ def expected_list(catalog):
 
 def ipc_history_matches(ipc,base,consumed):
  accepted=ipc.get('accepted');applied=ipc.get('applied')
- return accepted in (base,base+[6]) and applied in (base,base+[6]) and len(applied)<=len(accepted) and ipc.get('consumed')==consumed
+ return accepted in (base,base+[6],base+[6,6]) and applied in (base,base+[6],base+[6,6]) and len(applied)<=len(accepted) and ipc.get('consumed') in (consumed,consumed+[6])
 
 def main():
- p=argparse.ArgumentParser();p.add_argument('--qemu',required=True);p.add_argument('--guest',required=True);p.add_argument('--transport',choices=['modern','legacy'],default='modern');p.add_argument('--output-dir',required=True);a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--qemu',required=True);p.add_argument('--guest',required=True);p.add_argument('--transport',choices=['modern','legacy'],default='modern');p.add_argument('--output-dir',required=True);p.add_argument('--exercise-storage-fault',action='store_true',help='require a guest built with storage-fault-test');a=p.parse_args()
  out=Path(a.output_dir).resolve();out.mkdir(parents=True,exist_ok=True)
  if any(out.iterdir()):raise RuntimeError('output directory must be empty')
  guest=Path(a.guest);h=sha(guest.read_bytes());qemu=subprocess.run([a.qemu,'--version'],check=True,capture_output=True,text=True,timeout=10).stdout.splitlines()[0]
@@ -52,6 +52,7 @@ def main():
     old[4*512:12*512]=legacy_slot(1,old_doc);create(disk,old)
    g=Guest(a.qemu,guest,disk,tmp,index,out,a.transport)
    try:
+    if ('debug_fail_postcommit' in g.tools)!=a.exercise_storage_fault:raise RuntimeError('unexpected storage test failpoint in guest')
     if index==5:
      # A full catalog refuses the task's new file; it must exit cleanly.
      for _ in range(8):
@@ -60,7 +61,7 @@ def main():
       time.sleep(.1)
      else:raise RuntimeError('failed file operation did not terminate task')
      if failed.get('image_outcomes')!=['file_error','fault','bad_svc','success'] or failed.get('images_reclaimed')!=[True]*4 or failed.get('completions_revoked')!=[True]*4 or failed.get('stale_response_blocked') is not True or failed.get('alias_removed')!=[True,True] or failed.get('frame_scrubbed')!=[True,True] or failed.get('code_alias_removed') is not True or failed.get('code_frame_scrubbed') is not True or failed.get('spawn_executed') is not True or failed.get('frame_pool_assigned')!=0:raise RuntimeError('failed task cleanup or later program invalid: '+str(failed))
-     if not ipc.get('initial_finished') or ipc.get('file_finished') or not ipc_history_matches(ipc,[1,2,3,4,6],[1,2,3,4]) or ipc.get('queue_len')!=0:raise RuntimeError('failed IPC outcome invalid: '+str(ipc))
+     if not ipc.get('initial_finished') or ipc.get('file_finished') or not ipc_history_matches(ipc,[1,2,3,4,6],[1,2,3,4]) or ipc.get('consumed')!=[1,2,3,4,6] or failed.get('stale_generation_rejected') is not True or ipc.get('queue_len')!=0:raise RuntimeError('failed IPC outcome invalid: '+str(ipc))
      expected_full=expected_list({'binary.bin':binary_hex,'init.bin':program_hex,'next.bin':next_hex,**extra_images,'notes.txt':file_hex,**{'fill'+str(n):'78' for n in range(4)}})
      if g.call('file_list',{})!=expected_full:raise RuntimeError('failure fixture catalog differs from expected files')
      reject(g,'file_get',{'name':'note'},'file not found')
@@ -79,13 +80,16 @@ def main():
      if g.call('file_put_hex',{'name':'init.bin','hex':program_hex})!={'slot':1,'generation':10,'readback_verified':True}:raise RuntimeError('approved image repair failed')
     for _ in range(8):
      ipc=g.call('ipc_status',{})
-     if ipc.get('finished') is True and ipc.get('consumed')==[1,2,3,4,6,7]:break
+     if ipc.get('finished') is True and ipc.get('consumed') in ([1,2,3,4,6,7],[1,2,3,4,6,7,6]):break
      time.sleep(.1)
     else:raise RuntimeError('FIFO did not finish: '+str(ipc))
     if not ipc.get('initial_finished') or not ipc.get('file_finished') or not ipc_history_matches(ipc,[1,2,3,4,6,7],[1,2,3,4,6,7]) or not ipc.get('save_denied') or not ipc.get('denial_consumed') or ipc.get('queue_len')!=0 or not ipc.get('full_rejected') or not ipc.get('full_consumed') or any(ipc.get(k)!=[True,True] for k in ('range_rejected','overflow_rejected','duplicate_rejected','utf8_rejected','spoof_rejected')) or ipc.get('source')!='synthetic descriptors and bytes constructed by EL0':raise RuntimeError('IPC save and rejection invariants failed: '+str(ipc))
     g.progress('EL0 file put/get and process exit',timeout_image=index==9)
+    completed=g.call('ipc_status',{})
+    expected_consumed=[1,2,3,4,6,7] if index==9 else [1,2,3,4,6,7,6]
+    if completed.get('consumed')!=expected_consumed:raise RuntimeError('later incarnation completion missing or duplicated: '+str(completed))
     storage=g.call('storage_status',{})
-    expected={'restore':'blank' if index==1 else 'restored','restore_generation':None if index==1 else 6 if index in (2,3) else 8 if index==4 else 4 if index==9 else 1,'restore_slots':(['blank','blank'] if index==1 else ['valid','valid'] if index in (2,4,9) else ['invalid','valid'] if index==3 else ['valid','blank']),'program_bootstrap':(['seeded']*4 if index in (1,6) else ['migrated-raw','seeded','seeded','seeded'] if index==7 else ['present','seeded','seeded','present'] if index==8 else ['present']*4),'before':blank,'after':blank if index==1 else final,'save':{'slot':0 if index in (1,2,3,4,9) else 1,'generation':1 if index==1 else 7 if index in (2,3) else 9 if index==4 else 5 if index==9 else 2,'readback_verified':True,'snapshot':final}}
+    expected={'restore':'blank' if index==1 else 'restored','restore_generation':None if index==1 else 6 if index in (2,3) else 8 if index==4 else 4 if index==9 else 1,'restore_slots':(['blank','blank'] if index==1 else ['valid','valid'] if index in (2,4,9) else ['invalid','valid'] if index==3 else ['valid','blank']),'program_bootstrap':(['seeded']*4 if index in (1,6) else ['migrated-raw','seeded','seeded','seeded'] if index==7 else ['present','seeded','seeded','present'] if index==8 else ['present']*4),'before':blank,'after':blank if index==1 else final,'save':{'slot':0 if index in (1,2,3,4,9) else 1,'generation':1 if index==1 else 7 if index in (2,3) else 9 if index==4 else 5 if index==9 else 2,'readback_verified':True,'snapshot':final},'write_blocked':False}
     if storage!=expected:raise RuntimeError('restore/save mismatch: '+str(storage))
     init=g.call('file_get',{'name':'init.bin'})
     if init.get('name')!='init.bin' or not isinstance(init.get('hex'),str) or not init['hex'] or len(init['hex'])>1024:raise RuntimeError('invalid init program file')
@@ -193,7 +197,61 @@ def main():
    else:
     validate_slot(data[4*512:12*512],5,final,{**images,'keep.bin':'00ff','note':b'hello'.hex()})
     validate_slot(data[12*512:20*512],4,final,{**images,'keep.bin':'00ff','note':b'hello'.hex()})
+  if a.exercise_storage_fault:
+   # In the same integrated guest, fail confirmation after the commit flush.
+   # The kernel must preserve the old in-memory view and deny further writes.
+   g=Guest(a.qemu,guest,disk,tmp,10,out,a.transport)
+   try:
+    for _ in range(20):
+     if g.call('ipc_status',{}).get('finished') is True:break
+     time.sleep(.1)
+    else:raise RuntimeError('fault-injection guest tasks did not finish')
+    baseline=g.call('file_put',{'name':'baseline.txt','data':'safe'})
+    if not baseline.get('readback_verified'):raise RuntimeError('baseline save failed')
+    expected_generation=baseline['generation']+1
+    catalog={entry['name']:g.call('file_get',{'name':entry['name']})['hex'] for entry in g.call('file_list',{})}
+    if g.call('debug_fail_postcommit',{})!={'armed':True}:raise RuntimeError('injection not armed; build with storage-fault-test')
+    reject(g,'file_put',{'name':'uncertain.txt','data':'committed'},'injected postcommit confirmation failure')
+    status=g.call('storage_status',{})
+    if status.get('write_blocked') is not True:raise RuntimeError('uncertain write was not blocked')
+    if g.call('file_get',{'name':'baseline.txt'})!={'name':'baseline.txt','hex':b'safe'.hex()}:raise RuntimeError('baseline read unavailable')
+    reject(g,'file_get',{'name':'uncertain.txt'},'file not found')
+    reject(g,'file_put',{'name':'later.txt','data':'must-not-write'},'storage write blocked until restart')
+    reject(g,'file_delete',{'name':'baseline.txt'},'storage write blocked until restart')
+    traces.append(g.trace);states.append(status)
+   finally:g.close()
+   data=disk.read_bytes();target=1-baseline['slot'];offset=(4 if target==0 else 12)*512
+   validate_slot(data[offset:offset+4096],expected_generation,final,{**catalog,'uncertain.txt':b'committed'.hex()})
+   g=Guest(a.qemu,guest,disk,tmp,11,out,a.transport)
+   try:
+    for _ in range(20):
+     if g.call('ipc_status',{}).get('finished') is True:break
+     time.sleep(.1)
+    else:raise RuntimeError('restart guest tasks did not finish')
+    status=g.call('storage_status',{})
+    if status.get('restore_generation')!=expected_generation or status.get('write_blocked') is not False:raise RuntimeError('restart did not reconcile committed slot')
+    if g.call('file_get',{'name':'uncertain.txt'})!={'name':'uncertain.txt','hex':b'committed'.hex()}:raise RuntimeError('committed write lost on restart')
+    if not g.call('file_put',{'name':'recovered.txt','data':'ok'}).get('readback_verified'):raise RuntimeError('writes not restored after reboot')
+    traces.append(g.trace);states.append(status)
+   finally:g.close()
+   # A failed initial restore must not permit a later write of the blank
+   # in-memory placeholder over either non-blank, invalid on-disk slot.
+   damaged_disk=Path(tmp)/'unrestorable.raw';damaged=bytearray(SIZE)
+   damaged[4*512]=0x51;damaged[12*512]=0x52;create(damaged_disk,damaged)
+   original_hash=sha(damaged_disk.read_bytes())
+   g=Guest(a.qemu,guest,damaged_disk,tmp,12,out,a.transport,allow_degraded=True)
+   try:
+    status=g.call('storage_status',{})
+    if status.get('restore')!='invalid' or status.get('restore_slots')!=['invalid','invalid'] or status.get('write_blocked') is not True:raise RuntimeError('invalid restoration not reported and blocked')
+    if g.call('document_snapshot',{})!=blank or g.call('file_list',{})!=[]:raise RuntimeError('unexpected degraded in-memory view')
+    reject(g,'file_put',{'name':'unsafe.txt','data':'must-not-write'},'storage write blocked until restart')
+    status2=g.call('storage_status',{});task=g.call('el0_status',{})
+    if status2.get('write_blocked') is not True or task.get('slice_ticks')!=0:raise RuntimeError('degraded mode did not remain responsive')
+    traces.append(g.trace);states.append(status2)
+   finally:g.close()
+   if sha(damaged_disk.read_bytes())!=original_hash:raise RuntimeError('invalid on-disk snapshot changed')
  if sha(guest.read_bytes())!=h:raise RuntimeError('image changed')
  (out/'workspace-dynamic-storage-evidence.json').write_text(json.dumps({'guest_sha256':h,'qemu_version':qemu,'transport':a.transport,'states':states,'qmp_input':qmp_events,'sessions':traces},indent=2)+'\n')
  print('PASS QEMU EL0 file IPC, fault containment, execution budget, recovery and legacy migration')
+ if a.exercise_storage_fault:print('PASS QEMU postcommit uncertainty, write blocking and restart reconciliation')
 if __name__=='__main__':main()

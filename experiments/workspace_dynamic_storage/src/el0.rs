@@ -51,6 +51,13 @@ static mut IMAGE_OUTCOMES:[u8;4]=[0;4];
 static mut PENDING_CANCELLED:u64=0;
 static mut COMPLETIONS_REVOKED:[bool;4]=[false;4];
 static mut STALE_RESPONSE_BLOCKED:bool=false;
+// A slot identifies an address space, not a task lifetime. Kernel-assigned
+// nonzero generations distinguish later admissions into the same slot.
+static mut TASK_INCARNATIONS:[u64;2]=[1,2];
+static mut NEXT_INCARNATION:u64=3;
+static mut IMAGE_INCARNATIONS:[u64;4]=[0;4];
+static mut STALE_TOKEN:Option<CompletionToken>=None;
+static mut STALE_GENERATION_REJECTED:bool=false;
 static mut FILE_EL0_VERIFIED:bool=false;
 #[no_mangle] static mut SPAWN_ACTIVE:bool=false;
 static mut SPAWN_EXECUTED:bool=false;
@@ -70,11 +77,20 @@ static mut IMAGE_LOADED:bool=false;
 // Single CPU, EL1 service executes only between slices; IRQs are masked on
 // exception entry. The request queue and completions are fixed-size.
 #[derive(Clone,Copy,PartialEq,Eq)]
-pub struct Request {pub actor:usize,pub id:u64,pub save:bool,pub file_op:u8,pub key:[u8;16],pub key_len:usize,pub value:[u8;32],pub value_len:usize}
-#[derive(Clone,Copy,PartialEq,Eq)] struct Completion {actor:usize,id:u64,popped:bool,applied:bool,success:bool,delivered:bool,consumed:bool,data:[u8;32],data_len:usize}
-const EMPTY_COMPLETION:Completion=Completion{actor:0,id:0,popped:false,applied:false,success:false,delivered:false,consumed:false,data:[0;32],data_len:0};
-struct Ipc {queue:[Option<Request>;2],head:usize,len:usize,completions:[Completion;7],accepted:[u64;7],accepted_len:usize,applied:[u64;7],applied_len:usize,consumed:[u64;7],consumed_len:usize,full:bool,full_consumed:bool,range:[bool;2],overflow:[bool;2],duplicate:[bool;2],utf8:[bool;2],spoof:[bool;2],save_denied:bool,denial_consumed:bool}
-static mut IPC:Ipc=Ipc{queue:[None;2],head:0,len:0,completions:[EMPTY_COMPLETION;7],accepted:[0;7],accepted_len:0,applied:[0;7],applied_len:0,consumed:[0;7],consumed_len:0,full:false,full_consumed:false,range:[false;2],overflow:[false;2],duplicate:[false;2],utf8:[false;2],spoof:[false;2],save_denied:false,denial_consumed:false};
+pub struct Request {pub actor:usize,pub incarnation:u64,pub id:u64,pub save:bool,pub file_op:u8,pub key:[u8;16],pub key_len:usize,pub value:[u8;32],pub value_len:usize}
+// Only the routing token is retained for a delayed-reply check; file bytes
+// from an exited task must not be retained in this fixture.
+#[derive(Clone,Copy)] struct CompletionToken {actor:usize,incarnation:u64,id:u64}
+impl Request {fn token(&self)->CompletionToken {CompletionToken{actor:self.actor,incarnation:self.incarnation,id:self.id}}}
+#[derive(Clone,Copy,PartialEq,Eq)] struct Completion {actor:usize,incarnation:u64,id:u64,popped:bool,applied:bool,success:bool,delivered:bool,consumed:bool,data:[u8;32],data_len:usize}
+const EMPTY_COMPLETION:Completion=Completion{actor:0,incarnation:0,id:0,popped:false,applied:false,success:false,delivered:false,consumed:false,data:[0;32],data_len:0};
+struct Ipc {queue:[Option<Request>;2],head:usize,len:usize,completions:[Completion;7],accepted:[u64;8],accepted_len:usize,applied:[u64;8],applied_len:usize,consumed:[u64;8],consumed_len:usize,full:bool,full_consumed:bool,range:[bool;2],overflow:[bool;2],duplicate:[bool;2],utf8:[bool;2],spoof:[bool;2],save_denied:bool,denial_consumed:bool}
+static mut IPC:Ipc=Ipc{queue:[None;2],head:0,len:0,completions:[EMPTY_COMPLETION;7],accepted:[0;8],accepted_len:0,applied:[0;8],applied_len:0,consumed:[0;8],consumed_len:0,full:false,full_consumed:false,range:[false;2],overflow:[false;2],duplicate:[false;2],utf8:[false;2],spoof:[false;2],save_denied:false,denial_consumed:false};
+fn incarnation(actor:usize)->u64 {
+ assert!(actor<2);
+ let id=unsafe{read_volatile(addr_of!(TASK_INCARNATIONS).cast::<u64>().add(actor))};
+ assert!(id!=0);id
+}
 fn in_page(p:u64,n:usize)->bool {n>0 && p>=super::mmu::ALIAS as u64 && p.checked_add(n as u64).is_some_and(|end|end<=(super::mmu::ALIAS+PAGE) as u64)}
 unsafe fn read64(p:u64)->u64 {let v:u64;asm!("ldr {v}, [{p}]",p=in(reg)p,v=out(reg)v,options(nostack,preserves_flags));v}
 unsafe fn write64(p:u64,v:u64){asm!("str {v}, [{p}]",p=in(reg)p,v=in(reg)v,options(nostack,preserves_flags));}
@@ -86,17 +102,17 @@ fn descriptor(actor:usize,index:usize,id:u64)->Option<Request> {
  if !in_page(h,40) || unsafe{read64(h+32)}!=id {return None}
  let (kp,kn,vp,vn)=unsafe{(read64(h),read64(h+8),read64(h+16),read64(h+24))};
  if kn==0 || kn>16 || vn>32 || !in_page(kp,kn as usize) || !in_page(vp,vn as usize) {return None}
- let mut req=Request{actor,id,save:false,file_op:0,key:[0;16],key_len:kn as usize,value:[0;32],value_len:vn as usize};
+ let mut req=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:0,key:[0;16],key_len:kn as usize,value:[0;32],value_len:vn as usize};
  for i in 0..req.key_len {req.key[i]=unsafe{readbyte(kp+i as u64)}}
  for i in 0..req.value_len {req.value[i]=unsafe{readbyte(vp+i as u64)}}
  if core::str::from_utf8(&req.key[..req.key_len]).is_err() || core::str::from_utf8(&req.value[..req.value_len]).is_err(){return None}
  Some(req)
 }
 fn submit(state:&mut Ipc,req:Request)->bool {
- let i=(req.id-1) as usize;
- if i>=7 || state.completions[i].id!=0 || state.len==2 || state.accepted_len>=7 {return false}
+ let Some(i)=req.id.checked_sub(1).and_then(|id|usize::try_from(id).ok()) else {return false};
+ if i>=7 || req.incarnation!=incarnation(req.actor) || state.completions[i].id!=0 || state.len==2 || state.accepted_len>=state.accepted.len() {return false}
  let slot=(state.head+state.len)%2;state.queue[slot]=Some(req);state.len+=1;
- state.completions[i]=Completion{actor:req.actor,id:req.id,..EMPTY_COMPLETION};
+ state.completions[i]=Completion{actor:req.actor,incarnation:req.incarnation,id:req.id,..EMPTY_COMPLETION};
  state.accepted[state.accepted_len]=req.id;state.accepted_len+=1;true
 }
 pub fn pop_request()->Option<Request> {
@@ -104,23 +120,46 @@ pub fn pop_request()->Option<Request> {
  // Keep both requests in the queue until the guest has actually seen it full.
  if !s.full_consumed || s.len==0 {return None}
  let r=s.queue[s.head].take()?;s.head=(s.head+1)%2;s.len-=1;
- s.completions[(r.id-1) as usize].popped=true;Some(r)
+ let c=&mut s.completions[(r.id-1) as usize];
+ if c.actor!=r.actor || c.incarnation!=r.incarnation || c.id!=r.id || r.incarnation!=incarnation(r.actor) {halt()}
+ c.popped=true;Some(r)
 }
-pub fn complete(actor:usize,id:u64,success:bool)->bool {
- let s=unsafe{&mut *addr_of_mut!(IPC)};if id==0 || id>7{return false}
- let c=&mut s.completions[(id-1) as usize];
- if c.actor!=actor || c.id!=id || !c.popped || c.applied || s.applied_len>=7{return false}
- c.applied=true;c.success=success;s.applied[s.applied_len]=id;s.applied_len+=1;true
+/// Check a popped request before a service effect. The service is synchronous
+/// on one CPU; this is not an atomic lease across future async/SMP execution.
+pub fn request_is_live(request:&Request)->bool {
+ if request.actor>=2 || request.incarnation!=incarnation(request.actor) || request.id==0 || request.id>7 {return false}
+ let state=unsafe{read_volatile(addr_of!(TASK_STATE).cast::<u64>().add(request.actor))};
+ if state!=1 && state!=2 {return false}
+ let s=unsafe{&*addr_of!(IPC)};
+ let c=&s.completions[(request.id-1) as usize];
+ c.actor==request.actor && c.incarnation==request.incarnation && c.id==request.id && c.popped && !c.applied
+}
+fn apply_completion(s:&mut Ipc,token:CompletionToken,success:bool,data:&[u8])->bool {
+ if token.actor>=2 || token.incarnation!=incarnation(token.actor) || token.id==0 || token.id>7 || data.len()>32 {return false}
+ let c=&mut s.completions[(token.id-1) as usize];
+ if c.actor!=token.actor || c.incarnation!=token.incarnation || c.id!=token.id || !c.popped || c.applied || s.applied_len>=s.applied.len() {return false}
+ c.data[..data.len()].copy_from_slice(data);c.data_len=data.len();
+ c.applied=true;c.success=success;s.applied[s.applied_len]=token.id;s.applied_len+=1;true
+}
+pub fn complete(request:&Request,success:bool)->bool {
+ let s=unsafe{&mut *addr_of_mut!(IPC)};
+ apply_completion(s,request.token(),success,&[])
 }
 /// Complete the file operation in the bounded queue. Bytes are copied into
 /// kernel-owned completion storage before the caller's buffers can change.
-pub fn complete_file(actor:usize,id:u64,success:bool,data:&[u8])->bool {
- if !(id==6 || id==7) || data.len()>32 || (id==6 && !data.is_empty()) {return false}
+pub fn complete_file(request:&Request,success:bool,data:&[u8])->bool {
+ if !(request.id==6 || request.id==7) || data.len()>32 || (request.id==6 && !data.is_empty()) {return false}
  let s=unsafe{&mut *addr_of_mut!(IPC)};
- let c=&mut s.completions[(id-1) as usize];
- if c.actor!=actor || c.id!=id || !c.popped || c.applied || s.applied_len>=7 {return false}
- c.data[..data.len()].copy_from_slice(data);c.data_len=data.len();
- c.applied=true;c.success=success;s.applied[s.applied_len]=id;s.applied_len+=1;true
+ // The stale request is captured from an actual earlier loaded task. Try it
+ // while the newer incarnation's same-ID completion is genuinely popped.
+ if request.id==6 && unsafe{read_volatile(addr_of!(IMAGE_COUNT))}==3 {
+  if let Some(stale)=unsafe{read_volatile(addr_of!(STALE_TOKEN))} {
+   let before=s.completions[5];let applied=s.applied;let count=s.applied_len;
+   if stale.incarnation==request.incarnation || apply_completion(s,stale,success,data) || s.completions[5]!=before || s.applied!=applied || s.applied_len!=count {halt()}
+   unsafe{write_volatile(addr_of_mut!(STALE_GENERATION_REJECTED),true)};
+  }
+ }
+ apply_completion(s,request.token(),success,data)
 }
 pub fn ipc_status()->Value {
  let s=unsafe{&*addr_of!(IPC)};
@@ -181,7 +220,7 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
  if unsafe{read_volatile(addr_of!(SLICE_MODE))}==0 {return 0}
  let s=unsafe{&mut *addr_of_mut!(IPC)};let op=esr&0xffff;
  let stage=unsafe{read_volatile(addr_of!(IMAGE_COUNT))};
- if loaded && ((op==0x130 && stage>2) || (op==0x131 && stage!=1)) {return stop_loaded_task(s,3)}
+ if loaded && ((op==0x130 && stage>3) || (op==0x131 && stage!=1)) {return stop_loaded_task(s,3)}
  if loaded && !matches!(op,0x103|0x105|0x121|0x122|0x130|0x131|0x7bad) {
   if op==0x666 && unsafe{read_volatile(addr_of!(IMAGE_COUNT))}==3 && unsafe{read64((super::mmu::ALIAS+136) as u64)}==1 {
    unsafe{write_volatile(addr_of_mut!(STALE_RESPONSE_BLOCKED),true)};
@@ -236,11 +275,12 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
    }
   },
   0x110 if actor==0 && s.consumed_len==3 && s.completions[3].id==0 => {
-   let r=Request{actor,id:4,save:true,file_op:0,key:[0;16],key_len:0,value:[0;32],value_len:0};
+   let r=Request{actor,incarnation:incarnation(actor),id:4,save:true,file_op:0,key:[0;16],key_len:0,value:[0;32],value_len:0};
    if !submit(s,r) {halt()}
   },
   0x130 if actor==0 && unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} && s.completions[5].id==0 => {
    let Some(mut r)=descriptor(actor,0,6) else {return stop_loaded_task(s,3)};r.file_op=1;if !submit(s,r){return stop_loaded_task(s,3)}
+   if stage==2 {unsafe{write_volatile(addr_of_mut!(STALE_TOKEN),Some(r.token()))}}
   },
   0x131 if actor==0 && unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} && s.completions[5].consumed && s.completions[6].id==0 => {
    let Some(mut r)=descriptor(actor,0,7) else {return stop_loaded_task(s,3)};r.file_op=2;if !submit(s,r){return stop_loaded_task(s,3)}
@@ -262,8 +302,8 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
    return 1;
   },
   0x103 => {
-    if !s.completions.iter().any(|c|c.actor==actor && c.delivered && !c.consumed) {
-     if let Some(c)=s.completions.iter_mut().find(|c|c.id!=0 && c.actor==actor && c.applied && !c.delivered) {
+    if !s.completions.iter().any(|c|c.actor==actor && c.incarnation==incarnation(actor) && c.delivered && !c.consumed) {
+     if let Some(c)=s.completions.iter_mut().find(|c|c.id!=0 && c.actor==actor && c.incarnation==incarnation(actor) && c.applied && !c.delivered) {
       unsafe{
        write64((super::mmu::ALIAS+80) as u64,c.id);write64((super::mmu::ALIAS+112) as u64,if c.success {1}else{2});
        write64((super::mmu::ALIAS+800) as u64,c.data_len as u64);
@@ -274,8 +314,8 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
   },
   0x105 => {
    let observed=unsafe{read64((super::mmu::ALIAS+88) as u64)};let result=unsafe{read64((super::mmu::ALIAS+120) as u64)};
-   if let Some(c)=s.completions.iter_mut().find(|c|c.id==observed && c.id!=0 && c.actor==actor && c.delivered && !c.consumed && result==if c.success {1}else{2}) {
-    if s.consumed_len>=7 {halt()} c.consumed=true;s.consumed[s.consumed_len]=observed;s.consumed_len+=1;
+   if let Some(c)=s.completions.iter_mut().find(|c|c.id==observed && c.id!=0 && c.actor==actor && c.incarnation==incarnation(actor) && c.delivered && !c.consumed && result==if c.success {1}else{2}) {
+    if s.consumed_len>=s.consumed.len() {halt()} c.consumed=true;s.consumed[s.consumed_len]=observed;s.consumed_len+=1;
     unsafe{write64((super::mmu::ALIAS+80) as u64,0);write64((super::mmu::ALIAS+88) as u64,0);write64((super::mmu::ALIAS+112) as u64,0);write64((super::mmu::ALIAS+120) as u64,0)};
    }
   },
@@ -452,7 +492,7 @@ fn reclaim_exited(actor:usize) {
    let ipc=unsafe{&mut *addr_of_mut!(IPC)};
    check(!ipc.queue.iter().flatten().any(|r|r.actor==0 && r.id>=6),"pending loaded-task request");
    for i in 5..7 {
-    check(ipc.completions[i].id==0 || ipc.completions[i].actor==0,"completion belongs to another actor");
+    check(ipc.completions[i].id==0 || (ipc.completions[i].actor==0 && ipc.completions[i].incarnation==incarnation(0)),"completion belongs to another incarnation");
     ipc.completions[i]=EMPTY_COMPLETION;
     check(ipc.completions[i]==EMPTY_COMPLETION,"completion revoke");
    }
@@ -482,6 +522,8 @@ fn marker(actor:usize)->u64 {
 // tasks have exited. No arbitrary binary loading or dynamic actor creation.
 fn admit_spawned_task(program:&[u8],entry_offset:usize) {
  check(unsafe{read_volatile(addr_of!(TASK_STATE))}==[3,3] && unsafe{read_volatile(addr_of!(IMAGE_COUNT))}<4 && !unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))},"invalid spawn admission");
+ let process_id=unsafe{read_volatile(addr_of!(NEXT_INCARNATION))};
+ let next_process_id=process_id.checked_add(1).unwrap_or_else(||halt());
  let frame_address=allocate_task_frame(0);
  let previous=unsafe{read_volatile(addr_of!(FIRST_FRAME_A))};
  check(previous!=0 && frame_address==previous,"spawn did not reuse first frame");
@@ -502,7 +544,11 @@ fn admit_spawned_task(program:&[u8],entry_offset:usize) {
   write_volatile(addr_of_mut!(CODE_ALIAS_REMOVED),false);
   write_volatile(addr_of_mut!(CODE_FRAME_SCRUBBED),false);
   write_volatile(addr_of_mut!(SPAWN_CODE_LEN),program.len() as u64);
-  let count=read_volatile(addr_of!(IMAGE_COUNT));write_volatile(addr_of_mut!(IMAGE_COUNT),count+1);
+  let count=read_volatile(addr_of!(IMAGE_COUNT));
+  write_volatile(addr_of_mut!(TASK_INCARNATIONS).cast::<u64>(),process_id);
+  write_volatile(addr_of_mut!(NEXT_INCARNATION),next_process_id);
+  write_volatile(addr_of_mut!(IMAGE_INCARNATIONS).cast::<u64>().add(count as usize),process_id);
+  write_volatile(addr_of_mut!(IMAGE_COUNT),count+1);
   write_volatile(addr_of_mut!(SPAWN_EXECUTED),false);write_volatile(addr_of_mut!(SPAWN_EXITED),false);write_volatile(addr_of_mut!(SPAWN_FAILED),false);write_volatile(addr_of_mut!(SPAWN_TICKS),0);
   write_volatile(addr_of_mut!(IMAGE_LOADED),true);
   write_volatile(addr_of_mut!(SPAWN_REUSED),true);
@@ -588,7 +634,7 @@ pub fn status()->Value {
  let states=unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|s|match s {1=>"ready",2=>"running",3=>"exited",_=>"invalid"});
  let outcomes=unsafe{read_volatile(addr_of!(IMAGE_OUTCOMES))}.map(|v|match v {0=>"pending",1=>"success",2=>"fault",3=>"bad_svc",4=>"file_error",5=>"timeout",_=>"invalid"});
  let reclaimed=[unsafe{read_volatile(addr_of!(IMAGE1_RECLAIMED))},unsafe{read_volatile(addr_of!(IMAGE2_RECLAIMED))},unsafe{read_volatile(addr_of!(IMAGE3_RECLAIMED))},unsafe{read_volatile(addr_of!(IMAGE4_RECLAIMED))}];
- json!({"validated":done,"ticks":8,"el":"EL0","events":events,"timer":"disabled","interrupts":"masked","slice_ticks":slice_ticks,"slice_counts":counts,"mode":"service-boundary","private_values":values,"service_asid":super::mmu::active_root()>>48,"cross_code_read_denied":unsafe{read_volatile(addr_of!(CROSS_READ_DENIED))},"task_states":states,"frame_scrubbed":unsafe{read_volatile(addr_of!(FRAME_SCRUBBED))},"alias_removed":unsafe{read_volatile(addr_of!(ALIAS_REMOVED))},"dispatches":unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))},"loader_rejected":unsafe{read_volatile(addr_of!(LOADER_REJECTED))},"image_loaded":unsafe{read_volatile(addr_of!(IMAGE_LOADED))},"code_alias_removed":unsafe{read_volatile(addr_of!(CODE_ALIAS_REMOVED))},"code_frame_scrubbed":unsafe{read_volatile(addr_of!(CODE_FRAME_SCRUBBED))},"image_outcomes":outcomes,"images_reclaimed":reclaimed,"completions_revoked":unsafe{read_volatile(addr_of!(COMPLETIONS_REVOKED))},"pending_cancelled":unsafe{read_volatile(addr_of!(PENDING_CANCELLED))},"stale_response_blocked":unsafe{read_volatile(addr_of!(STALE_RESPONSE_BLOCKED))},"image_count":unsafe{read_volatile(addr_of!(IMAGE_COUNT))},"image1_exited":unsafe{read_volatile(addr_of!(IMAGE1_EXITED))},"image2_exited":unsafe{read_volatile(addr_of!(IMAGE2_EXITED))},"image1_reclaimed":unsafe{read_volatile(addr_of!(IMAGE1_RECLAIMED))},"image2_reclaimed":unsafe{read_volatile(addr_of!(IMAGE2_RECLAIMED))},"spawn_admitted":unsafe{read_volatile(addr_of!(SPAWN_ADMITTED))},"spawn_executed":unsafe{read_volatile(addr_of!(SPAWN_EXECUTED))},"spawn_failed":unsafe{read_volatile(addr_of!(SPAWN_FAILED))},"spawn_exited":unsafe{read_volatile(addr_of!(SPAWN_EXITED))},"spawn_reused_frame":unsafe{read_volatile(addr_of!(SPAWN_REUSED))},"frame_pool_capacity":4,"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()})
+ json!({"validated":done,"ticks":8,"el":"EL0","events":events,"timer":"disabled","interrupts":"masked","slice_ticks":slice_ticks,"slice_counts":counts,"mode":"service-boundary","private_values":values,"service_asid":super::mmu::active_root()>>48,"cross_code_read_denied":unsafe{read_volatile(addr_of!(CROSS_READ_DENIED))},"task_states":states,"frame_scrubbed":unsafe{read_volatile(addr_of!(FRAME_SCRUBBED))},"alias_removed":unsafe{read_volatile(addr_of!(ALIAS_REMOVED))},"dispatches":unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))},"loader_rejected":unsafe{read_volatile(addr_of!(LOADER_REJECTED))},"image_loaded":unsafe{read_volatile(addr_of!(IMAGE_LOADED))},"code_alias_removed":unsafe{read_volatile(addr_of!(CODE_ALIAS_REMOVED))},"code_frame_scrubbed":unsafe{read_volatile(addr_of!(CODE_FRAME_SCRUBBED))},"image_outcomes":outcomes,"images_reclaimed":reclaimed,"completions_revoked":unsafe{read_volatile(addr_of!(COMPLETIONS_REVOKED))},"pending_cancelled":unsafe{read_volatile(addr_of!(PENDING_CANCELLED))},"stale_response_blocked":unsafe{read_volatile(addr_of!(STALE_RESPONSE_BLOCKED))},"image_incarnations":unsafe{read_volatile(addr_of!(IMAGE_INCARNATIONS))},"stale_generation_rejected":unsafe{read_volatile(addr_of!(STALE_GENERATION_REJECTED))},"image_count":unsafe{read_volatile(addr_of!(IMAGE_COUNT))},"image1_exited":unsafe{read_volatile(addr_of!(IMAGE1_EXITED))},"image2_exited":unsafe{read_volatile(addr_of!(IMAGE2_EXITED))},"image1_reclaimed":unsafe{read_volatile(addr_of!(IMAGE1_RECLAIMED))},"image2_reclaimed":unsafe{read_volatile(addr_of!(IMAGE2_RECLAIMED))},"spawn_admitted":unsafe{read_volatile(addr_of!(SPAWN_ADMITTED))},"spawn_executed":unsafe{read_volatile(addr_of!(SPAWN_EXECUTED))},"spawn_failed":unsafe{read_volatile(addr_of!(SPAWN_FAILED))},"spawn_exited":unsafe{read_volatile(addr_of!(SPAWN_EXITED))},"spawn_reused_frame":unsafe{read_volatile(addr_of!(SPAWN_REUSED))},"frame_pool_capacity":4,"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()})
 }
 
 global_asm!(r#"
@@ -1728,6 +1774,34 @@ badsvc_entry:
     cbnz x2, 28f
     mov x2, #1
     str x2, [x0, #136]
+    // Submit the same request ID under a new incarnation and wait until the
+    // service completes it. The service attempts the genuine stale request
+    // before applying this completion; the old generation must be rejected.
+    movz x2, #0x6f6e
+    movk x2, #0x6574, lsl #16
+    str x2, [x0, #256]
+    movz x2, #0x6568
+    movk x2, #0x6c6c, lsl #16
+    movk x2, #0x6f, lsl #32
+    str x2, [x0, #288]
+    add x2, x0, #256
+    str x2, [x0, #512]
+    mov x2, #4
+    str x2, [x0, #520]
+    add x2, x0, #288
+    str x2, [x0, #528]
+    mov x2, #5
+    str x2, [x0, #536]
+    mov x2, #6
+    str x2, [x0, #544]
+    svc #0x130
+29: svc #0x103
+    ldr x2, [x0, #80]
+    cbz x2, 29b
+    str x2, [x0, #88]
+    ldr x3, [x0, #112]
+    str x3, [x0, #120]
+    svc #0x105
     svc #0x666        // denied by the loaded-task syscall allowlist
 28: svc #0x667
     b badsvc_entry

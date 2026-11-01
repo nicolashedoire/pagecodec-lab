@@ -6,6 +6,7 @@ publish = false
 
 [features]
 irq-diagnostic-test = []
+storage-fault-test = []
 
 [dependencies]
 dynamic-input-sketch = { path = "../dynamic_input" }

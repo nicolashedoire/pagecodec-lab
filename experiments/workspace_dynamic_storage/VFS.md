@@ -34,6 +34,32 @@ rollback or atomicity is promised. Readback may come from a volatile device
 cache and does not prove persistence across a power cut; the driver may also
 complete `flush` without a negotiated FLUSH feature.
 
+If a save fails after the first write begins, its disk outcome is ambiguous:
+even a reported error can leave a valid newer committed slot. The single-CPU
+service blocks further snapshot writes until a restart restores the disk. It
+also blocks writes if initial slot reading or validation fails; a pair of
+verified blank slots still permits initial creation. `storage_status` reports
+`write_blocked` alongside `restore`; an `invalid` restore is not a successful
+restore. If no virtual block device is discovered, the guest also reports
+`restore=unavailable`, blocks writes and suspends the fixture; this specific
+missing-device path has not been exercised in the recorded scenario. While
+blocked, the fixed fixture's EL0 slices are suspended so this
+QEMU guest can keep serving MCP reads. Those reads return the last in-memory
+copy, which may differ from what a later restart recovers, and do not establish
+general service availability or a complete recovery protocol.
+
+An opt-in `storage-fault-test` build exposes a test-only MCP failpoint that
+returns an error immediately after commit flush, before confirmation readback.
+The same QEMU runner, invoked with `--exercise-storage-fault`, checks that the
+unconfirmed update is absent from the in-memory view, later file writes are
+blocked, and reads remain available. A fresh VM then restores the committed
+slot and permits writes again. The runner also checks an image with two
+nonblank invalid slots leaves all disk bytes unchanged. Both images are
+temporary QEMU disks; the injection is absent from normal builds. Recorded
+synthetic traces are available for [modern](evidence/storage-fault-modern.json)
+and [legacy](evidence/storage-fault-legacy.json) VirtIO. This tests a specific
+reported-error window, not power-loss durability or rollback.
+
 The versioned payload has exactly `format`, `document`, and `files` keys. Its
 `format` is `workspace-files-v1`; file contents are lowercase hexadecimal.
 The loader also accepts the exact legacy three-key document snapshot and

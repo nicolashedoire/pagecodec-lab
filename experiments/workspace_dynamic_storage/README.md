@@ -10,7 +10,7 @@ At startup the EL1 service reads the two synthetic slots **before** the scripted
 
 The integrated scenario runs nine sequential QEMU processes with exclusively created temporary 1 MiB disk images. The first boot starts with blank slots; A and B perform their FIFO edits and save the workspace. A task loaded from `init.bin` sends FIFO PUT and GET requests for `note=hello`, checks the returned five bytes, then exits. Two further loaded programs trigger an EL0 memory fault and an unknown SVC; the guest stops each task, cleans its frames and then runs `next.bin`. Another boot exercises a looping program and its interrupt budget. Synthetic MCP requests also create, list, delete and restore files, including non-UTF-8 bytes. Recorded traces cover this flow with [modern](evidence/workspace-dynamic-storage-modern.json) and [legacy](evidence/workspace-dynamic-storage-legacy.json) VirtIO.
 
-The [Linux CI run for commit `8742cb7`](https://github.com/nicolashedoire/pagecodec-lab/actions/runs/41328940588/job/124914741666) passed both transports before the file-listing, deletion and task-exit changes. It does not validate those later changes.
+The [CI run for commit `fa75bdb`](https://github.com/nicolashedoire/pagecodec-lab/actions/runs/41331732325) passed all jobs, including the integrated guest on both modern and legacy VirtIO. This result applies to that commit, not later changes.
 
 The next boots restore the saved files, then recover from a deliberately corrupted newest slot. The first VM also receives a synthetic QMP tablet click and an MCP assistant click; neither changes the saved document. An invalid `init.bin` is refused before frames are allocated; after repair through MCP the program loads again. A subsequent full-catalog boot makes its file PUT fail and checks that the task reports failure, exits and releases its code and data frames. The last two boots exercise migration from synthetic legacy snapshots. The host terminates QEMU after each completed scenario and never attaches a physical block device or host directory to the guest.
 
@@ -23,6 +23,13 @@ The one-time EL0 constructors temporarily use register x2 for message data; the 
 The EL1 stack has a 256 KiB reservation and one unmapped guard page once the MMU is active. A guard is not a guarantee of diagnostics or recovery: if an exception arrives with an unusable stack, handling the exception may itself fail. A large stack adjustment can also skip one guard page.
 
 Each initial fixed task requests exit after its work is acknowledged. The kernel does not return to its EL0 frame, does not schedule it again, removes its private alias and invalidates the local TLB before zeroing and releasing its frame. Four further programs are admitted sequentially into the freed actor-0 slot. The loader checks a restricted ELF64/AArch64 format and maps a separate user read/execute page. The covered EL0 faults and an unknown SVC stop that task and scrub its code and data frames; an interrupt-count budget handles a tested infinite loop. These are bounded one-CPU scenarios, not comprehensive fault isolation or a real-time deadline. The parser does not authenticate instructions: the local unauthenticated MCP endpoint can modify automatically executed files. Other malformed behavior can still halt or hang the VM. Programs share actor 0 without independent identity or authority.
+
+Each admission receives a kernel-controlled monotone incarnation number.
+The IPC service checks actor, incarnation and request ID before an effect,
+completion, delivery and acknowledgment. In this synchronous one-CPU guest,
+the scenario rejects a real late completion even when the next task has reused
+its request ID. This is not authenticated user identity, multicore safety or
+general cancellation of an effect that has already happened.
 
 The two fixed EL0 tasks use separate physical code pages and separate L3 page tables. In each address space, the other task's code page is privileged and non-executable at EL0; startup checks the expected access permissions using address-translation probes. This is not a general process loader or a proof of complete isolation.
 

@@ -806,6 +806,14 @@ jobs:
           python3 run_demo.py --qemu qemu-system-aarch64 \
             --guest "target/aarch64-unknown-none-softfloat/release/${{ matrix.binary }}" \
             --output-dir "$RUNNER_TEMP/storage-legacy-${{ matrix.id }}" --transport legacy
+      - name: Exercise integrated recovery after uncertain storage write
+        if: matrix.id == 'dynamic-fixture'
+        working-directory: experiments/${{ matrix.directory }}
+        run: |
+          CARGO_TARGET_DIR=target/ci-storage-fault cargo build --release --locked --features storage-fault-test
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest "target/ci-storage-fault/aarch64-unknown-none-softfloat/release/${{ matrix.binary }}" \
+            --output-dir "$RUNNER_TEMP/storage-fault-${{ matrix.id }}" --exercise-storage-fault
       - name: Preserve storage diagnostic evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -815,6 +823,7 @@ jobs:
             ${{ runner.temp }}/irq-injected-${{ matrix.id }}/
             ${{ runner.temp }}/storage-normal-${{ matrix.id }}/
             ${{ runner.temp }}/storage-legacy-${{ matrix.id }}/
+            ${{ runner.temp }}/storage-fault-${{ matrix.id }}/
           if-no-files-found: ignore
       - name: Preserve failing guest binary
         if: failure()

@@ -26,7 +26,7 @@ def connect(path,process):
     raise TimeoutError('socket timeout')
 
 class Guest:
-    def __init__(self,qemu,kernel,image,tmp,index,out,transport):
+    def __init__(self,qemu,kernel,image,tmp,index,out,transport,allow_degraded=False):
         self.trace=[];self.qmp_trace=[];self.socket=Path(tmp)/('mcp'+str(index));self.qmp=Path(tmp)/('qmp'+str(index))
         self.log=tempfile.TemporaryFile(mode='w+b')
         f={'driver':'file','filename':str(image),'node-name':'f0'}
@@ -45,6 +45,7 @@ class Guest:
             self.trace.append({'notification':{'jsonrpc':'2.0','method':'notifications/initialized'}});self.next_id=2
             listed=self.exchange({'jsonrpc':'2.0','id':2,'method':'tools/list','params':{}})
             names={x['name'] for x in listed.get('result',{}).get('tools',[])}
+            self.tools=names
             if not {'ipc_status','document_snapshot','document_merge','pointer_state','interaction_state','move_ai','click_ai','mmu_status','el0_status'}.issubset(names):raise RuntimeError('missing MCP tools')
             status=self.call('mmu_status',{})
             expected={'enabled':True,'caches':False,'mapping':'identity','image':'normal-nc','virtio':'device-xn','range_checks':'full','kernel_el0':'samples-denied','user_code':'ro','user_stack':'private-alias-rw','address_spaces':2,'asids':[1,2],'gic':'device-xn'}
@@ -53,7 +54,10 @@ class Guest:
             if not preempt.get('validated') or preempt.get('ticks')!=8 or preempt.get('el')!='EL0' or preempt.get('timer')!='disabled' or preempt.get('interrupts')!='masked':raise RuntimeError('EL0 probe status invalid')
             if preempt.get('private_values')!=[0xa1a1,0xb2b2] or preempt.get('service_asid')!=1:raise RuntimeError('private markers or service ASID invalid')
             states=preempt.get('task_states')
-            if preempt.get('cross_code_read_denied')!=[True,True] or preempt.get('frame_pool_capacity')!=4 or not isinstance(states,list) or len(states)!=2 or any(s not in ('ready','exited') for s in states) or preempt.get('frame_pool_assigned')!=states.count('ready'):raise RuntimeError('isolated task code or frame assignment invalid')
+            assigned=preempt.get('frame_pool_assigned')
+            # The loaded program may already own its two frames when the
+            # status request arrives; teardown is checked later by progress().
+            if preempt.get('cross_code_read_denied')!=[True,True] or preempt.get('frame_pool_capacity')!=4 or not isinstance(states,list) or len(states)!=2 or any(s not in ('ready','exited') for s in states) or not isinstance(assigned,int) or not states.count('ready')<=assigned<=4:raise RuntimeError('isolated task code or frame assignment invalid')
             events=preempt.get('events',[]);previous=[0,0]
             if len(events)!=8:raise RuntimeError('EL0 event count')
             for event_index,event in enumerate(events):
@@ -61,7 +65,10 @@ class Guest:
                 if event.get('task')!=actor or event.get('next')!=expected_next or event.get('count',0)<=previous[actor]:raise RuntimeError('EL0 preemption trace invalid: '+str(events))
                 previous[actor]=event['count']
             counts=preempt.get('slice_counts',[])
-            if preempt.get('mode')!='service-boundary' or preempt.get('slice_ticks',0)<2 or len(counts)!=2 or min(counts)<=0:raise RuntimeError('service slices not active')
+            if allow_degraded:
+                degraded=self.call('storage_status',{})
+                if degraded.get('restore')!='invalid' or degraded.get('write_blocked') is not True or preempt.get('slice_ticks')!=0:raise RuntimeError('degraded startup did not suspend task slices')
+            elif preempt.get('mode')!='service-boundary' or preempt.get('slice_ticks',0)<2 or len(counts)!=2 or min(counts)<=0:raise RuntimeError('service slices not active')
             self.last_progress=preempt
             with connect(self.qmp,self.process) as q:
                 with q.makefile('rwb',buffering=0) as st:
@@ -139,6 +146,9 @@ class Guest:
         expected=['success','fault','timeout' if timeout_image else 'bad_svc','success']
         if current.get('image_count')!=4 or current.get('image_outcomes')!=expected or current.get('images_reclaimed')!=[True]*4:raise RuntimeError('fault containment or image cleanup invalid across '+label)
         if current.get('completions_revoked')!=[True]*4 or (not timeout_image and current.get('stale_response_blocked') is not True):raise RuntimeError('IPC response survived task exit across '+label)
+        incarnations=current.get('image_incarnations')
+        if not isinstance(incarnations,list) or len(incarnations)!=4 or any(not isinstance(x,int) or x<=0 for x in incarnations) or len(set(incarnations))!=4:raise RuntimeError('process incarnations not unique across '+label)
+        if not timeout_image and current.get('stale_generation_rejected') is not True:raise RuntimeError('stale completion was not rejected across '+label)
         if current.get('loader_rejected') is not False or any(current.get(k) is not True for k in ('image_loaded','code_alias_removed','code_frame_scrubbed')):raise RuntimeError('program loading or code reclamation invalid across '+label)
         if len(current.get('slice_counts',[]))!=2 or any(a<b for a,b in zip(current['slice_counts'],before['slice_counts'])):raise RuntimeError('EL0 counts regressed across '+label)
         again=self.call('el0_status',{})
