@@ -836,22 +836,52 @@ def main():
    if state.get('two_segment')!=[True,True] or state.get('frame_pool_assigned')!=6:raise RuntimeError('direct IPC task isolation invalid: '+str(state))
    args={'a_slot':0,'a_incarnation':first['incarnation_text'],'b_slot':1,'b_incarnation':second['incarnation_text'],'boot_id':first['boot_id']}
    reject(g,'ipc_direct_bind',dict(args,b_slot=0),'invalid channel slots')
-   if g.call('ipc_direct_bind',args)!={'bound':True}:raise RuntimeError('direct IPC bind failed')
+   if g.call('ipc_direct_bind',args).get('bound') is not True:raise RuntimeError('direct IPC bind failed')
    state=g.wait_independent(lambda s:s.get('slot_states')==['exited','ready'],'first IPC exchange and A exit')
    if state.get('exit_codes',[None,None])[0]!=0 or state.get('outcomes',[None,None])[0]!=1 or state.get('incarnations')!=[first['incarnation'],second['incarnation']] or state.get('frame_pool_assigned')!=3:raise RuntimeError('first IPC exchange failed: '+str(state))
    channel=g.call('ipc_direct_status',{})
-   if set(channel)!={'bound','incarnations','queued','sent','received','dropped','scrubbed'} or channel.get('bound') is not False or channel.get('queued')!=[0,0] or channel.get('sent')!=[2,2] or channel.get('received')!=[2,2] or channel.get('scrubbed') is not True:raise RuntimeError('direct IPC closure or first exchange invalid: '+str(channel))
+   if set(channel)!={'bound','channel_id','incarnations','queued','sent','received','dropped','scrubbed','full_rejections','peer_unbound'} or channel.get('bound') is not False or channel.get('queued')!=[0,0] or channel.get('sent')!=[2,2] or channel.get('received')!=[2,2] or channel.get('scrubbed') is not True:raise RuntimeError('direct IPC closure or first exchange invalid: '+str(channel))
    replacement=g.call('process_spawn_staged',{'id':upload_id})
    if replacement.get('slot')!=0 or replacement.get('incarnation',0)<=second['incarnation'] or replacement.get('boot_id')!=first['boot_id']:raise RuntimeError('IPC sender readmission invalid')
    reject(g,'ipc_direct_bind',args,'stale process incarnation')
    args['a_incarnation']=replacement['incarnation_text']
-   if g.call('ipc_direct_bind',args)!={'bound':True}:raise RuntimeError('direct IPC rebind failed')
+   if g.call('ipc_direct_bind',args).get('bound') is not True:raise RuntimeError('direct IPC rebind failed')
    state=g.wait_independent(lambda s:s.get('slot_states')==['exited','exited'],'second IPC exchange and teardown')
    if state.get('incarnations')!=[replacement['incarnation'],second['incarnation']] or state.get('outcomes')!=[1,1] or state.get('exit_codes')!=[0,0] or state.get('data_scrubbed')!=[True,True] or state.get('code_scrubbed')!=[True,True] or state.get('stack_scrubbed')!=[True,True] or state.get('frame_pool_assigned')!=0:raise RuntimeError('direct IPC process cleanup invalid: '+str(state))
    channel=g.call('ipc_direct_status',{})
    if channel.get('bound') is not False or channel.get('queued')!=[0,0] or channel.get('sent')!=[2,2] or channel.get('received')!=[2,2] or channel.get('scrubbed') is not True:raise RuntimeError('direct IPC final cleanup invalid: '+str(channel))
    if g.call('file_list',{})!=files_before:raise RuntimeError('direct IPC unexpectedly modified the file catalogue')
    g.call('upload_reset',{'id':upload_id})
+   # Exercise an actually full FIFO and explicit close/reopen on the same boot.
+   queue_elf=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-ipc-queue.hex').read_text().strip())
+   queue_upload=stage_program(g,queue_elf)
+   qa=g.call('process_spawn_staged',{'id':queue_upload})
+   qb=g.call('process_spawn_staged',{'id':queue_upload})
+   if qa.get('slot')!=0 or qb.get('slot')!=1 or qa.get('boot_id')!=qb.get('boot_id'):raise RuntimeError('IPC queue fixture admission failed')
+   g.wait_independent(lambda x:x.get('slot_states')==['ready','ready'],'IPC queue actors ready')
+   queue_args={'a_slot':0,'a_incarnation':qa['incarnation_text'],'b_slot':1,'b_incarnation':qb['incarnation_text'],'boot_id':qa['boot_id']}
+   first_channel=g.call('ipc_direct_bind',queue_args)['channel_id']
+   def wait_direct(predicate,label):
+    for _ in range(60):
+     snapshot=g.call('ipc_direct_status',{})
+     if predicate(snapshot):return snapshot
+     time.sleep(.2)
+    raise RuntimeError('direct IPC did not reach '+label+': '+str(snapshot))
+   full=wait_direct(lambda x:x.get('queued')==[0,2] and x.get('full_rejections',[0,0])[0]>0,'full queue and rejected send')
+   baseline=full['peer_unbound']
+   if g.call('ipc_direct_close',{'channel_id':first_channel,'boot_id':qa['boot_id']})!={'closed':True}:raise RuntimeError('IPC close failed')
+   closed=wait_direct(lambda x:x.get('bound') is False and all(x.get('peer_unbound',[0,0])[i]>baseline[i] for i in range(2)),'both tasks observed close')
+   if closed.get('queued')!=[0,0] or closed.get('dropped')!=[0,2] or closed.get('scrubbed') is not True:raise RuntimeError('IPC close did not scrub full queue: '+str(closed))
+   second_channel=g.call('ipc_direct_bind',queue_args)['channel_id']
+   if int(second_channel)<=int(first_channel):raise RuntimeError('IPC channel identity did not advance')
+   wait_direct(lambda x:x.get('bound') is True and x.get('received',[0,0])[0]==1,'empty new queue and new message')
+   reject(g,'ipc_direct_close',{'channel_id':first_channel,'boot_id':qa['boot_id']},'stale direct channel')
+   if g.call('ipc_direct_close',{'channel_id':second_channel,'boot_id':qa['boot_id']})!={'closed':True}:raise RuntimeError('second IPC close failed')
+   state=g.wait_independent(lambda x:x.get('slot_states')==['exited','exited'],'IPC queue actors exited')
+   if state.get('incarnations')!=[qa['incarnation'],qb['incarnation']] or state.get('outcomes')!=[1,1] or state.get('exit_codes')!=[0,0] or state.get('data_scrubbed')!=[True,True] or state.get('code_scrubbed')!=[True,True] or state.get('stack_scrubbed')!=[True,True] or state.get('frame_pool_assigned')!=0:raise RuntimeError('IPC queue fixture cleanup failed: '+str(state))
+   after=g.call('ipc_direct_status',{})
+   if after.get('bound') is not False or after.get('queued')!=[0,0] or after.get('scrubbed') is not True:raise RuntimeError('second IPC channel not clean: '+str(after))
+   g.call('upload_reset',{'id':queue_upload})
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
   # No NIC: the same Rust program must see -19 without requiring a peer.

@@ -794,6 +794,7 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"process_status","description":"Inspect the latest bounded guest task admission.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"ipc_direct_bind","description":"Bind two independent guest tasks by slot, exact incarnation and current boot ID; no authentication.","inputSchema":{"type":"object","properties":{"a_slot":{"type":"integer","minimum":0,"maximum":1},"a_incarnation":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20},"b_slot":{"type":"integer","minimum":0,"maximum":1},"b_incarnation":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20},"boot_id":{"type":"string","pattern":"^[0-9a-f]{32}$"}},"required":["a_slot","a_incarnation","b_slot","b_incarnation","boot_id"],"additionalProperties":false}},
                                         {"name":"ipc_direct_status","description":"Read direct-channel state and counters without message contents.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"ipc_direct_close","description":"Close the current direct channel by exact boot and channel ID.","inputSchema":{"type":"object","properties":{"channel_id":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20},"boot_id":{"type":"string","pattern":"^[0-9a-f]{32}$"}},"required":["channel_id","boot_id"],"additionalProperties":false}},
                                         {"name":"network_status","description":"Read virtual network device state and counters without frame contents.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"network_grant_open","description":"Open the VM network channel for two current independent tasks; not authentication.","inputSchema":{"type":"object","properties":{"a_slot":{"type":"integer","minimum":0,"maximum":1},"a_incarnation":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20},"b_slot":{"type":"integer","minimum":0,"maximum":1},"b_incarnation":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20},"boot_id":{"type":"string","pattern":"^[0-9a-f]{32}$"}},"required":["a_slot","a_incarnation","b_slot","b_incarnation","boot_id"],"additionalProperties":false}},
                                         {"name":"network_grant_close","description":"Close a current network grant by exact boot and generation.","inputSchema":{"type":"object","properties":{"generation":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20},"boot_id":{"type":"string","pattern":"^[0-9a-f]{32}$"}},"required":["generation","boot_id"],"additionalProperties":false}},
@@ -1046,7 +1047,7 @@ pub extern "C" fn graph_main() -> ! {
                                                     usize::try_from(o.get("b_slot")?.as_u64()?).ok()?,parse_incarnation(o.get("b_incarnation")?.as_str()?)?,
                                                     parse_boot_id(o.get("boot_id")?.as_str()?)?)));
                                                 if let Some((a_slot,a_inc,b_slot,b_inc,boot_id))=parsed {
-                                                    match el0::bind_direct(a_slot,a_inc,b_slot,b_inc,boot_id) {Ok(())=>tool_json(id,json!({"bound":true})),Err(error)=>tool_error(id,error)}
+                                                    match el0::bind_direct(a_slot,a_inc,b_slot,b_inc,boot_id) {Ok(channel_id)=>tool_json(id,json!({"bound":true,"channel_id":format!("{}",channel_id)})),Err(error)=>tool_error(id,error)}
                                                 } else {tool_error(id,"invalid ipc_direct_bind arguments");}
                                             }
                                             Some("network_grant_open") => {
@@ -1070,6 +1071,13 @@ pub extern "C" fn graph_main() -> ! {
                                                 let args=params.and_then(|p|p.get("arguments"));
                                                 if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"network_status requires empty arguments");}
                                                 else {tool_json(id,net::status());}
+                                            }
+                                            Some("ipc_direct_close") => {
+                                                let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
+                                                let parsed=args.filter(|o|o.len()==2).and_then(|o|Some((parse_incarnation(o.get("channel_id")?.as_str()?)?,parse_boot_id(o.get("boot_id")?.as_str()?)?)));
+                                                if let Some((channel_id,boot))=parsed {
+                                                    match el0::close_direct(channel_id,boot) {Ok(())=>tool_json(id,json!({"closed":true})),Err(error)=>tool_error(id,error)}
+                                                } else {tool_error(id,"invalid ipc_direct_close arguments");}
                                             }
                                             Some("ipc_direct_status") => {
                                                 let args=params.and_then(|p|p.get("arguments"));
