@@ -610,14 +610,29 @@ pub extern "C" fn graph_main() -> ! {
                     let mut reply_len=0usize;
                     let mut reply_too_large=false;
                     let mut reply_invalid_name=false;
+                    let mut write_error=None;
                     let success=if request.actor!=0 {false} else if let (Some(key),Some(data))=(key,data) {
                         match request.file_op {
                             1=>{
                                 // A restored, byte-identical committed file needs no rewrite.
                                 if STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed) {false}
                                 else if files.get(key).is_ok_and(|old|old==data) {true}
-                                else if let Some(ref mut disk)=block {put_file(disk,&document,&mut files,key,data).is_ok()}
-                                else {false}
+                                else if let Some(ref mut disk)=block {
+                                    match put_file(disk,&document,&mut files,key,data) {
+                                        Ok(_)=>true,
+                                        Err(error)=>{
+                                            if request.id>=8 {
+                                                write_error=Some(match error {
+                                                    "invalid filename"=>el0::WriteError::InvalidName,
+                                                    "too many files"|"catalog too large"|"file too large"|"snapshot invalid or capacity exceeded"=>el0::WriteError::NoSpace,
+                                                    _=>el0::WriteError::Io,
+                                                });
+                                            }
+                                            false
+                                        }
+                                    }
+                                }
+                                else {if request.id>=8 {write_error=Some(el0::WriteError::Io)} false}
                             }
                             2=>match files.get(key) {
                                 Ok(bytes) if bytes.len()<=reply.len()=>{reply_len=bytes.len();reply[..reply_len].copy_from_slice(bytes);true},
@@ -628,7 +643,7 @@ pub extern "C" fn graph_main() -> ! {
                             _=>false,
                         }
                     } else {false};
-                    let completed=if reply_too_large {el0::complete_file_oversize(&request)} else if reply_invalid_name {el0::complete_file_invalid_name(&request)} else {el0::complete_file(&request,success,&reply[..reply_len])};
+                    let completed=if let Some(error)=write_error {el0::complete_file_write_error(&request,error)} else if reply_too_large {el0::complete_file_oversize(&request)} else if reply_invalid_name {el0::complete_file_invalid_name(&request)} else {el0::complete_file(&request,success,&reply[..reply_len])};
                     if !completed {halt()}
                     continue;
                 }

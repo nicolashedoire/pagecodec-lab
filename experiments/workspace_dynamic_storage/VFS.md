@@ -35,6 +35,35 @@ The guest counts submitted/completed reads without logging file contents; the
 same scenario verifies 3/3 and 2/2 completions. `fixtures/rebuild.py` verifies
 the committed instruction bytes against the assembly without executing them.
 
+## Bounded writes from a loaded program
+
+`SVC #0x141` uses `x0`/`x1` for a 1–16 byte name and `x2`/`x3` for a
+0–32 byte source within the calling task's private page. It returns the byte
+count, or `-11` while pending (retry the same addresses, lengths and name bytes), `-14`
+for an invalid range, `-22` for invalid arguments or a forbidden name, `-28`
+for a full catalog or snapshot, `-5` for an I/O failure, and `-75` when
+request IDs are exhausted. The kernel copies the bytes at submission; later
+changes to the source buffer do not change that request. A task has at most one
+generic read or write in flight. This is a bounded experimental ABI, not POSIX.
+Changing the name while polling returns `-22` and leaves the original request
+in flight until the original name is restored or the task exits.
+
+The service stages a candidate catalog and reports success only after the
+existing two-slot commit and readback. A byte-identical existing file requires
+no write. A failed write after disk modification starts is ambiguous: the
+guest sets `write_blocked` and suspends EL0 until reboot, so the process is not
+guaranteed to receive the I/O error. Ending a process does not undo a disk
+commit already performed. Reboot reconciles the two slots. Device readback is
+not a guarantee of persistence across a power loss.
+
+The integrated QEMU scenario runs [`generic-write.S`](fixtures/generic-write.S)
+as a separately loaded ELF: it changes its source after submission, creates a
+file and an empty file, exercises invalid names, a page-crossing source and
+full-catalog refusal, then checks the original bytes and the empty file after
+reboot on the same virtual disk. The existing injected post-commit error
+scenario verifies the shared storage path's `write_blocked` and recovery;
+it does not inject failure into the EL0 write itself.
+
 `init.bin`, `fault.bin`, `badsvc.bin` and `next.bin` are reserved boot-image names: `file_delete` refuses
 their removal, so a confirmed deletion cannot be silently undone by boot-time
 seeding. A PUT can still replace their bytes. The loader validates a narrow ELF

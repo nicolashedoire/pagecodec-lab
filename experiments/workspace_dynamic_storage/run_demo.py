@@ -259,6 +259,45 @@ def main():
     if g.call('document_snapshot',{})!=final:raise RuntimeError('generic reader changed workspace')
     traces.append(g.trace);states.append(g.call('storage_status',{}))
    finally:g.close()
+  # The writer is another loaded ELF, not a host-side substitute. Fill the
+  # catalog to nine entries after the first file it creates, then test ENOSPC.
+  writer_code=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'generic-write.hex').read_text().strip())
+  writer_hex=independent_elf(next_hex,writer_code)
+  g=Guest(a.qemu,guest,disk,tmp,21,out,a.transport)
+  try:
+   g.progress('before generic writer',timeout_image=True,expected_exit_code=0)
+   if len(g.call('file_list',{}))!=7:raise RuntimeError('unexpected catalog before generic writer')
+   if not g.call('file_put',{'name':'fill','data':'x'}).get('readback_verified'):raise RuntimeError('quota filler was not saved')
+   staged=g.call('file_put_hex',{'name':'next.bin','hex':writer_hex})
+   if not staged.get('readback_verified'):raise RuntimeError('generic writer ELF was not saved')
+   traces.append(g.trace);states.append(g.call('storage_status',{}))
+  finally:g.close()
+  g=Guest(a.qemu,guest,disk,tmp,22,out,a.transport)
+  try:
+   g.progress('generic writer execution',timeout_image=True,expected_exit_code=0)
+   ipc=g.call('ipc_status',{})
+   if ipc.get('generic_write_submitted')!=4 or ipc.get('generic_write_completed')!=4:raise RuntimeError('generic writes not completed as expected: '+str(ipc))
+   if g.call('file_get',{'name':'actor.txt'})!={'name':'actor.txt','hex':b'world'.hex()}:raise RuntimeError('write did not capture initial source bytes')
+   if g.call('file_get',{'name':'empty'})!={'name':'empty','hex':''}:raise RuntimeError('empty file was not created')
+   reject(g,'file_get',{'name':'full'},'file not found')
+   if len(g.call('file_list',{}))!=10:raise RuntimeError('rejected write changed catalog')
+   if g.call('document_snapshot',{})!=final:raise RuntimeError('generic writer changed workspace')
+   traces.append(g.trace);states.append(g.call('storage_status',{}))
+  finally:g.close()
+  g=Guest(a.qemu,guest,disk,tmp,23,out,a.transport)
+  try:
+   # Inspect restored bytes before relying on a repeated writer execution.
+   state=g.call('storage_status',{})
+   if state.get('restore_generation',0)<=staged['generation']:raise RuntimeError('ELF write did not advance persistent generation')
+   if g.call('file_get',{'name':'actor.txt'})!={'name':'actor.txt','hex':b'world'.hex()} or g.call('file_get',{'name':'empty'})!={'name':'empty','hex':''}:raise RuntimeError('ELF bytes did not survive VM restart')
+   g.progress('generic writer after restart',timeout_image=True,expected_exit_code=0)
+   reject(g,'file_get',{'name':'full'},'file not found')
+   for name in ('fill','actor.txt','empty'):
+    if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('quota fixture cleanup failed')
+   # Stop the writer from re-creating files on later boot scenarios.
+   if not g.call('file_put_hex',{'name':'next.bin','hex':independent_exit_elf(next_hex,0)}).get('readback_verified'):raise RuntimeError('writer reset failed')
+   traces.append(g.trace);states.append(g.call('storage_status',{}))
+  finally:g.close()
   if a.exercise_storage_fault:
    # In the same integrated guest, fail confirmation after the commit flush.
    # The kernel must preserve the old in-memory view and deny further writes.

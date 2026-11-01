@@ -62,8 +62,9 @@ class Guest:
             if len(events)!=8:raise RuntimeError('EL0 event count')
             for event_index,event in enumerate(events):
                 actor=event_index%2;expected_next=1-actor if event_index<7 else 2
-                if event.get('task')!=actor or event.get('next')!=expected_next or event.get('count',0)<=previous[actor]:raise RuntimeError('EL0 preemption trace invalid: '+str(events))
+                if event.get('task')!=actor or event.get('next')!=expected_next or event.get('count',0)<previous[actor]:raise RuntimeError('EL0 preemption trace invalid: '+str(events))
                 previous[actor]=event['count']
+            if any(count<=0 for count in previous):raise RuntimeError('EL0 task did not progress across probe: '+str(events))
             counts=preempt.get('slice_counts',[])
             if allow_degraded:
                 degraded=self.call('storage_status',{})

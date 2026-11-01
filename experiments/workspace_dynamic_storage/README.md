@@ -48,6 +48,20 @@ private page. The guest checks the ranges and revalidates the incarnation and
 mapping before copying a reply. This is a single-flight, nonblocking interface
 for files of at most 32 bytes, not a general POSIX or multicore API.
 
+`SVC #0x141` adds a [bounded file write](VFS.md#bounded-writes-from-a-loaded-program).
+The kernel copies the submitted bytes before returning control to EL0. The VM
+scenario changes the source buffer after submission and confirms the original
+bytes survive a restart. If the disk outcome becomes uncertain, the existing
+storage guard suspends EL0 until reboot; an immediate error return is not
+guaranteed in that case.
+
+The startup probe requires both initial tasks' counters to be nondecreasing
+across interrupts and each task to progress at least once during the full
+probe. An interrupt can arrive during initialization or an SVC, so equal
+counter values on consecutive interrupts are not evidence of a failure. A
+full modern-transport run failed the older per-interrupt condition before the
+write scenario; the condition was corrected and the integrated run repeated.
+
 The two fixed EL0 tasks use separate physical code pages and separate L3 page tables. In each address space, the other task's code page is privileged and non-executable at EL0; startup checks the expected access permissions using address-translation probes. This is not a general process loader or a proof of complete isolation.
 
 ## IRQ diagnostic experiment
