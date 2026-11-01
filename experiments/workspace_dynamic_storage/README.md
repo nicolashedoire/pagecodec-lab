@@ -1,4 +1,11 @@
-# EL0-constructed workspace messages with SVC save and restore
+# Integrated ARM64 guest: processes, storage and workspace prototype
+
+This guest has grown beyond its initial fixed-message experiment. It now
+includes bounded isolated ELF tasks, a reclaiming heap, IPC and sleeping tasks,
+virtual storage, and an experimental isolated VirtIO Ethernet path. The
+sections below retain the original experiment's history; see [VFS.md](VFS.md)
+for the current interfaces, validation and limitations. It is not a complete OS
+or a native Apple Silicon build.
 
 This fixed ARM64 QEMU experiment combines [`workspace_queue_dynamic`](../workspace_queue_dynamic/) with [`workspace_storage_ipc`](../workspace_storage_ipc/) with a task-originated save. After three scripted edits have been applied and acknowledged, task A issues SVC `0x110`. The handler checks `CURRENT` and the active TTBR, accepts a save request with fixed ID 4 into the same two-entry preallocated FIFO, and never touches the document or disk. Task B issues the same opcode and receives a dedicated response with kernel-assigned fixture ID 5 and `E_DENIED=4`. B reads and compares both, then echoes them in an acknowledgment SVC; the kernel verifies the same task/TTBR and marks the denial consumed. This denial uses dedicated private-page offsets rather than the positive-completion slots. The handler verifies that rejecting B did not modify the queue, its indices or the existing completion and accepted-request records. Actor labels identify fixed synthetic tasks, not authenticated people or an AI. The fixed EL0 scripts construct the synthetic UTF-8 strings and descriptors in their own initially zeroed pages; the SVC handler validates and copies those bytes into the FIFO.
 
@@ -121,6 +128,19 @@ python3 run_demo.py --qemu /path/to/qemu-system-aarch64 \
 The harness records synthetic MCP I/O, guest hash and QEMU version and checks the image hash did not change. Inter glyphs are distributed under the [SIL Open Font License](assets/OFL.txt).
 
 ### Interactive launcher and boot identity
+
+On macOS, after building the guest, open its QEMU window with:
+
+```sh
+python3 launch_vm.py --qemu /path/to/qemu-system-aarch64 \
+  --guest /path/to/workspace-dynamic-storage-demo --display cocoa
+```
+
+The default display is `none`; use `--create-image /path/to/new.img` to create
+a persistent virtual disk, or `--resume-image /path/to/existing.img` to reuse
+one previously created for this guest. With neither option the disk is
+temporary. The launcher prints the private MCP socket path. Its panels are a
+prototype, not application windows or independent graphical desktops.
 
 `launch_vm.py` provisions a virtual VirtIO entropy device along with its GPU,
 tablet and disposable or explicitly requested persistent disk. The guest uses
