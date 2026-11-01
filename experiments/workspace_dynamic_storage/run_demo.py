@@ -821,6 +821,39 @@ def main():
   v2_duplicate=bytearray(v2_base);record=bytearray(v2_duplicate[97*512:130*512]);record[8:16]=(1).to_bytes(8,'little')
   payload_len=int.from_bytes(record[16:20],'little');record[20:28]=int(fnv64(record[8:20]+record[512:512+payload_len]),16).to_bytes(8,'little');v2_duplicate[97*512:130*512]=record
   v2_case(48,v2_duplicate,['valid','valid'],'invalid','duplicate program generations','duplicate program generations')
+  # A linked Rust program exchanges messages directly between two private
+  # address spaces. Rebind after recycling A while B remains alive.
+  ipc_elf=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-direct-ipc.hex').read_text().strip())
+  g=Guest(a.qemu,guest,disk,tmp,51,out,a.transport)
+  try:
+   g.progress('before direct IPC tasks',timeout_image=True,expected_exit_code=0);g.wait_boot_identity()
+   files_before=g.call('file_list',{})
+   upload_id=stage_program(g,ipc_elf)
+   first=g.call('process_spawn_staged',{'id':upload_id})
+   second=g.call('process_spawn_staged',{'id':upload_id})
+   if first.get('slot')!=0 or second.get('slot')!=1 or first.get('boot_id')!=second.get('boot_id') or first.get('incarnation')==second.get('incarnation'):raise RuntimeError('direct IPC admissions invalid')
+   state=g.wait_independent(lambda s:s.get('slot_states')==['ready','ready'],'direct IPC tasks ready')
+   if state.get('two_segment')!=[True,True] or state.get('frame_pool_assigned')!=6:raise RuntimeError('direct IPC task isolation invalid: '+str(state))
+   args={'a_slot':0,'a_incarnation':first['incarnation_text'],'b_slot':1,'b_incarnation':second['incarnation_text'],'boot_id':first['boot_id']}
+   reject(g,'ipc_direct_bind',dict(args,b_slot=0),'invalid channel slots')
+   if g.call('ipc_direct_bind',args)!={'bound':True}:raise RuntimeError('direct IPC bind failed')
+   state=g.wait_independent(lambda s:s.get('slot_states')==['exited','ready'],'first IPC exchange and A exit')
+   if state.get('exit_codes',[None,None])[0]!=0 or state.get('outcomes',[None,None])[0]!=1 or state.get('incarnations')!=[first['incarnation'],second['incarnation']] or state.get('frame_pool_assigned')!=3:raise RuntimeError('first IPC exchange failed: '+str(state))
+   channel=g.call('ipc_direct_status',{})
+   if set(channel)!={'bound','incarnations','queued','sent','received','dropped','scrubbed'} or channel.get('bound') is not False or channel.get('queued')!=[0,0] or channel.get('sent')!=[2,2] or channel.get('received')!=[2,2] or channel.get('scrubbed') is not True:raise RuntimeError('direct IPC closure or first exchange invalid: '+str(channel))
+   replacement=g.call('process_spawn_staged',{'id':upload_id})
+   if replacement.get('slot')!=0 or replacement.get('incarnation',0)<=second['incarnation'] or replacement.get('boot_id')!=first['boot_id']:raise RuntimeError('IPC sender readmission invalid')
+   reject(g,'ipc_direct_bind',args,'stale process incarnation')
+   args['a_incarnation']=replacement['incarnation_text']
+   if g.call('ipc_direct_bind',args)!={'bound':True}:raise RuntimeError('direct IPC rebind failed')
+   state=g.wait_independent(lambda s:s.get('slot_states')==['exited','exited'],'second IPC exchange and teardown')
+   if state.get('incarnations')!=[replacement['incarnation'],second['incarnation']] or state.get('outcomes')!=[1,1] or state.get('exit_codes')!=[0,0] or state.get('data_scrubbed')!=[True,True] or state.get('code_scrubbed')!=[True,True] or state.get('stack_scrubbed')!=[True,True] or state.get('frame_pool_assigned')!=0:raise RuntimeError('direct IPC process cleanup invalid: '+str(state))
+   channel=g.call('ipc_direct_status',{})
+   if channel.get('bound') is not False or channel.get('queued')!=[0,0] or channel.get('sent')!=[2,2] or channel.get('received')!=[2,2] or channel.get('scrubbed') is not True:raise RuntimeError('direct IPC final cleanup invalid: '+str(channel))
+   if g.call('file_list',{})!=files_before:raise RuntimeError('direct IPC unexpectedly modified the file catalogue')
+   g.call('upload_reset',{'id':upload_id})
+   traces.append(g.trace);states.append(g.call('storage_status',{}))
+  finally:g.close()
   if a.exercise_storage_fault:
    v2_fault=Path(tmp)/'program-v2-fault.raw';create(v2_fault,v2_base)
    pf=Guest(a.qemu,guest,v2_fault,tmp,49,out,a.transport)

@@ -191,6 +191,99 @@ fn user_address(location:UserLocation)->Option<u64> {
  let base=match location.region {UserRegion::Data=>super::mmu::ALIAS,UserRegion::Stack=>super::mmu::USER_STACK};
  Some(u64::try_from(base.checked_add(location.offset)?).ok()?)
 }
+// One explicit two-process channel, fixed storage, no pointers into EL0.
+// All accesses occur on the sole CPU at a masked SVC/service boundary.
+#[derive(Clone,Copy)]
+struct DirectMessage {sender:u64,sender_inc:u64,dest_inc:u64,len:usize,bytes:[u8;32]}
+const DIRECT_EMPTY:DirectMessage=DirectMessage{sender:0,sender_inc:0,dest_inc:0,len:0,bytes:[0;32]};
+struct DirectChannel {bound:bool,incarnations:[u64;2],queues:[[DirectMessage;2];2],head:[usize;2],len:[usize;2],sent:[u64;2],received:[u64;2],dropped:[u64;2],scrubbed:bool}
+static mut DIRECT:DirectChannel=DirectChannel{bound:false,incarnations:[0;2],queues:[[DIRECT_EMPTY;2];2],head:[0;2],len:[0;2],sent:[0;2],received:[0;2],dropped:[0;2],scrubbed:true};
+fn direct_result(f:&mut Frame,code:i64) {f.regs[0]=code as u64}
+/// Establish exactly one channel between the two current independent tasks.
+/// The boot ID is a public freshness value, not client authentication.
+pub fn bind_direct(a:usize,ai:u64,b:usize,bi:u64,boot:[u8;16])->Result<(), &'static str> {
+ let current_boot=super::boot_identity::identifier().ok_or("boot identity unavailable")?;
+ if boot!=current_boot {return Err("stale boot identity")}
+ if a>=2 || b>=2 || a==b {return Err("invalid channel slots")}
+ let mut daif:u64;let mut timer:u64;unsafe{asm!("mrs {},DAIF",out(reg) daif);asm!("mrs {},CNTV_CTL_EL0",out(reg) timer)}
+ if daif&(1<<7)==0 || timer&1!=0 || super::mmu::active_root()!=super::mmu::root(0) {return Err("channel bind requires service boundary")}
+ if !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} || unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {return Err("independent processes not active")}
+ let states=unsafe{read_volatile(addr_of!(TASK_STATE))};
+ if states[a]!=1 || states[b]!=1 {return Err("process is not ready")}
+ if ai==0 || bi==0 || incarnation(a)!=ai || incarnation(b)!=bi
+  || unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS).cast::<u64>().add(a))}!=ai
+  || unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS).cast::<u64>().add(b))}!=bi {return Err("stale process incarnation")}
+ let c=unsafe{&mut *addr_of_mut!(DIRECT)};
+ if c.bound {return Err("direct channel already bound")}
+ if c.len!=[0;2] || !c.scrubbed {return Err("direct channel not clean")}
+ let mut ids=[0u64;2];ids[a]=ai;ids[b]=bi;
+ c.incarnations=ids;c.head=[0;2];c.sent=[0;2];c.received=[0;2];c.dropped=[0;2];c.bound=true;
+ Ok(())
+}
+/// Exposes metadata only; message bytes and virtual addresses remain private.
+pub fn direct_status()->Value {
+ let c=unsafe{&*addr_of!(DIRECT)};
+ json!({"bound":c.bound,"incarnations":c.incarnations,"queued":c.len,"sent":c.sent,"received":c.received,"dropped":c.dropped,"scrubbed":c.scrubbed})
+}
+fn direct_live(c:&DirectChannel,actor:usize)->bool {
+ if actor>=2 || !c.bound || !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} || unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {return false}
+ let peer=1-actor;let states=unsafe{read_volatile(addr_of!(TASK_STATE))};
+ matches!(states[actor],1|2) && matches!(states[peer],1|2)
+  && c.incarnations[actor]!=0 && c.incarnations[peer]!=0
+  && incarnation(actor)==c.incarnations[actor] && incarnation(peer)==c.incarnations[peer]
+}
+fn direct_peer(f:&mut Frame,actor:usize) {
+ if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {direct_result(f,-38);return}
+ let c=unsafe{&*addr_of!(DIRECT)};
+ if !direct_live(c,actor) {direct_result(f,-107);return}
+ let peer=1-actor;f.regs[0]=peer as u64;f.regs[1]=c.incarnations[peer];
+}
+fn direct_send(f:&mut Frame,actor:usize) {
+ if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {direct_result(f,-38);return}
+ let c=unsafe{&mut *addr_of_mut!(DIRECT)};
+ if !direct_live(c,actor) {direct_result(f,-107);return}
+ let peer=1-actor;
+ if f.regs[0]!=peer as u64 || f.regs[1]!=c.incarnations[peer] {direct_result(f,-116);return}
+ let len=f.regs[3];if len==0 || len>32 {direct_result(f,-22);return}
+ let len=len as usize;let address=f.regs[2];
+ if user_location(actor,address,len,false,false).is_none() {direct_result(f,-14);return}
+ if c.len[peer]==2 {direct_result(f,-11);return}
+ let mut message=DirectMessage{sender:actor as u64,sender_inc:c.incarnations[actor],dest_inc:c.incarnations[peer],len,bytes:[0;32]};
+ for i in 0..len {message.bytes[i]=unsafe{readbyte(address+i as u64)}}
+ let index=(c.head[peer]+c.len[peer])%2;c.queues[peer][index]=message;c.len[peer]+=1;
+ c.sent[actor]=c.sent[actor].saturating_add(1);c.scrubbed=false;direct_result(f,0)
+}
+fn clear_direct_message(m:&mut DirectMessage) {
+ for byte in &mut m.bytes {unsafe{write_volatile(byte,0)}}
+ m.sender=0;m.sender_inc=0;m.dest_inc=0;m.len=0;
+}
+fn direct_recv(f:&mut Frame,actor:usize) {
+ if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {direct_result(f,-38);return}
+ let c=unsafe{&mut *addr_of_mut!(DIRECT)};
+ if !direct_live(c,actor) {direct_result(f,-107);return}
+ let cap=f.regs[1];if cap==0 || cap>32 {direct_result(f,-22);return}
+ if c.len[actor]==0 {direct_result(f,-11);return}
+ let index=c.head[actor];let message=c.queues[actor][index];let peer=1-actor;
+ if message.len==0 || message.len>32 || message.sender!=peer as u64
+  || message.sender_inc!=c.incarnations[peer] || message.dest_inc!=c.incarnations[actor] {halt()}
+ if message.len>cap as usize {direct_result(f,-34);return}
+ let address=f.regs[0];if user_location(actor,address,cap as usize,true,false).is_none() {direct_result(f,-14);return}
+ for i in 0..message.len {unsafe{writebyte(address+i as u64,message.bytes[i])}}
+ clear_direct_message(&mut c.queues[actor][index]);c.head[actor]=(index+1)%2;c.len[actor]-=1;
+ c.received[actor]=c.received[actor].saturating_add(1);
+ f.regs[0]=message.len as u64;f.regs[1]=message.sender;f.regs[2]=message.sender_inc;
+}
+fn close_direct_for(actor:usize) {
+ let c=unsafe{&mut *addr_of_mut!(DIRECT)};
+ if !c.bound || actor>=2 || c.incarnations[actor]!=incarnation(actor) {return}
+ for dest in 0..2 {
+  c.dropped[dest]=c.dropped[dest].saturating_add(c.len[dest] as u64);
+  for message in &mut c.queues[dest] {clear_direct_message(message)}
+ }
+ c.len=[0;2];c.head=[0;2];c.bound=false;c.incarnations=[0;2];
+ c.scrubbed=c.queues.iter().flatten().all(|m|m.len==0 && m.bytes.iter().all(|b|*b==0));
+ if !c.scrubbed {halt()}
+}
 unsafe fn read64(p:u64)->u64 {let v:u64;asm!("ldr {v}, [{p}]",p=in(reg)p,v=out(reg)v,options(nostack,preserves_flags));v}
 unsafe fn write64(p:u64,v:u64){asm!("str {v}, [{p}]",p=in(reg)p,v=in(reg)v,options(nostack,preserves_flags));}
 unsafe fn writebyte(p:u64,v:u8){asm!("strb {v:w}, [{p}]",p=in(reg)p,v=in(reg)v as u32,options(nostack,preserves_flags));}
@@ -449,6 +542,9 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
   if !valid {unsafe{write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(actor),2)};return 1}
   match esr&0xffff {
    0x150=>{if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=2 {f.regs[0]=(-38i64) as u64;return 0};unsafe{write_volatile(addr_of_mut!(PAIR_BARRIER_SEEN).cast::<bool>().add(actor),true)};let counts=unsafe{read_volatile(addr_of!(PAIR_IRQS))};let seen=unsafe{read_volatile(addr_of!(PAIR_BARRIER_SEEN))};let frames=unsafe{read_volatile(addr_of!(TASK_FRAMES))};let live=if frames.iter().all(|p|*p!=0) {unsafe{[read_volatile(frames[0] as *const u64),read_volatile(frames[1] as *const u64)]}} else {[0;2]};if counts[0]>0 && counts[1]>0 && seen==[true,true] && frames.iter().all(|p|*p!=0) {unsafe{write_volatile(addr_of_mut!(PAIR_LIVE_MARKERS),live);write_volatile(addr_of_mut!(PAIR_BARRIER_OPEN),true)}};f.regs[0]=if unsafe{read_volatile(addr_of!(PAIR_BARRIER_OPEN))} {0} else {(-11i64) as u64};return 0},
+   0x160=>{direct_peer(f,actor);return 0},
+   0x161=>{direct_send(f,actor);return 0},
+   0x162=>{direct_recv(f,actor);return 0},
    0x140=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_read(f,state,actor);return 0},
    0x141=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_write(f,state,actor);return 0},
    0x123=>{unsafe{write_volatile(addr_of_mut!(PAIR_EXIT_CODES).cast::<Option<u64>>().add(actor),Some(f.regs[0]));write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(actor),1)};return 1},
@@ -986,6 +1082,9 @@ extern "C" fn pair_irq_check(f:*const Frame)->u64 {
  0
 }
 fn reclaim_pair(actor:usize) {
+ // Closing the channel discards both bounded queues before either frame can
+ // be reused by a later incarnation.
+ close_direct_for(actor);
  // Revoke this incarnation's queued or completed generic operation before
  // returning the private frames. Another actor's request is untouched.
  let state=unsafe{&mut *addr_of_mut!(IPC)};let generation=incarnation(actor);

@@ -436,3 +436,39 @@ specific refusal path, not every disk failure or process fault.
 The EL1 guard page is active only after the MMU is enabled. If the EL1 stack
 has already overflowed into it, exception handling may itself fail; the guard
 does not guarantee a diagnostic or recovery.
+
+### Direct IPC between independent tasks
+
+`ipc_direct_bind` establishes one volatile, bidirectional kernel channel between
+slots 0 and 1 using their exact decimal incarnation strings and the current
+32-character boot ID. `ipc_direct_status` returns only binding state, identities,
+queue lengths and counters, never message bytes or addresses. A client can observe
+or bind this endpoint without authentication; boot IDs provide freshness, not
+authorization. A stopped or exited peer closes the channel and clears the two
+fixed FIFO queues; there is currently no separate close/reconfiguration operation.
+The `scrubbed` flag describes those queue entries only, not all temporary kernel
+stack copies. This implementation assumes one CPU and does not claim SMP safety.
+
+EL0 services `0x160`, `0x161`, and `0x162` query the peer, send, and receive.
+Each destination queue holds two messages of 1–32 bytes; user buffers may be in
+the actor's private data page or its separate mapped stack. The sender specifies
+both destination slot and incarnation. Empty/full queues return -11, invalid
+arguments -22, an invalid buffer -14, insufficient receive capacity -34 without
+consuming the message, a closed/unbound channel -107, and a stale destination
+-116. Source slot and incarnation accompany successful receives. This is a
+local experimental IPC primitive, not a network stack or a general capability
+model.
+
+The integrated VM scenario uses two copies of the same linked `no_std` Rust ELF.
+They exchange two ordered messages each way using both stack and data buffers;
+the program itself verifies payloads, sizes, boundaries, and stale destinations.
+After the first actor exits, its replacement is admitted while the other stays
+alive: an old incarnation is rejected before rebinding, and another exchange
+checks cleanup and continued isolation. The file catalogue is unchanged.
+The scenario does not deterministically force a full queue or close a channel
+while messages remain queued; those two behaviors are not yet proven by this run.
+
+One legacy-transport full run timed out waiting for the initial MCP response
+at boot 26 (15-second socket read timeout, no kernel diagnostic captured).
+A subsequent run passed that boot with the same timeout. The cause is unknown;
+this observation is intermittent and is not evidence of a fix.

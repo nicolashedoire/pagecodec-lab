@@ -31,17 +31,17 @@ def validate(data):
  return data.hex()+'\n'
 
 def main():
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('--rustc',default='rustc');p.add_argument('--write',action='store_true');a=p.parse_args()
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('--rustc',default='rustc');p.add_argument('--write',action='store_true');p.add_argument('--fixture',choices=('rust-two-segment','rust-direct-ipc'),default='rust-two-segment');a=p.parse_args()
  sysroot=Path(subprocess.check_output([a.rustc,'--print','sysroot'],text=True).strip())
  host=next(line.split(': ',1)[1] for line in subprocess.check_output([a.rustc,'-vV'],text=True).splitlines() if line.startswith('host: '))
  linker=sysroot/'lib'/'rustlib'/host/'bin'/'rust-lld'
  with tempfile.TemporaryDirectory(prefix='guest-two-segment-') as tmp:
   output=Path(tmp)/'fixture.elf'
-  subprocess.run([a.rustc,'--target','aarch64-unknown-none-softfloat','--edition','2021','--crate-type','bin','-C','panic=abort','-C','opt-level=2','-C','relocation-model=static','-C','linker='+str(linker),'-C','linker-flavor=ld.lld','-C','link-arg=-T'+str(ROOT/'rust-two-segment.ld'),'-C','link-arg=--build-id=none','-C','link-arg=-z','-C','link-arg=max-page-size=4096','-C','strip=symbols',str(ROOT/'rust-two-segment.rs'),'-o',str(output)],check=True)
+  subprocess.run([a.rustc,'--target','aarch64-unknown-none-softfloat','--edition','2021','--crate-type','bin','-C','panic=abort','-C','opt-level=2','-C','relocation-model=static','-C','linker='+str(linker),'-C','linker-flavor=ld.lld','-C','link-arg=-T'+str(ROOT/'rust-two-segment.ld'),'-C','link-arg=--build-id=none','-C','link-arg=-z','-C','link-arg=max-page-size=4096','-C','strip=symbols',str(ROOT/(a.fixture+'.rs')),'-o',str(output)],check=True)
   text=validate(output.read_bytes())
- target=ROOT/'rust-two-segment.hex'
+ target=ROOT/(a.fixture+'.hex')
  if a.write:target.write_text(text)
  elif target.read_text()!=text:raise SystemExit('linked fixture differs; check Rust toolchain')
- print('rust-two-segment:',len(text.strip())//2,'bytes')
+ print(a.fixture+':',len(text.strip())//2,'bytes')
 
 if __name__=='__main__':main()
