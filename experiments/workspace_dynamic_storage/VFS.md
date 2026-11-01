@@ -188,6 +188,37 @@ scenario sends 320 mixed requests after warmup, compares repeated live-byte and
 largest-free snapshots, then exercises a file and a loaded process. Stability
 over this finite workload does not prove the absence of leaks in other paths.
 
+## One persistent program on a dedicated virtual disk
+
+An explicitly provisioned disposable QEMU disk of exactly 2,048 sectors has a
+separate single-program area: sectors 20–29 and 30–39. Each 5,120-byte record
+contains one 512-byte header and up to 4,216 bytes of raw ELF plus zero padding.
+The existing workspace snapshots remain at sectors 4–11 and 12–19, with their
+format unchanged. `program_store_commit` copies a sealed staged image to the
+inactive program record; `program_store_status` reports both records and
+`program_store_spawn` loads the latest valid program. This is one unnamed
+program slot, not a filesystem and not a transaction with the workspace.
+
+Only blank or recognized valid records may be overwritten. An unknown or
+invalid record blocks further program writes; a valid neighboring record can
+still be read and run. Two blank records mean empty storage. Equal valid
+generations, or no valid record when the area is nonblank, are errors. In
+particular, an interrupted first write can leave invalid+blank and requires a
+separate explicit recovery policy; it is never silently reformatted. A matching
+magic/header does not establish ownership of arbitrary disk sectors, so this
+must only be used on a virtual disk explicitly dedicated to this guest.
+
+Commit writes an uncommitted record, flushes, writes its commit header, flushes,
+then reads back and checks the entire record, checksum, padding and ELF. From
+the first write until successful verification, any error blocks subsequent
+snapshot and program writes until restart. Restart may recover either prior or
+new committed generation after an ambiguous failure. The checksum detects
+accidental corruption, not malicious changes. VirtIO flush may be a no-op if
+not negotiated, and reads/writes can block; neither power-loss durability nor
+responsiveness with a silent disk is established. The scenario uses temporary
+disks, preserves bytes outside sectors 20–39 across program commits, checks
+fallback and refusal cases, and exercises a postcommit error in test builds.
+
 `process_stop` accepts an exact identity such as
 `{"slot":0,"incarnation":"42","boot_id":"0123456789abcdef0123456789abcdef"}`.
 The incarnation must be a canonical,

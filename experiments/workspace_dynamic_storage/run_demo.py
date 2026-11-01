@@ -29,6 +29,17 @@ def fnv64(data):
  for byte in data:value=((value^byte)*0x100000001b3)&0xffffffffffffffff
  return f'{value:016x}'
 
+def stage_program(g,image):
+ upload_id=g.call('upload_begin',{'size':len(image),'checksum':fnv64(image)})['id']
+ for offset in range(0,len(image),512):
+  g.call('upload_chunk',{'id':upload_id,'offset':offset,'hex':image[offset:offset+512].hex()})
+ if g.call('upload_seal',{'id':upload_id})!={'sealed':True}:raise RuntimeError('program fixture upload failed')
+ return upload_id
+
+def wait_rust_program(g,admitted):
+ state=g.wait_independent(lambda s:s.get('slot_states',[None,None])[0]=='exited','stored Rust ELF exited')
+ if state.get('incarnations',[None,None])[0]!=admitted.get('incarnation') or state.get('outcomes',[None,None])[0]!=1 or state.get('exit_codes',[None,None])[0]!=0 or state.get('data_scrubbed',[False,False])[0] is not True or state.get('code_scrubbed',[False,False])[0] is not True or state.get('frame_pool_assigned')!=0:raise RuntimeError('stored Rust process exit or cleanup invalid: '+str(state))
+
 def independent_exit_elf(reference_hex,exit_code):
  if not 0<=exit_code<=65535:raise RuntimeError('invalid external exit code')
  instructions=(0xd2800000 | (exit_code<<5),
@@ -558,6 +569,8 @@ def main():
   finally:g.close()
   # Upload a real compiled Rust no_std program larger than the persistent
   # per-file limit; the staging area is not part of the virtual disk catalog.
+  # Guard sectors outside the designated program region in the dedicated disk.
+  guarded=bytearray(disk.read_bytes());guarded[3*512]=0xa7;guarded[40*512]=0x5c;disk.write_bytes(guarded)
   rust_code=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-no-std.hex').read_text().strip())
   if not 392<len(rust_code)<=4096 or len(rust_code)%4:raise RuntimeError('Rust code size not suitable for page-boundary test')
   # Pad unreachable code with AArch64 NOPs to exercise the full RX page.
@@ -608,6 +621,12 @@ def main():
    if g.call('upload_seal',{'id':upload_id})!={'sealed':True}:raise RuntimeError('Rust upload seal failed')
    reject(g,'upload_chunk',{'id':upload_id,'offset':len(rust_elf),'hex':'00'},'upload already sealed')
    if g.call('file_list',{})!=original_catalog:raise RuntimeError('temporary upload modified VFS')
+   if g.call('program_store_status',{})!={'state':'blank','slots':['blank','blank'],'generation':None,'write_blocked':False,'unknown_region':False}:raise RuntimeError('new program area not blank')
+   disk_before=disk.read_bytes()
+   for index in (0,1):
+    if g.call('program_store_commit',{'id':upload_id})!={'slot':index,'generation':index+1,'readback_verified':True}:raise RuntimeError('program store commit failed')
+   disk_after=disk.read_bytes()
+   if disk_before[:20*512]!=disk_after[:20*512] or disk_before[40*512:]!=disk_after[40*512:]:raise RuntimeError('program store changed sectors outside its area')
    rust=g.call('process_spawn_staged',{'id':upload_id})
    if rust.get('started') is not True or rust.get('slot')!=0:raise RuntimeError('staged Rust admission failed')
    state=g.wait_independent(lambda s:s.get('slot_states',[None,None])[0]=='exited','staged Rust ELF exited')
@@ -621,6 +640,14 @@ def main():
    g.progress('after staged Rust ELF reboot',timeout_image=True,expected_exit_code=0)
    if g.call('upload_status',{}).get('active') is not False:raise RuntimeError('temporary upload survived reboot')
    if g.call('file_get',{'name':'a-rust'})!={'name':'a-rust','hex':'52'}:raise RuntimeError('Rust file effect not persisted')
+   stored=g.call('program_store_status',{})
+   if stored!={'state':'valid','slots':['valid','valid'],'generation':2,'write_blocked':False,'unknown_region':False}:raise RuntimeError('stored Rust ELF not restored: '+str(stored))
+   if not g.call('file_put',{'name':'a-rust','data':'X'}).get('readback_verified'):raise RuntimeError('stored ELF execution probe setup failed')
+   g.wait_boot_identity()
+   admitted=g.call('program_store_spawn',{})
+   if admitted.get('started') is not True or admitted.get('slot')!=0:raise RuntimeError('stored ELF admission failed')
+   wait_rust_program(g,admitted)
+   if g.call('file_get',{'name':'a-rust'})!={'name':'a-rust','hex':'52'}:raise RuntimeError('restored ELF did not execute its file write')
    if not g.call('file_delete',{'name':'a-rust'}).get('readback_verified'):raise RuntimeError('Rust fixture cleanup failed')
    heap_samples=exercise_reclaiming_heap(g,preflight=a.heap_preflight)
    if not g.call('file_put',{'name':'a-heap','data':'alive'}).get('readback_verified'):raise RuntimeError('file write after heap workload failed')
@@ -633,7 +660,67 @@ def main():
    if state.get('incarnations',[None,None])[0]!=launched.get('incarnation') or state.get('outcomes',[None,None])[0]!=1 or state.get('exit_codes',[None,None])[0]!=0 or state.get('data_scrubbed',[False,False])[0] is not True or state.get('code_scrubbed',[False,False])[0] is not True or state.get('frame_pool_assigned')!=0:raise RuntimeError('process cleanup after heap workload failed')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
+  # Exercise conservative recovery on disposable clones of the same disk.
+  # The source disk and its two snapshot slots are never overwritten by the
+  # host while a guest is running.
+  program_base=disk.read_bytes()
+  def program_case(index,raw,expected_slots,expected_state,load_error,commit_error):
+   case_disk=Path(tmp)/('program-case-'+str(index)+'.raw');create(case_disk,bytes(raw))
+   case=Guest(a.qemu,guest,case_disk,tmp,index,out,a.transport)
+   try:
+    case.progress('program region case '+str(index),timeout_image=True,expected_exit_code=0)
+    status=case.call('program_store_status',{})
+    if status.get('slots')!=expected_slots or status.get('state')!=expected_state or status.get('unknown_region')!=('unknown' in expected_slots):raise RuntimeError('wrong program recovery status: '+str(status))
+    if load_error is None:
+     case.wait_boot_identity();admitted=case.call('program_store_spawn',{});wait_rust_program(case,admitted)
+     if case.call('file_get',{'name':'a-rust'})!={'name':'a-rust','hex':'52'}:raise RuntimeError('program fallback did not execute')
+    else:reject(case,'program_store_spawn',{},load_error)
+    upload_id=stage_program(case,rust_elf)
+    before=case_disk.read_bytes()
+    reject(case,'program_store_commit',{'id':upload_id},commit_error)
+    if case_disk.read_bytes()!=before:raise RuntimeError('refused program write changed the virtual disk')
+    traces.append(case.trace);states.append(case.call('storage_status',{}))
+   finally:case.close()
+  unknown=bytearray(program_base);unknown[30*512:30*512+8]=b'FOREIGN!'
+  program_case(33,unknown,['valid','unknown'],'valid',None,'unknown program region')
+  corrupt=bytearray(program_base);corrupt[30*512+512+200]^=1
+  program_case(34,corrupt,['valid','invalid'],'valid',None,'program region needs repair')
+  invalid=bytearray(program_base);invalid[20*512+512+200]^=1;invalid[30*512+512+200]^=1
+  program_case(35,invalid,['invalid','invalid'],'invalid','no valid committed program','program region needs repair')
+  partial=bytearray(program_base);partial[20*512+28]=0;partial[30*512:40*512]=bytes(5120)
+  program_case(36,partial,['invalid','blank'],'invalid','no valid committed program','program region needs repair')
+  unknown_first=bytearray(program_base);unknown_first[20*512:20*512+8]=b'FOREIGN!'
+  program_case(37,unknown_first,['unknown','valid'],'valid',None,'unknown program region')
+  duplicate=bytearray(program_base);record=bytearray(duplicate[30*512:40*512]);record[8:16]=(1).to_bytes(8,'little')
+  payload_len=int.from_bytes(record[16:20],'little');record[20:28]=int(fnv64(record[8:20]+record[512:512+payload_len]),16).to_bytes(8,'little');duplicate[30*512:40*512]=record
+  program_case(38,duplicate,['valid','valid'],'invalid','duplicate program generations','duplicate program generations')
   if a.exercise_storage_fault:
+   # A postcommit error makes the shared disk write state uncertain.  The
+   # restarted VM reconciles this disposable program store from both records.
+   program_fault=Path(tmp)/'program-fault.raw';create(program_fault,program_base)
+   pf=Guest(a.qemu,guest,program_fault,tmp,39,out,a.transport)
+   try:
+    pf.progress('before program postcommit failure',timeout_image=True,expected_exit_code=0)
+    upload_id=stage_program(pf,rust_elf)
+    before=program_fault.read_bytes()
+    if pf.call('debug_fail_program_postcommit',{})!={'armed':True}:raise RuntimeError('program postcommit failpoint not armed')
+    reject(pf,'program_store_commit',{'id':upload_id},'injected program postcommit confirmation failure')
+    if pf.call('storage_status',{}).get('write_blocked') is not True:raise RuntimeError('uncertain program write did not block storage')
+    reject(pf,'program_store_commit',{'id':upload_id},'storage write blocked until restart')
+    reject(pf,'file_put',{'name':'blocked.txt','data':'x'},'storage write blocked until restart')
+    after=program_fault.read_bytes()
+    if before[:20*512]!=after[:20*512] or before[40*512:]!=after[40*512:]:raise RuntimeError('failed program write changed outside its region')
+    traces.append(pf.trace);states.append(pf.call('storage_status',{}))
+   finally:pf.close()
+   pf=Guest(a.qemu,guest,program_fault,tmp,40,out,a.transport)
+   try:
+    pf.progress('after program postcommit restart',timeout_image=True,expected_exit_code=0)
+    status=pf.call('program_store_status',{})
+    if status.get('generation')!=3 or status.get('write_blocked') is not False:raise RuntimeError('committed program record did not reconcile: '+str(status))
+    pf.wait_boot_identity();admitted=pf.call('program_store_spawn',{});wait_rust_program(pf,admitted)
+    if pf.call('file_get',{'name':'a-rust'})!={'name':'a-rust','hex':'52'}:raise RuntimeError('recovered program did not execute')
+    traces.append(pf.trace);states.append(pf.call('storage_status',{}))
+   finally:pf.close()
    # In the same integrated guest, fail confirmation after the commit flush.
    # The kernel must preserve the old in-memory view and deny further writes.
    g=Guest(a.qemu,guest,disk,tmp,10,out,a.transport)
