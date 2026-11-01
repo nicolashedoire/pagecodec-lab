@@ -41,6 +41,44 @@ or remotely. Jev and the local Laya experiment provide structured decisions;
 neither on its own is speech recognition, speech synthesis or a complete
 conversational model.
 
+## Dessa as the desired voice experience
+
+The requested target is [Block's Dessa](https://block.xyz/dessa), including its
+natural conversational voice and the ability to listen and speak concurrently.
+Dessa is described as a speech-to-speech conversational model, not merely a
+selectable TTS voice; an integration cannot be assumed to expose an independent
+voice or an MCP/tool-calling interface. According to the
+[user-provided ZDNet report](https://www.zdnet.fr/actualites/jack-dorsey-presente-dessa-une-ia-vocale-capable-de-tourner-sur-un-ordinateur-portable-506430.htm),
+it is not publicly available. On 2026-11-01 we checked the official page in a
+browser: it reports that launch links are still forthcoming and describes early
+access for a small group of safety researchers. We found no official public
+weights, license or public API to integrate. An
+[independent access summary](https://ordalin.com/guides/dessa) reports the same
+availability status. Neither French support nor the exact voice-selection
+mechanism has been established.
+
+[Block reports](https://block.xyz/dessa) local operation on a MacBook Pro M4 Max or better; this does
+not establish that the project's M4 Pro with 24 GiB can run the model. Model
+size, memory needs and runtime behavior remain unverified. Do not label a
+different model, a voice clone or a recording as the original Dessa voice.
+
+Keep a replaceable voice-backend interface with simultaneous audio input and
+output, interruption, state reporting and separate access to system tools.
+If an official local distribution and compatible terms become available, assess
+the exact artifact and verify the voice, French, hardware use and interface
+before integration. The flow above is one cascaded alternative; a direct
+speech-to-speech backend need not pass through STT and TTS. This is a design
+target only; the VM currently has no working audio stack or voice engine.
+
+For an independently developed local research candidate,
+[Kyutai Moshi](https://github.com/kyutai-labs/moshi) offers full-duplex speech
+and Rust/MLX implementations; its [FAQ](https://github.com/kyutai-labs/moshi/blob/main/FAQ.md)
+says the published conversational model is English-only. Separately,
+[Kyutai's English/French TTS model](https://huggingface.co/kyutai/tts-1.6b-en_fr)
+is a streaming text-to-speech component with CC-BY-4.0 weights, not a full
+audio-to-audio assistant or Dessa's voice. Neither has been integrated or
+benchmarked in this project, and neither establishes comparable voice quality.
+
 ## Conversation and system interaction
 
 1. A user explicitly opens a session and grants microphone access. The widget
