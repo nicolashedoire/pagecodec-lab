@@ -131,8 +131,12 @@ struct Ipc {queue:[Option<Request>;2],head:usize,len:usize,completions:[Completi
 static mut IPC:Ipc=Ipc{queue:[None;2],head:0,len:0,completions:[EMPTY_COMPLETION;9],accepted:[0;8],accepted_len:0,applied:[0;8],applied_len:0,consumed:[0;8],consumed_len:0,full:false,full_consumed:false,range:[false;2],overflow:[false;2],duplicate:[false;2],utf8:[false;2],spoof:[false;2],save_denied:false,denial_consumed:false};
 // A loaded process can have one generic file operation in flight. Only copied
 // bytes and offsets within its private page are retained, never Rust borrows.
+#[derive(Clone,Copy,PartialEq,Eq)]
+enum UserRegion {Data,Stack}
+#[derive(Clone,Copy,PartialEq,Eq)]
+struct UserLocation {region:UserRegion,offset:usize}
 #[derive(Clone,Copy)]
-struct GenericIo {token:CompletionToken,file_op:u8,name:[u8;16],name_len:usize,name_offset:usize,dest_offset:usize,capacity:usize}
+struct GenericIo {token:CompletionToken,file_op:u8,name:[u8;16],name_len:usize,name_location:UserLocation,dest_location:UserLocation,capacity:usize}
 static mut GENERIC_IO:[Option<GenericIo>;2]=[None;2];
 static mut NEXT_GENERIC_ID:u64=8;
 // Aggregate only; never expose filenames, user addresses or file contents.
@@ -147,7 +151,7 @@ fn clear_generic_io(actor:usize) {
  // still Some, then clear the discriminant. Single CPU, SVC/service only.
  let p=unsafe{addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor)};
  if let Some(mut old)=unsafe{read_volatile(p)} {
-  old.file_op=0;old.name=[0;16];old.name_len=0;old.name_offset=0;old.dest_offset=0;old.capacity=0;
+  old.file_op=0;old.name=[0;16];old.name_len=0;old.name_location=UserLocation{region:UserRegion::Data,offset:0};old.dest_location=UserLocation{region:UserRegion::Data,offset:0};old.capacity=0;
   old.token=CompletionToken{actor:0,incarnation:0,id:0};
   unsafe{write_volatile(p,Some(old))};
  }
@@ -163,6 +167,30 @@ fn incarnation(actor:usize)->u64 {
  assert!(id!=0);id
 }
 fn in_page(p:u64,n:usize)->bool {n>0 && p>=super::mmu::ALIAS as u64 && p.checked_add(n as u64).is_some_and(|end|end<=(super::mmu::ALIAS+PAGE) as u64)}
+// Capture only a region and offset. The frame and current EL0 mapping are
+// revalidated on each retry, with no guest reference retained across SVCs.
+fn user_location(actor:usize,address:u64,len:usize,write:bool,allow_empty:bool)->Option<UserLocation> {
+ if actor>=2 || super::mmu::active_root()!=super::mmu::root(actor) || (len==0 && !allow_empty) {return None}
+ let end=address.checked_add(u64::try_from(len).ok()?)?;
+ for region in [UserRegion::Data,UserRegion::Stack] {
+  let (base,frame)=match region {
+   UserRegion::Data=>(super::mmu::ALIAS,unsafe{read_volatile(addr_of!(TASK_FRAMES).cast::<usize>().add(actor))}),
+   UserRegion::Stack=>(super::mmu::USER_STACK,unsafe{read_volatile(addr_of!(PAIR_STACK_FRAMES).cast::<usize>().add(actor))}),
+  };
+  let start=base as u64;let limit=start.checked_add(PAGE as u64)?;
+  if address<start || end>limit || (len>0 && address==limit) {continue}
+  // A zero-byte buffer may point one byte past the mapped region, but still
+  // requires the region's first byte to map to this live process's frame.
+  let (probe,probe_len)=if len==0 {(start,1)}else{(address,len)};
+  if !super::mmu::user_region_matches(probe,probe_len,base,frame,write) {return None}
+  return Some(UserLocation{region,offset:usize::try_from(address-start).ok()?})
+ }
+ None
+}
+fn user_address(location:UserLocation)->Option<u64> {
+ let base=match location.region {UserRegion::Data=>super::mmu::ALIAS,UserRegion::Stack=>super::mmu::USER_STACK};
+ Some(u64::try_from(base.checked_add(location.offset)?).ok()?)
+}
 unsafe fn read64(p:u64)->u64 {let v:u64;asm!("ldr {v}, [{p}]",p=in(reg)p,v=out(reg)v,options(nostack,preserves_flags));v}
 unsafe fn write64(p:u64,v:u64){asm!("str {v}, [{p}]",p=in(reg)p,v=in(reg)v,options(nostack,preserves_flags));}
 unsafe fn writebyte(p:u64,v:u8){asm!("strb {v:w}, [{p}]",p=in(reg)p,v=in(reg)v as u32,options(nostack,preserves_flags));}
@@ -336,27 +364,23 @@ fn generic_read(f:&mut Frame,s:&mut Ipc,actor:usize) {
  let result=|f:&mut Frame,v:i64|{f.regs[0]=v as u64};
  if name_len==0 || name_len>16 || capacity==0 || capacity>32 {result(f,-22);return}
  let (name_len,capacity)=(name_len as usize,capacity as usize);
- let frame=task_frame(actor);
- if !in_page(name_va,name_len) || !in_page(dest_va,capacity)
-   || !super::mmu::user_alias_matches(name_va,name_len,frame,false)
-   || !super::mmu::user_alias_matches(dest_va,capacity,frame,true) {result(f,-14);return}
+ let Some(name_location)=user_location(actor,name_va,name_len,false,false) else{result(f,-14);return};
+ let Some(dest_location)=user_location(actor,dest_va,capacity,true,false) else{result(f,-14);return};
  let mut name=[0u8;16];
  for (i,byte) in name[..name_len].iter_mut().enumerate() {*byte=unsafe{readbyte(name_va+i as u64)}}
  if core::str::from_utf8(&name[..name_len]).is_err() {result(f,-22);return}
- let name_offset=(name_va-super::mmu::ALIAS as u64) as usize;
- let dest_offset=(dest_va-super::mmu::ALIAS as u64) as usize;
  if let Some(pending)=unsafe{read_volatile(addr_of!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor))} {
   if pending.file_op!=2 || pending.token.actor!=actor || pending.token.incarnation!=incarnation(actor)
-   || pending.name!=name || pending.name_len!=name_len || pending.name_offset!=name_offset
-   || pending.dest_offset!=dest_offset || pending.capacity!=capacity {result(f,-22);return}
+   || pending.name!=name || pending.name_len!=name_len || pending.name_location!=name_location
+   || pending.dest_location!=dest_location || pending.capacity!=capacity {result(f,-22);return}
   let c=&mut s.completions[7+actor];
   if c.id!=pending.token.id || c.actor!=actor || c.incarnation!=pending.token.incarnation {halt()}
   if !c.applied {result(f,-11);return}
   let code=if c.access_denied {-13} else if c.invalid_name {-22} else if c.oversize {-34} else if !c.success {-2} else if c.data_len>capacity {-34} else {
    // Revalidate the current mapping and incarnation immediately before the
    // copy, since only guest offsets were retained while the service ran.
-   let dest=super::mmu::ALIAS.checked_add(pending.dest_offset).unwrap_or_else(||halt()) as u64;
-   if incarnation(actor)!=pending.token.incarnation || !super::mmu::user_alias_matches(dest,pending.capacity,task_frame(actor),true) {result(f,-14);return}
+   let Some(dest)=user_address(pending.dest_location) else{result(f,-14);return};
+   if incarnation(actor)!=pending.token.incarnation || user_location(actor,dest,pending.capacity,true,false)!=Some(pending.dest_location) {result(f,-14);return}
    for i in 0..c.data_len {unsafe{writebyte(dest+i as u64,c.data[i])}}
    c.data_len as i64
   };
@@ -367,7 +391,7 @@ fn generic_read(f:&mut Frame,s:&mut Ipc,actor:usize) {
  let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:2,key:name,key_len:name_len,value:[0;32],value_len:0};
  if !submit(s,request) {result(f,-11);return}
  if unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} {unsafe{write_volatile(addr_of_mut!(PAIR_LAST_TOKENS).cast::<Option<CompletionToken>>().add(actor),Some(request.token()))}}
- unsafe{write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:2,name,name_len,name_offset,dest_offset,capacity}));let p=addr_of_mut!(GENERIC_READ_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true)};
+ unsafe{write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:2,name,name_len,name_location,dest_location,capacity}));let p=addr_of_mut!(GENERIC_READ_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true)};
  result(f,-11);
 }
 // SVC 0x141: poll one bounded write. x0=name VA, x1=name length,
@@ -381,21 +405,15 @@ fn generic_write(f:&mut Frame,s:&mut Ipc,actor:usize) {
  let result=|f:&mut Frame,v:i64|{f.regs[0]=v as u64};
  if name_len==0 || name_len>16 || len>32 {result(f,-22);return}
  let (name_len,len)=(name_len as usize,len as usize);
- let frame=task_frame(actor);
- let empty_src=len==0 && src_va>=super::mmu::ALIAS as u64 && src_va<=(super::mmu::ALIAS+PAGE) as u64;
- if !in_page(name_va,name_len) || (!empty_src && !in_page(src_va,len))
-   || !super::mmu::user_alias_matches(name_va,name_len,frame,false)
-   || (!empty_src && !super::mmu::user_alias_matches(src_va,len,frame,false))
-   || (empty_src && !super::mmu::user_alias_matches(super::mmu::ALIAS as u64,1,frame,false)) {result(f,-14);return}
+ let Some(name_location)=user_location(actor,name_va,name_len,false,false) else{result(f,-14);return};
+ let Some(src_location)=user_location(actor,src_va,len,false,true) else{result(f,-14);return};
  let mut name=[0u8;16];
  for (i,byte) in name[..name_len].iter_mut().enumerate() {*byte=unsafe{readbyte(name_va+i as u64)}}
  if core::str::from_utf8(&name[..name_len]).is_err() {result(f,-22);return}
- let name_offset=(name_va-super::mmu::ALIAS as u64) as usize;
- let src_offset=(src_va-super::mmu::ALIAS as u64) as usize;
  if let Some(pending)=unsafe{read_volatile(addr_of!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor))} {
   if pending.file_op!=1 || pending.token.actor!=actor || pending.token.incarnation!=incarnation(actor)
-   || pending.name!=name || pending.name_len!=name_len || pending.name_offset!=name_offset
-   || pending.dest_offset!=src_offset || pending.capacity!=len {result(f,-22);return}
+   || pending.name!=name || pending.name_len!=name_len || pending.name_location!=name_location
+   || pending.dest_location!=src_location || pending.capacity!=len {result(f,-22);return}
   let c=&mut s.completions[7+actor];
   if c.id!=pending.token.id || c.actor!=actor || c.incarnation!=pending.token.incarnation {halt()}
   if !c.applied {result(f,-11);return}
@@ -409,7 +427,7 @@ fn generic_write(f:&mut Frame,s:&mut Ipc,actor:usize) {
  let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:1,key:name,key_len:name_len,value,value_len:len};
  if !submit(s,request) {result(f,-11);return}
  if unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} {unsafe{write_volatile(addr_of_mut!(PAIR_LAST_TOKENS).cast::<Option<CompletionToken>>().add(actor),Some(request.token()))}}
- unsafe{write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:1,name,name_len,name_offset,dest_offset:src_offset,capacity:len}));let p=addr_of_mut!(GENERIC_WRITE_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true)};
+ unsafe{write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:1,name,name_len,name_location,dest_location:src_location,capacity:len}));let p=addr_of_mut!(GENERIC_WRITE_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true)};
  result(f,-11);
 }
 #[no_mangle]

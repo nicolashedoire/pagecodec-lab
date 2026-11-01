@@ -582,7 +582,7 @@ def main():
   # Upload a real compiled Rust no_std program larger than the persistent
   # per-file limit; the staging area is not part of the virtual disk catalog.
   # Guard sectors outside the designated program region in the dedicated disk.
-  guarded=bytearray(disk.read_bytes());guarded[3*512]=0xa7;guarded[40*512]=0x5c;disk.write_bytes(guarded)
+  guarded=bytearray(disk.read_bytes());guarded[3*512]=0xa7;guarded[40*512]=0x5c;guarded[63*512]=0x6d;guarded[130*512]=0x7e;disk.write_bytes(guarded)
   rust_code=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-no-std.hex').read_text().strip())
   if not 392<len(rust_code)<=4096 or len(rust_code)%4:raise RuntimeError('Rust code size not suitable for page-boundary test')
   # Pad unreachable code with AArch64 NOPs to exercise the full RX page.
@@ -738,12 +738,16 @@ def main():
    upload_id=stage_program(g,linked)
    before=disk.read_bytes();reject(g,'program_store_commit',{'id':upload_id},'invalid staged ELF')
    if disk.read_bytes()!=before:raise RuntimeError('oversized persistent program modified disk')
+   if g.call('program_store_v2_status',{})!={'state':'blank','slots':['blank','blank'],'generation':None,'write_blocked':False,'unknown_region':False}:raise RuntimeError('new V2 program area not blank')
+   if g.call('program_store_v2_commit',{'id':upload_id})!={'slot':0,'generation':1,'readback_verified':True}:raise RuntimeError('linked V2 commit failed')
+   after=disk.read_bytes()
+   if before[:64*512]!=after[:64*512] or before[130*512:]!=after[130*512:]:raise RuntimeError('V2 commit changed sectors outside its area')
    task_a=g.call('process_spawn_staged',{'id':upload_id})
    if task_a.get('slot')!=0:raise RuntimeError('linked Rust A admission failed')
-   state=g.wait_independent(lambda s:s.get('slot_states',[None,None])[0]=='ready' and s.get('io_completed',[0,0])[0]>=2,'linked Rust A active')
+   state=g.wait_independent(lambda s:s.get('slot_states',[None,None])[0]=='ready' and s.get('io_completed',[0,0])[0]>=11,'linked Rust A active after buffer checks')
    task_b=g.call('process_spawn_staged',{'id':upload_id})
    if task_b.get('slot')!=1 or task_b.get('incarnation',0)<=task_a.get('incarnation',0):raise RuntimeError('linked Rust B admission failed')
-   state=g.wait_independent(lambda s:s.get('slot_states')==['ready','ready'] and min(s.get('io_completed',[0,0]))>=2,'both linked Rust tasks active')
+   state=g.wait_independent(lambda s:s.get('slot_states')==['ready','ready'] and min(s.get('io_completed',[0,0]))>=11,'both linked Rust tasks active after buffer checks')
    if state.get('incarnations')!=[task_a['incarnation'],task_b['incarnation']] or state.get('two_segment')!=[True,True] or state.get('rw_init_verified')!=[True,True] or state.get('slot_mappings_verified')!=[True,True] or state.get('frame_pool_assigned')!=6:raise RuntimeError('linked Rust mappings or initialization invalid: '+str(state))
    for side in ('a','b'):
     if g.call('file_get',{'name':side+'-rust'})!={'name':side+'-rust','hex':'52'}:raise RuntimeError('linked Rust task did not write its file')
@@ -755,12 +759,95 @@ def main():
    state=g.wait_independent(lambda s:s.get('slot_states')==['exited','exited'],'linked Rust tasks exited')
    if state.get('outcomes')!=[1,1] or state.get('exit_codes')!=[0,0] or state.get('data_scrubbed')!=[True,True] or state.get('code_scrubbed')!=[True,True] or state.get('stack_scrubbed')!=[True,True] or state.get('frame_pool_assigned')!=0:raise RuntimeError('linked Rust teardown invalid: '+str(state))
    g.call('upload_reset',{'id':upload_id})
+   linked_max=linked+bytes(16384-len(linked))
+   upload_max=stage_program(g,linked_max)
+   before=disk.read_bytes()
+   if g.call('program_store_v2_commit',{'id':upload_max})!={'slot':1,'generation':2,'readback_verified':True}:raise RuntimeError('maximum V2 commit failed')
+   after=disk.read_bytes()
+   if before[:64*512]!=after[:64*512] or before[130*512:]!=after[130*512:]:raise RuntimeError('maximum V2 commit changed outside its area')
+   g.call('upload_reset',{'id':upload_max})
    for side in ('a','b'):
     for suffix in ('-gate','-rust'):
      if not g.call('file_delete',{'name':side+suffix}).get('readback_verified'):raise RuntimeError('linked Rust fixture cleanup failed')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
+  # Restore and run the full-sized V2 record after a fresh VM boot.
+  g=Guest(a.qemu,guest,disk,tmp,42,out,a.transport)
+  try:
+   g.progress('before persistent V2 Rust',timeout_image=True,expected_exit_code=0);g.wait_boot_identity()
+   v2=g.call('program_store_v2_status',{})
+   if v2!={'state':'valid','slots':['valid','valid'],'generation':2,'write_blocked':False,'unknown_region':False}:raise RuntimeError('V2 program did not restore: '+str(v2))
+   if g.call('program_store_status',{}).get('generation')!=2:raise RuntimeError('V2 changed V1 program generation')
+   if not g.call('file_put',{'name':'a-gate','data':'1'}).get('readback_verified'):raise RuntimeError('V2 Rust gate setup failed')
+   task=g.call('program_store_v2_spawn',{})
+   if task.get('started') is not True or task.get('slot')!=0:raise RuntimeError('V2 persistent ELF admission failed')
+   state=g.wait_independent(lambda s:s.get('slot_states',[None,None])[0]=='exited','stored V2 Rust exited')
+   if state.get('outcomes',[None,None])[0]!=1 or state.get('exit_codes',[None,None])[0]!=0 or state.get('two_segment',[False,False])[0] is not True or state.get('rw_init_verified',[False,False])[0] is not True or state.get('stack_scrubbed',[False,False])[0] is not True or state.get('frame_pool_assigned')!=0:raise RuntimeError('V2 persistent ELF execution failed: '+str(state))
+   if g.call('file_get',{'name':'a-rust'})!={'name':'a-rust','hex':'52'}:raise RuntimeError('V2 persistent ELF file effect absent')
+   for name in ('a-gate','a-rust'):
+    if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('V2 ELF fixture cleanup failed')
+   traces.append(g.trace);states.append(g.call('storage_status',{}))
+  finally:g.close()
+  v2_base=disk.read_bytes()
+  def v2_case(index,raw,expected_slots,expected_state,load_error,commit_error):
+   case_disk=Path(tmp)/('program-v2-case-'+str(index)+'.raw');create(case_disk,bytes(raw))
+   case=Guest(a.qemu,guest,case_disk,tmp,index,out,a.transport)
+   try:
+    case.progress('program V2 region case '+str(index),timeout_image=True,expected_exit_code=0)
+    status=case.call('program_store_v2_status',{})
+    if status.get('slots')!=expected_slots or status.get('state')!=expected_state or status.get('unknown_region')!=('unknown' in expected_slots):raise RuntimeError('wrong V2 recovery status: '+str(status))
+    if load_error is None:
+     if not case.call('file_put',{'name':'a-gate','data':'1'}).get('readback_verified'):raise RuntimeError('V2 fallback gate failed')
+     case.wait_boot_identity();task=case.call('program_store_v2_spawn',{})
+     state=case.wait_independent(lambda s:s.get('slot_states',[None,None])[0]=='exited','V2 fallback exited')
+     if state.get('incarnations',[None,None])[0]!=task.get('incarnation') or state.get('exit_codes',[None,None])[0]!=0 or state.get('stack_scrubbed',[False,False])[0] is not True:raise RuntimeError('V2 fallback failed: '+str(state))
+     if case.call('file_get',{'name':'a-rust'})!={'name':'a-rust','hex':'52'}:raise RuntimeError('V2 fallback did not execute')
+    else:reject(case,'program_store_v2_spawn',{},load_error)
+    upload_id=stage_program(case,linked)
+    before=case_disk.read_bytes();reject(case,'program_store_v2_commit',{'id':upload_id},commit_error)
+    if case_disk.read_bytes()!=before:raise RuntimeError('refused V2 write changed virtual disk')
+    traces.append(case.trace);states.append(case.call('storage_status',{}))
+   finally:case.close()
+  v2_unknown=bytearray(v2_base);v2_unknown[97*512:97*512+8]=b'FOREIGN!'
+  v2_case(43,v2_unknown,['valid','unknown'],'valid',None,'unknown program region')
+  v2_unknown_first=bytearray(v2_base);v2_unknown_first[64*512:64*512+8]=b'FOREIGN!'
+  v2_case(44,v2_unknown_first,['unknown','valid'],'valid',None,'unknown program region')
+  v2_corrupt=bytearray(v2_base);v2_corrupt[97*512+512+200]^=1
+  v2_case(45,v2_corrupt,['valid','invalid'],'valid',None,'program region needs repair')
+  v2_invalid=bytearray(v2_base);v2_invalid[64*512+512+200]^=1;v2_invalid[97*512+512+200]^=1
+  v2_case(46,v2_invalid,['invalid','invalid'],'invalid','no valid committed program','program region needs repair')
+  v2_partial=bytearray(v2_base);v2_partial[64*512+28]=0;v2_partial[97*512:130*512]=bytes(16896)
+  v2_case(47,v2_partial,['invalid','blank'],'invalid','no valid committed program','program region needs repair')
+  v2_duplicate=bytearray(v2_base);record=bytearray(v2_duplicate[97*512:130*512]);record[8:16]=(1).to_bytes(8,'little')
+  payload_len=int.from_bytes(record[16:20],'little');record[20:28]=int(fnv64(record[8:20]+record[512:512+payload_len]),16).to_bytes(8,'little');v2_duplicate[97*512:130*512]=record
+  v2_case(48,v2_duplicate,['valid','valid'],'invalid','duplicate program generations','duplicate program generations')
   if a.exercise_storage_fault:
+   v2_fault=Path(tmp)/'program-v2-fault.raw';create(v2_fault,v2_base)
+   pf=Guest(a.qemu,guest,v2_fault,tmp,49,out,a.transport)
+   try:
+    pf.progress('before V2 postcommit failure',timeout_image=True,expected_exit_code=0)
+    upload_id=stage_program(pf,linked);before=v2_fault.read_bytes()
+    if pf.call('debug_fail_program_v2_postcommit',{})!={'armed':True}:raise RuntimeError('V2 postcommit failpoint not armed')
+    reject(pf,'program_store_v2_commit',{'id':upload_id},'injected program v2 postcommit confirmation failure')
+    if pf.call('storage_status',{}).get('write_blocked') is not True:raise RuntimeError('uncertain V2 write did not block storage')
+    reject(pf,'program_store_v2_commit',{'id':upload_id},'storage write blocked until restart')
+    reject(pf,'program_store_commit',{'id':upload_id},'storage write blocked until restart')
+    reject(pf,'file_put',{'name':'blocked.txt','data':'x'},'storage write blocked until restart')
+    after=v2_fault.read_bytes()
+    if before[:64*512]!=after[:64*512] or before[130*512:]!=after[130*512:]:raise RuntimeError('failed V2 write changed outside its region')
+    traces.append(pf.trace);states.append(pf.call('storage_status',{}))
+   finally:pf.close()
+   pf=Guest(a.qemu,guest,v2_fault,tmp,50,out,a.transport)
+   try:
+    pf.progress('after V2 postcommit restart',timeout_image=True,expected_exit_code=0)
+    status=pf.call('program_store_v2_status',{})
+    if status.get('generation')!=3 or status.get('write_blocked') is not False:raise RuntimeError('V2 committed record did not reconcile: '+str(status))
+    if not pf.call('file_put',{'name':'a-gate','data':'1'}).get('readback_verified'):raise RuntimeError('V2 recovered gate failed')
+    pf.wait_boot_identity();task=pf.call('program_store_v2_spawn',{})
+    state=pf.wait_independent(lambda s:s.get('slot_states',[None,None])[0]=='exited','V2 recovered program exited')
+    if state.get('exit_codes',[None,None])[0]!=0 or state.get('stack_scrubbed',[False,False])[0] is not True:raise RuntimeError('V2 recovered program failed: '+str(state))
+    traces.append(pf.trace);states.append(pf.call('storage_status',{}))
+   finally:pf.close()
    # A postcommit error makes the shared disk write state uncertain.  The
    # restarted VM reconciles this disposable program store from both records.
    program_fault=Path(tmp)/'program-fault.raw';create(program_fault,program_base)

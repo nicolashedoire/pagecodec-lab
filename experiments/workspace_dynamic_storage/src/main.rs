@@ -9,6 +9,7 @@ mod vfs;
 mod boot_identity;
 mod staging;
 mod program_store;
+mod program_store_v2;
 extern crate alloc;
 use alloc::format;
 use alloc::string::String;
@@ -79,6 +80,8 @@ static STORAGE_WRITE_BLOCKED: AtomicBool = AtomicBool::new(false);
 static FAIL_NEXT_POSTCOMMIT: AtomicBool = AtomicBool::new(false);
 #[cfg(feature="storage-fault-test")]
 static FAIL_NEXT_PROGRAM_POSTCOMMIT: AtomicBool = AtomicBool::new(false);
+#[cfg(feature="storage-fault-test")]
+static FAIL_NEXT_PROGRAM_V2_POSTCOMMIT: AtomicBool = AtomicBool::new(false);
 
 #[global_allocator]
 static ALLOC: heap::Heap = heap::Heap::new();
@@ -780,6 +783,9 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"program_store_commit","description":"Commit a sealed staged ELF into the dedicated QEMU program area; no authentication.","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}},
                                         {"name":"program_store_status","description":"Inspect dedicated QEMU program records and shared write-block state.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"program_store_spawn","description":"Admit the newest valid persistent ELF as an independent task.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"program_store_v2_commit","description":"Commit a sealed ELF to the dedicated V2 QEMU program area; no authentication.","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}},
+                                        {"name":"program_store_v2_status","description":"Inspect V2 QEMU program records and shared write-block state.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"program_store_v2_spawn","description":"Admit the newest valid V2 ELF as an independent task.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"process_stop","description":"Stop one independent guest task by slot, exact decimal incarnation and boot ID; no authentication.","inputSchema":{"type":"object","properties":{"slot":{"type":"integer","minimum":0,"maximum":1},"incarnation":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20},"boot_id":{"type":"string","pattern":"^[0-9a-f]{32}$"}},"required":["slot","incarnation","boot_id"],"additionalProperties":false}},
                                         {"name":"process_status","description":"Inspect the latest bounded guest task admission.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"fixtures_pause","description":"Pause new built-in fixture admissions after the current fixture finishes.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
@@ -803,6 +809,8 @@ pub extern "C" fn graph_main() -> ! {
                                         response["result"]["tools"].as_array_mut().unwrap().push(json!({"name":"debug_fail_postcommit","description":"Test-only: fail the next write after commit flush.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}));
                                         #[cfg(feature="storage-fault-test")]
                                         response["result"]["tools"].as_array_mut().unwrap().push(json!({"name":"debug_fail_program_postcommit","description":"Test-only: fail a program write after commit flush.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}));
+                                        #[cfg(feature="storage-fault-test")]
+                                        response["result"]["tools"].as_array_mut().unwrap().push(json!({"name":"debug_fail_program_v2_postcommit","description":"Test-only: fail a V2 program write after commit flush.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}));
                                         send(&response);
                                     },
                                     Some("tools/call") => {
@@ -950,6 +958,38 @@ pub extern "C" fn graph_main() -> ! {
                                                     }
                                                 }else{tool_error(id,"storage unavailable")}
                                             }
+                                            Some("program_store_v2_commit") => {
+                                                let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
+                                                let upload_id=args.filter(|o|o.len()==1).and_then(|o|parse_incarnation(o.get("id")?.as_str()?));
+                                                if let Some(upload_id)=upload_id {
+                                                    match upload.image(upload_id) {
+                                                        Ok(image)=>if let Some(ref mut disk)=block {
+                                                            match program_store_v2::store(disk,image) {Ok((slot,generation))=>tool_json(id,json!({"slot":slot,"generation":generation,"readback_verified":true})),Err(error)=>tool_error(id,error)}
+                                                        }else{tool_error(id,"storage unavailable")},
+                                                        Err(error)=>tool_error(id,error),
+                                                    }
+                                                }else{tool_error(id,"invalid program_store_v2_commit arguments")}
+                                            }
+                                            Some("program_store_v2_status") => {
+                                                let args=params.and_then(|p|p.get("arguments"));
+                                                if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"program_store_v2_status requires empty arguments");}
+                                                else if let Some(ref mut disk)=block {match program_store_v2::status(disk) {Ok(status)=>tool_json(id,status),Err(error)=>tool_error(id,error)}}
+                                                else {tool_error(id,"storage unavailable")}
+                                            }
+                                            Some("program_store_v2_spawn") => {
+                                                let args=params.and_then(|p|p.get("arguments"));
+                                                if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"program_store_v2_spawn requires empty arguments");}
+                                                else if STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed) {tool_error(id,"storage write blocked until restart");}
+                                                else if let Some(ref mut disk)=block {
+                                                    match program_store_v2::load(disk).and_then(|image|el0::start_independent(&image)) {
+                                                        Ok((slot,incarnation))=>match boot_identity::identifier() {
+                                                            Some(boot_id)=>tool_json(id,json!({"started":true,"slot":slot,"incarnation":incarnation,"incarnation_text":format!("{}",incarnation),"boot_id":boot_id_text(boot_id)})),
+                                                            None=>halt(),
+                                                        },
+                                                        Err(error)=>tool_error(id,error),
+                                                    }
+                                                }else{tool_error(id,"storage unavailable")}
+                                            }
                                             Some("process_spawn") => {
                                                 let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
                                                 let name=args.filter(|o|o.len()==1).and_then(|o|o.get("name")).and_then(Value::as_str);
@@ -1013,6 +1053,13 @@ pub extern "C" fn graph_main() -> ! {
                                                 if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"debug requires empty arguments");}
                                                 else if STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed) {tool_error(id,"storage write blocked until restart");}
                                                 else {FAIL_NEXT_PROGRAM_POSTCOMMIT.store(true,Ordering::Relaxed);tool_json(id,json!({"armed":true}));}
+                                            }
+                                            #[cfg(feature="storage-fault-test")]
+                                            Some("debug_fail_program_v2_postcommit") => {
+                                                let args=params.and_then(|p|p.get("arguments"));
+                                                if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"debug requires empty arguments");}
+                                                else if STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed) {tool_error(id,"storage write blocked until restart");}
+                                                else {FAIL_NEXT_PROGRAM_V2_POSTCOMMIT.store(true,Ordering::Relaxed);tool_json(id,json!({"armed":true}));}
                                             }
                                             Some("file_get") => {
                                                 let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);

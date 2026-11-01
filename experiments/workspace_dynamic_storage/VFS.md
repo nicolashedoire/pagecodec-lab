@@ -13,8 +13,9 @@ and requests can also fail if the shared 3,584-byte snapshot payload is full.
 ## Bounded reads from a loaded program
 
 `SVC #0x140` accepts a UTF-8 file name address and length in `x0`/`x1`, and a
-destination address and capacity in `x2`/`x3`. Both ranges must be inside the
-calling task's mapped private page; names are 1–16 bytes and destinations
+destination address and capacity in `x2`/`x3`. Each range must lie wholly in
+the calling task's RW data page or, when mapped, its separate stack page; the
+two ranges may use different pages. Names are 1–16 bytes and destinations
 1–32 bytes. The call returns a byte count or a negative status in `x0`: `-11`
 means retry the same arguments, `-2` means absent/unavailable, `-34` means the
 file does not fit, `-14` means an invalid user range, `-22` means invalid or
@@ -38,7 +39,9 @@ the committed instruction bytes against the assembly without executing them.
 ## Bounded writes from a loaded program
 
 `SVC #0x141` uses `x0`/`x1` for a 1–16 byte name and `x2`/`x3` for a
-0–32 byte source within the calling task's private page. It returns the byte
+0–32 byte source in its mapped data or stack page. For a zero-length source,
+the pointer may equal the end of either mapped page. GET capacity zero is
+invalid. It returns the byte
 count, or `-11` while pending (retry the same addresses, lengths and name bytes), `-14`
 for an invalid range, `-22` for invalid arguments or a forbidden name, `-28`
 for a full catalog or snapshot, `-5` for an I/O failure, and `-75` when
@@ -187,10 +190,12 @@ a separate RW stack page and an unmapped guard page. The integrated scenario
 uploads a real 8,552-byte Rust `no_std` ELF with initialized `.data` and zeroed
 `.bss`, launches two independent copies, and verifies their data initialization,
 mapping checks, distinct stack cleanup and completed file effects. Both copies
-check their own data and stack contents after running concurrently. The SVC file
-ABI accepts buffers only from the RW data page, not the stack. The fixed
-persistent program area still accepts at most 4,216 bytes and refuses the larger
-ELF; there is no multi-segment persistence migration yet. This is a narrow ELF
+check their own data and stack contents after running concurrently. They also
+exercise mixed data/stack SVC buffers, page crossings, sentinel bytes and zero
+length; the PUT source snapshot is checked, though an individual run does not
+prove that the mutation happened before the service applied the request. The
+V1 persistent program area still accepts at most 4,216 bytes; the separate V2
+area supports the larger ELF. This is a narrow ELF
 subset, with no interpreter, dynamic linker or runtime relocations. Mapping
 verification errors have controlled rollback, but internal MMU assertions may
 still halt the guest; no general recovery from page-table corruption is claimed.
@@ -231,6 +236,28 @@ not negotiated, and reads/writes can block; neither power-loss durability nor
 responsiveness with a silent disk is established. The scenario uses temporary
 disks, preserves bytes outside sectors 20–39 across program commits, checks
 fallback and refusal cases, and exercises a postcommit error in test builds.
+
+## Persistent program V2
+
+The separate `program_store_v2_commit`, `program_store_v2_status` and
+`program_store_v2_spawn` operations use two 33-sector records at 64–96 and
+97–129 on the same explicitly dedicated QEMU disk. Each has a 512-byte header
+and up to 16,384 bytes of ELF. V1 at 20–39 and snapshots at 4–19 remain
+independent and unchanged; V1 and V2 generations are never compared and no
+automatic migration or cross-version transaction is provided. A nonblank
+unknown or invalid record prohibits V2 writes, even if its neighbor is valid;
+a valid neighbor remains readable. Two blank records may be initialized. A
+matching header is not proof of ownership: this layout is only for an
+explicitly provisioned virtual disk, not an arbitrary device.
+
+V2 uses the same stage/flush/commit/flush/full-readback pattern and shares the
+write block after an ambiguous error. The scenario stores the linked Rust ELF,
+also exercises an image exactly 16,384 bytes, restarts and runs the stored
+program, and checks sectors outside 64–129 byte-for-byte around commits. It
+tests unknown and corrupt records, blank plus interrupted record, duplicate
+generations, fallback and an injected postcommit failure. Checksum is not
+authentication; FLUSH may be unnegotiated, disk I/O can block, and these tests
+do not establish power-loss durability or a general filesystem.
 
 `process_stop` accepts an exact identity such as
 `{"slot":0,"incarnation":"42","boot_id":"0123456789abcdef0123456789abcdef"}`.

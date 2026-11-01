@@ -32,13 +32,14 @@ fn query(address:usize,write:bool,user:bool)->u64 {
 pub fn root(index:usize)->u64 {assert!(index<2);unsafe{read_volatile(addr_of!(ROOTS).cast::<u64>().add(index))}}
 pub fn active_root()->u64 {let v:u64;unsafe{asm!("mrs {}, TTBR0_EL1",out(reg) v)}v}
 pub fn switch_root(root:u64) {unsafe{asm!("dsb ishst","msr TTBR0_EL1, {r}","isb","tlbi vmalle1","dsb ish","isb",r=in(reg) root);}}
-/// Revalidate the current EL0 alias for a live private frame before access.
-/// This one-page, one-CPU guest has immutable mappings during an SVC handler.
-pub fn user_alias_matches(address:u64,len:usize,frame:usize,write:bool)->bool {
- if len==0 || frame%PAGE!=0 {return false}
+/// Verify one complete single-page user region against its caller-owned frame.
+/// The caller must already have selected the task's TTBR and masked IRQs.
+pub fn user_region_matches(address:u64,len:usize,base:usize,frame:usize,write:bool)->bool {
+ if len==0 || frame==0 || frame%PAGE!=0 || !matches!(base,ALIAS|USER_STACK) {return false}
  let Ok(start)=usize::try_from(address) else{return false};
  let Some(end)=start.checked_add(len) else{return false};
- if start<ALIAS || end>ALIAS+PAGE {return false}
+ let Some(limit)=base.checked_add(PAGE) else{return false};
+ if start<base || end>limit {return false}
  let result=query(start,write,true);
  result&1==0 && result&PA_MASK==(frame as u64&PA_MASK)
 }
