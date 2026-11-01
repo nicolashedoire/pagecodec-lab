@@ -350,17 +350,39 @@ def main():
    for i,(name,old,new) in enumerate((('a-doc',b'AAAA',b'CCCC'),('b-doc',b'BBBB',b'DDDD'))):
     expected=old if cancelled[i] else new
     if g.call('file_get',{'name':name})!={'name':name,'hex':expected.hex()}:raise RuntimeError('exit write did not match cancellation outcome')
+   # Admit unrelated ELF files by explicit VFS names in this same boot.
+   for name in ('pair-a.bin','pair-b.bin'):
+    if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('default pair cleanup failed')
+   named=[]
+   for side in ('a','b'):
+    code=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/('pair-named-'+side+'.hex')).read_text().strip())
+    named.append(independent_elf(next_hex,code))
+   if not g.call('file_put_hex',{'name':'left.elf','hex':named[0]}).get('readback_verified'):raise RuntimeError('named ELF not saved')
+   if not g.call('file_put_hex',{'name':'right.elf','hex':'ff'}).get('readback_verified'):raise RuntimeError('invalid named ELF not saved')
+   reject(g,'process_pair_start',{'a':'left.elf'},'invalid process_pair_start arguments')
+   reject(g,'process_pair_start',{'a':'left.elf','b':'absent.elf'},'pair program unavailable')
+   reject(g,'process_pair_start',{'a':'left.elf','b':'right.elf'},'invalid pair ELF')
+   if g.call('process_pair_status',{})!=exit_pair:raise RuntimeError('invalid named admission changed finished pair')
+   if not g.call('file_put_hex',{'name':'right.elf','hex':named[1]}).get('readback_verified'):raise RuntimeError('named ELF repair failed')
+   if g.call('process_pair_start',{'a':'left.elf','b':'right.elf'})!={'started':True}:raise RuntimeError('named pair admission failed')
+   pair4=g.wait_pair(expected_markers=(0xc1c1,0xd2d2))
+   if pair4.get('run_id')!=4 or min(pair4['incarnations'])<=max(exit_pair['incarnations']):raise RuntimeError('named pair identities were reused')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
   g=Guest(a.qemu,guest,disk,tmp,25,out,a.transport)
   try:
    g.progress('pair writes after restart',timeout_image=True,expected_exit_code=0)
+   reject(g,'process_pair_start',{'a':1,'b':'right.elf'},'invalid process_pair_start arguments')
+   reject(g,'process_pair_start',{'a':'left.elf','b':'right.elf','extra':True},'invalid process_pair_start arguments')
+   reject(g,'process_pair_start',{'a':'../left.elf','b':'right.elf'},'pair program unavailable')
+   refused=g.call('process_pair_status',{})
+   if refused.get('started') is not False or refused.get('frame_pool_assigned')!=0:raise RuntimeError('invalid named request allocated frames')
    # A timer can let the service apply before exit. Only the still-queued
    # requests must be cancelled; already committed writes remain committed.
    for i,(name,old,new) in enumerate((('a-doc',b'AAAA',b'CCCC'),('b-doc',b'BBBB',b'DDDD'))):
     expected=old if cancelled[i] else new
     if g.call('file_get',{'name':name})!={'name':name,'hex':expected.hex()}:raise RuntimeError('exit write did not match cancellation outcome')
-   for name in ('pair-a.bin','pair-b.bin'):
+   for name in ('left.elf','right.elf'):
     if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('pair fixture cleanup failed')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()

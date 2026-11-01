@@ -163,7 +163,7 @@ class Guest:
         if again.get('task_states')!=['exited','exited'] or any(again.get(k)!=current.get(k) for k in ('slice_ticks','dispatches','slice_counts','frame_pool_assigned','frame_scrubbed','alias_removed','spawn_admitted','spawn_reused_frame','spawn_executed','spawn_exited','loader_rejected','image_loaded','code_alias_removed','code_frame_scrubbed','image_count','image_outcomes','images_reclaimed','completions_revoked','stale_response_blocked')):raise RuntimeError('exited task was dispatched again across '+label)
         self.last_progress=current
         return current
-    def wait_pair(self):
+    def wait_pair(self,expected_markers=(0xa1a1,0xb2b2)):
         for _ in range(60):
             pair=self.call('process_pair_status',{})
             if pair.get('done') is True:break
@@ -173,8 +173,8 @@ class Guest:
         if not isinstance(identities,list) or len(identities)!=2 or any(not isinstance(x,int) or x<=0 for x in identities) or identities[0]==identities[1]:raise RuntimeError('pair identities invalid: '+str(pair))
         ticks=pair.get('irq_counts')
         if pair.get('started') is not True or pair.get('mappings_verified') is not True or not isinstance(ticks,list) or len(ticks)!=2 or any(not isinstance(x,int) or x<=0 for x in ticks):raise RuntimeError('pair mappings or preemption invalid: '+str(pair))
-        if pair.get('barrier_seen')!=[True,True] or pair.get('live_markers')!=[0xa1a1,0xb2b2]:raise RuntimeError('pair never held both private markers at the barrier: '+str(pair))
-        if pair.get('outcomes')!=[1,1] or pair.get('exit_codes')!=[0,0] or pair.get('markers')!=[0xa1a1,0xb2b2] or pair.get('data_scrubbed')!=[True,True] or pair.get('code_scrubbed')!=[True,True] or pair.get('frame_pool_assigned')!=0:raise RuntimeError('pair exit or frame cleanup invalid: '+str(pair))
+        if pair.get('barrier_seen')!=[True,True] or pair.get('live_markers')!=list(expected_markers):raise RuntimeError('pair never held both private markers at the barrier: '+str(pair))
+        if pair.get('outcomes')!=[1,1] or pair.get('exit_codes')!=[0,0] or pair.get('markers')!=list(expected_markers) or pair.get('data_scrubbed')!=[True,True] or pair.get('code_scrubbed')!=[True,True] or pair.get('frame_pool_assigned')!=0:raise RuntimeError('pair exit or frame cleanup invalid: '+str(pair))
         return pair
     def input(self,events):
         self.qmp_command({'execute':'input-send-event','arguments':{'events':events}})

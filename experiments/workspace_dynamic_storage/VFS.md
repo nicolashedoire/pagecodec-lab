@@ -66,8 +66,12 @@ it does not inject failure into the EL0 write itself.
 
 ## Two loaded processes
 
-The integrated guest also accepts a request to start the separately stored
-`pair-a.bin` and `pair-b.bin` ELF files together. Each runs with a distinct
+The integrated guest accepts `process_pair_start` with explicit file names,
+for example `{"a":"left.elf","b":"right.elf"}`. Empty arguments retain the
+default `pair-a.bin` and `pair-b.bin` names. Both files must already exist and
+pass ELF validation before admission. Supplying the same name twice is allowed:
+the two instances still receive distinct pages; the program itself must handle
+being run twice. Each runs with a distinct
 process incarnation and a private data and code mapping. The sample programs
 write different values at the same virtual address, wait until both have been
 preempted, and check their own value before exiting. The harness checks the
@@ -78,7 +82,8 @@ pair after cleanup on the same boot. It verifies fresh incarnations, rejects
 real completions from the previous pair, also rejects an explicitly constructed
 token using the current request ID with the previous incarnation, and preserves
 the finished result when a
-new ELF is malformed. The separate refusal while a pair is active is not
+new ELF is malformed. It also launches two different ELF files by explicit
+names and verifies different private markers. The separate refusal while a pair is active is not
 exercised by this scenario. This demonstrates
 two time-sliced tasks on one virtual CPU; it does not provide a general-purpose
 process manager, syscall API or multicore execution. The MCP endpoint remains

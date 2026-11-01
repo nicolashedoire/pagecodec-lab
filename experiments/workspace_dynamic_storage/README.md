@@ -10,7 +10,7 @@ At startup the EL1 service reads the two synthetic slots **before** the scripted
 
 The integrated scenario runs multiple sequential QEMU processes with exclusively created temporary 1 MiB disk images. The first boot starts with blank slots; A and B perform their FIFO edits and save the workspace. A task loaded from `init.bin` sends FIFO PUT and GET requests for `note=hello`, checks the returned five bytes, then exits. Two further loaded programs trigger an EL0 memory fault and an unknown SVC; the guest stops each task, cleans its frames and then runs `next.bin`. Another boot exercises a looping program and its interrupt budget. Synthetic MCP requests also create, list, delete and restore files, including non-UTF-8 bytes. Recorded traces cover this flow with [modern](evidence/workspace-dynamic-storage-modern.json) and [legacy](evidence/workspace-dynamic-storage-legacy.json) VirtIO.
 
-The [CI run for commit `132adfe`](https://github.com/nicolashedoire/pagecodec-lab/actions/runs/41336848945) passed all jobs, including the integrated guest on both modern and legacy VirtIO. This result applies to that commit, not later changes.
+The [CI run for commit `0e3b6ed`](https://github.com/nicolashedoire/pagecodec-lab/actions/runs/41337845440) passed all jobs, including the integrated guest on both modern and legacy VirtIO. This result applies to that commit, not later changes.
 
 The next boots restore the saved files, then recover from a deliberately corrupted newest slot. The first VM also receives a synthetic QMP tablet click and an MCP assistant click; neither changes the saved document. An invalid `init.bin` is refused before frames are allocated; after repair through MCP the program loads again. A subsequent full-catalog boot makes its file PUT fail and checks that the task reports failure, exits and releases its code and data frames. The last two boots exercise migration from synthetic legacy snapshots. The host terminates QEMU after each completed scenario and never attaches a physical block device or host directory to the guest.
 
@@ -82,6 +82,14 @@ exercise the incarnation check itself. Refusal while an earlier pair is still
 active is implemented but is not exercised deterministically by this scenario;
 internal failures after allocation may still halt the guest instead of rolling
 back cleanly.
+
+The local MCP `process_pair_start` request may name both ELF files explicitly;
+empty arguments retain the default fixture names. Both files are read and
+validated before admission, so missing or invalid files leave the last finished
+pair unchanged. Two identical file names are allowed and receive separate
+frames; the behavior of the programs themselves still depends on their code.
+The synchronization barrier no longer requires the fixture's specific marker
+values. This remains a two-slot, one-CPU experimental interface.
 
 The two fixed EL0 tasks use separate physical code pages and separate L3 page tables. In each address space, the other task's code page is privileged and non-executable at EL0; startup checks the expected access permissions using address-translation probes. This is not a general process loader or a proof of complete isolation.
 

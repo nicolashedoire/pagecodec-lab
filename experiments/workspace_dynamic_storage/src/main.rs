@@ -753,7 +753,7 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"interaction_state","description":"Read logical button focus and click counts in this guest.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"mmu_status","description":"Read the guest's verified identity-map status.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"el0_status","description":"Read verified pre-graphical EL0 timer trace.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
-                                        {"name":"process_pair_start","description":"Admit pair-a.bin and pair-b.bin as bounded experimental guest tasks; no authentication.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"process_pair_start","description":"Admit two named bounded ELF guest tasks (empty arguments use pair-a.bin and pair-b.bin); no authentication.","inputSchema":{"type":"object","properties":{"a":{"type":"string"},"b":{"type":"string"}},"oneOf":[{"maxProperties":0},{"required":["a","b"]}],"additionalProperties":false}},
                                         {"name":"process_pair_status","description":"Inspect the experimental pair of guest tasks.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"move_remote","description":"Move the visible pointer for a synthetic logical actor; no window or authenticated identity.","inputSchema":{"type":"object","properties":{"x":{"type":"integer","minimum":0,"maximum":799},"y":{"type":"integer","minimum":0,"maximum":599}},"required":["x","y"],"additionalProperties":false}},
                                         {"name":"remote_state","description":"Read the third synthetic actor's logical position.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
@@ -808,11 +808,16 @@ pub extern "C" fn graph_main() -> ! {
                                                 else {let mut status=storage_state.clone();status["write_blocked"]=json!(STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed));tool_json(id,status);}
                                             }
                                             Some("process_pair_start") => {
-                                                let args=params.and_then(|p|p.get("arguments"));
-                                                if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"process_pair_start requires empty arguments");}
+                                                let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
+                                                let names=args.and_then(|o| {
+                                                    if o.is_empty() {Some(("pair-a.bin","pair-b.bin"))}
+                                                    else if o.len()==2 {Some((o.get("a")?.as_str()?,o.get("b")?.as_str()?))}
+                                                    else {None}
+                                                });
+                                                if names.is_none() {tool_error(id,"invalid process_pair_start arguments");}
                                                 else if STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed) {tool_error(id,"storage write blocked until restart");}
-                                                else {
-                                                    match (files.read_for_load("pair-a.bin",512),files.read_for_load("pair-b.bin",512)) {
+                                                else if let Some((a_name,b_name))=names {
+                                                    match (files.read_for_load(a_name,512),files.read_for_load(b_name,512)) {
                                                         (Ok(a),Ok(b))=>match el0::start_pair(a,b) {
                                                             Ok(())=>tool_json(id,json!({"started":true})),
                                                             Err(error)=>tool_error(id,error),
