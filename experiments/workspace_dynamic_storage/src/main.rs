@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 #![recursion_limit = "256"]
+mod heap;
 mod mmu;
 mod el0;
 mod loader;
@@ -16,7 +17,6 @@ use system_core_sketch::{Document, Origin};
 use workspace_bridge_sketch::Bridge;
 use dynamic_input_sketch::{Bounds, Router};
 use serde_json::{json, Value};
-use core::alloc::{GlobalAlloc, Layout};
 use core::arch::{asm, global_asm};
 use core::panic::PanicInfo;
 use core::ptr::{addr_of_mut, NonNull};
@@ -69,7 +69,6 @@ fn in_guest_ram(addr: usize, len: usize) -> bool {
 struct PageAligned<const N: usize>([u8; N]);
 static mut HEAP: PageAligned<HEAP_SIZE> = PageAligned([0; HEAP_SIZE]);
 static mut DMA: PageAligned<DMA_SIZE> = PageAligned([0; DMA_SIZE]);
-static HEAP_NEXT: AtomicUsize = AtomicUsize::new(0);
 static DMA_NEXT: AtomicUsize = AtomicUsize::new(0);
 // A failed write or confirmation can leave a newer snapshot on disk while the
 // in-memory catalog still reflects the previous one. Block subsequent writes
@@ -78,28 +77,8 @@ static STORAGE_WRITE_BLOCKED: AtomicBool = AtomicBool::new(false);
 #[cfg(feature="storage-fault-test")]
 static FAIL_NEXT_POSTCOMMIT: AtomicBool = AtomicBool::new(false);
 
-struct Bump;
-unsafe impl GlobalAlloc for Bump {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let align = layout.align();
-        let base = addr_of_mut!(HEAP) as *mut u8 as usize;
-        let mut current = HEAP_NEXT.load(Ordering::Relaxed);
-        loop {
-            let Some(start) = base.checked_add(current)
-                .and_then(|n| n.checked_add(align - 1))
-                .map(|n| (n & !(align - 1)) - base) else { return core::ptr::null_mut() };
-            let Some(end) = start.checked_add(layout.size()) else { return core::ptr::null_mut() };
-            if end > HEAP_SIZE { return core::ptr::null_mut(); }
-            match HEAP_NEXT.compare_exchange_weak(current, end, Ordering::Relaxed, Ordering::Relaxed) {
-                Ok(_) => return (addr_of_mut!(HEAP) as *mut u8).add(start),
-                Err(n) => current = n,
-            }
-        }
-    }
-    unsafe fn dealloc(&self, _: *mut u8, _: Layout) { /* one-shot test, never reuse */ }
-}
 #[global_allocator]
-static ALLOC: Bump = Bump;
+static ALLOC: heap::Heap = heap::Heap::new();
 
 // Single-CPU QEMU, MMU enabled with an identity map and caches disabled.
 // Full mapped-range checks are guest-specific, not suitable for real DMA.
@@ -618,7 +597,6 @@ pub extern "C" fn graph_main() -> ! {
     let mut overflow = false;
     let mut initialized = false;
     let mut ready = false;
-    let mut messages = 0u32;
     // Avoid yielding between every byte of an incoming UART message. Even an
     // incomplete or absent message gets a bounded number of idle polls before
     // the service voluntarily schedules the EL0 slices.
@@ -747,14 +725,7 @@ pub extern "C" fn graph_main() -> ! {
         while let Some(b) = poll_uart() {
             if b == b'\n' {
                 service_polls=SERVICE_POLLS;
-                // Count even oversized requests. The bump heap is not reclaimed;
-                // a bounded demo terminates instead of allocating indefinitely.
-                if messages >= 64 {
-                    write("{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32000,\"message\":\"demo request limit reached\"}}\n");
-                    halt();
-                }
-                else {
-                    messages += 1;
+                {
                     if overflow { rpc_error(Value::Null, -32700, "request too long"); }
                     else {
                     match serde_json::from_slice::<Value>(&line[..used]) {
@@ -789,6 +760,8 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"pointer_state","description":"Read the two pointer coordinates in this guest only.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"click_ai","description":"Activate the synthetic button under the AI pointer; no host click or authentication.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"interaction_state","description":"Read logical button focus and click counts in this guest.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"heap_status","description":"Read bounded guest heap allocator metrics.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"heap_exercise","description":"Exercise bounded heap coalescing and raw allocation failure without exhausting the service.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"mmu_status","description":"Read the guest's verified identity-map status.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"el0_status","description":"Read verified pre-graphical EL0 timer trace.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"process_pair_start","description":"Admit two named bounded ELF guest tasks (empty arguments use pair-a.bin and pair-b.bin); no authentication.","inputSchema":{"type":"object","properties":{"a":{"type":"string"},"b":{"type":"string"}},"oneOf":[{"maxProperties":0},{"required":["a","b"]}],"additionalProperties":false}},
@@ -1056,6 +1029,12 @@ pub extern "C" fn graph_main() -> ! {
                                                 if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"status requires empty arguments");}
                                                 else {tool_json(id,el0::status());}
                                             }
+                                            Some("heap_status") | Some("heap_exercise") => {
+                                                let args=params.and_then(|p|p.get("arguments"));
+                                                if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"heap tool requires empty arguments");}
+                                                else if name==Some("heap_status") {tool_json(id,heap::stats());}
+                                                else {tool_json(id,heap::exercise());}
+                                            }
                                             Some("mmu_status") => {
                                                 let args=params.and_then(|p|p.get("arguments"));
                                                 if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"status requires empty arguments");}
@@ -1079,11 +1058,11 @@ pub extern "C" fn graph_main() -> ! {
                                                 let args=params.and_then(|p|p.get("arguments"));
                                                 if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) { tool_error(id,"exercise requires empty arguments"); }
                                                 else {
-                                                    let before=HEAP_NEXT.load(Ordering::Relaxed);
+                                                    let before=heap::allocation_attempts();
                                                     let mut ok=true;
                                                     for i in 0..1100 { ok &= move_pointer(&mut router,&human,&hs,16+i%300,180); }
                                                     ok &= move_pointer(&mut router,&human,&hs,200,180);
-                                                    let after=HEAP_NEXT.load(Ordering::Relaxed);
+                                                    let after=heap::allocation_attempts();
                                                     if !ok || before!=after || cursor(&router,&human)!=(200,180) || router.bounded_trace().len()!=64 || router.overwritten()==0 {
                                                         tool_error(id,"bounded movement test failed");
                                                     } else {

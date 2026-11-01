@@ -41,6 +41,31 @@ def reject(g,tool,args,message):
  result=g.trace[-1]['response']['result']
  if result.get('content')!=[{'type':'text','text':message}]:raise RuntimeError('wrong refusal: '+str(result))
 
+def exercise_reclaiming_heap(g,preflight=False):
+ # Both the allocator probe and the long run execute in the unified guest.
+ probe=g.call('heap_exercise',{})
+ if any(probe.get(k) is not True for k in ('coalesced','oom_reported','recovered','live_restored','alignments_ok')):raise RuntimeError('guest allocator probe failed: '+str(probe))
+ if preflight:return [g.call('heap_status',{})]
+ def request(i):
+  if i%4==0:g.call('document_snapshot',{})
+  elif i%4==1:g.call('file_list',{})
+  elif i%4==2:
+   if g.call('file_get',{'name':'note'})!={'name':'note','hex':b'hello'.hex()}:raise RuntimeError('file read failed during heap exercise')
+  else:g.call('upload_status',{})
+ for i in range(32):request(i)
+ samples=[g.call('heap_status',{})]
+ for batch in range(10):
+  for i in range(32):request(batch*32+i)
+  samples.append(g.call('heap_status',{}))
+ start,end=samples[0],samples[-1]
+ if any(not isinstance(s.get(k),int) for s in samples for k in ('capacity','live_bytes','peak_bytes','free_bytes','largest_free','alloc_attempts','alloc_successes','frees','active_allocations','metadata_exhaustions')):raise RuntimeError('invalid allocator counters')
+ if any(s['capacity']!=start['capacity'] or s['metadata_exhaustions']!=0 for s in samples):raise RuntimeError('allocator capacity or metadata exhausted: '+str(samples))
+ if end['alloc_successes']<=start['alloc_successes'] or end['frees']<=start['frees']:raise RuntimeError('no allocation and free activity observed')
+ # The counters are captured while servicing the same heap_status request.
+ # Small JSON bookkeeping variations are allowed; growth must not accumulate.
+ if max(s['live_bytes'] for s in samples)-min(s['live_bytes'] for s in samples)>4096 or start['largest_free']-end['largest_free']>4096:raise RuntimeError('heap did not settle across repeated requests: '+str(samples))
+ return samples
+
 def expected_list(catalog):
  return [{'name':name,'size':len(hexbytes)//2} for name,hexbytes in sorted(catalog.items())]
 
@@ -49,7 +74,7 @@ def ipc_history_matches(ipc,base,consumed):
  return accepted in (base,base+[6],base+[6,6]) and applied in (base,base+[6],base+[6,6]) and len(applied)<=len(accepted) and ipc.get('consumed') in (consumed,consumed+[6])
 
 def main():
- p=argparse.ArgumentParser();p.add_argument('--qemu',required=True);p.add_argument('--guest',required=True);p.add_argument('--transport',choices=['modern','legacy'],default='modern');p.add_argument('--output-dir',required=True);p.add_argument('--exercise-storage-fault',action='store_true',help='require a guest built with storage-fault-test');a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--qemu',required=True);p.add_argument('--guest',required=True);p.add_argument('--transport',choices=['modern','legacy'],default='modern');p.add_argument('--output-dir',required=True);p.add_argument('--exercise-storage-fault',action='store_true',help='require a guest built with storage-fault-test');p.add_argument('--heap-preflight',action='store_true',help='run the short heap probe while the guest still has its message limit');a=p.parse_args()
  out=Path(a.output_dir).resolve();out.mkdir(parents=True,exist_ok=True)
  if any(out.iterdir()):raise RuntimeError('output directory must be empty')
  guest=Path(a.guest);h=sha(guest.read_bytes());qemu=subprocess.run([a.qemu,'--version'],check=True,capture_output=True,text=True,timeout=10).stdout.splitlines()[0]
@@ -564,8 +589,8 @@ def main():
    g.call('upload_reset',{'id':invalid_id})
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
-  # Start a fresh guest for the valid upload: staging is intentionally
-  # volatile, and this leaves headroom in the 64-message per-boot budget.
+  # Start a fresh guest for the valid upload to exercise the fact that staging
+  # is intentionally volatile and does not survive a restart.
   g=Guest(a.qemu,guest,disk,tmp,32,out,a.transport)
   try:
    g.progress('before valid staged Rust ELF',timeout_image=True,expected_exit_code=0)
@@ -597,6 +622,15 @@ def main():
    if g.call('upload_status',{}).get('active') is not False:raise RuntimeError('temporary upload survived reboot')
    if g.call('file_get',{'name':'a-rust'})!={'name':'a-rust','hex':'52'}:raise RuntimeError('Rust file effect not persisted')
    if not g.call('file_delete',{'name':'a-rust'}).get('readback_verified'):raise RuntimeError('Rust fixture cleanup failed')
+   heap_samples=exercise_reclaiming_heap(g,preflight=a.heap_preflight)
+   if not g.call('file_put',{'name':'a-heap','data':'alive'}).get('readback_verified'):raise RuntimeError('file write after heap workload failed')
+   if g.call('file_get',{'name':'a-heap'})!={'name':'a-heap','hex':b'alive'.hex()}:raise RuntimeError('file read after heap workload failed')
+   if not g.call('file_delete',{'name':'a-heap'}).get('readback_verified'):raise RuntimeError('file cleanup after heap workload failed')
+   g.wait_boot_identity()
+   launched=g.call('process_spawn',{'name':'next.bin'})
+   if launched.get('started') is not True or launched.get('slot')!=0:raise RuntimeError('process admission after heap workload failed')
+   state=g.wait_independent(lambda s:s.get('slot_states',[None,None])[0]=='exited','post-workload ELF exited')
+   if state.get('incarnations',[None,None])[0]!=launched.get('incarnation') or state.get('outcomes',[None,None])[0]!=1 or state.get('exit_codes',[None,None])[0]!=0 or state.get('data_scrubbed',[False,False])[0] is not True or state.get('code_scrubbed',[False,False])[0] is not True or state.get('frame_pool_assigned')!=0:raise RuntimeError('process cleanup after heap workload failed')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
   if a.exercise_storage_fault:

@@ -166,10 +166,14 @@ FNV detects common accidental corruption, not malicious tampering. Upload IDs
 are sequential and restart after a reboot, so they prevent accidental mixing
 only within a boot; an old request can collide with a new upload after reboot.
 They are not credentials, and the serial MCP endpoint is unauthenticated.
-The existing bump allocator never reclaims allocations, so a 64-message limit
-per boot also bounds operations. The runner splits the invalid-upload checks
-and the valid upload across fresh boots and spaces out status polling to leave
-headroom; it recreates the volatile staging state after restart. The VM scenario uses a real compiled Rust `no_std`
+The guest heap uses a bounded reusable free-extent table with neighboring
+extents coalesced on free. Its fixed metadata and first-fit search are designed
+for this single-CPU VM, not as a general multicore allocator. The separate DMA
+arena remains a one-way bump allocation and is not recycled. Raw heap
+allocation can report exhaustion, but existing JSON and collection operations
+may still abort the guest on OOM; the service does not promise OOM recovery.
+The runner splits invalid and valid uploads across fresh boots and recreates
+the volatile staging state after restart. The VM scenario uses a real compiled Rust `no_std`
 program padded with unreachable ARM64 NOPs to fill the 4,096-byte code page.
 It checks partial, stale, out-of-order, oversized, corrupt and invalid ELF
 refusals, including an oversized and internally inconsistent segment. A
@@ -177,6 +181,12 @@ coherent 4,100-byte code image is refused by the upload-size limit before the
 ELF parser sees it. The accepted upload runs and its separate VFS write is
 verified after reboot. The restricted loader is not a full native executable
 environment.
+
+`heap_status` exposes allocation, release, live-byte, high-water and free-space
+counters, and `heap_exercise` runs a bounded allocator self-check. The integrated
+scenario sends 320 mixed requests after warmup, compares repeated live-byte and
+largest-free snapshots, then exercises a file and a loaded process. Stability
+over this finite workload does not prove the absence of leaks in other paths.
 
 `process_stop` accepts an exact identity such as
 `{"slot":0,"incarnation":"42","boot_id":"0123456789abcdef0123456789abcdef"}`.
@@ -260,9 +270,7 @@ nonblank invalid slots leaves all disk bytes unchanged. Both images are
 temporary QEMU disks; the injection is absent from normal builds. Recorded
 synthetic traces are available for [modern](evidence/storage-fault-modern.json)
 and [legacy](evidence/storage-fault-legacy.json) VirtIO. Both include the
-pair-to-single-to-pair execution on the current guest. The modern fault trace
-was recorded before the runner split upload checks across boots; the legacy
-fault trace uses that split. This tests a specific
+pair-to-single-to-pair execution on the current guest. This tests a specific
 reported-error window, not power-loss durability or rollback.
 
 The versioned payload has exactly `format`, `document`, and `files` keys. Its

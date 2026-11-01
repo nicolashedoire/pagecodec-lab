@@ -1,7 +1,7 @@
 //! Controlled QEMU EL0 timer probe, run once before the graphical guest.
 use alloc::vec::Vec;
 use serde_json::{json,Value};
-use core::{arch::{asm,global_asm},ptr::{addr_of,addr_of_mut,read_volatile,write_volatile},sync::atomic::Ordering};
+use core::{arch::{asm,global_asm},ptr::{addr_of,addr_of_mut,read_volatile,write_volatile}};
 const PAGE:usize=4096;
 const GICD:usize=0x0800_0000;const GICC:usize=0x0801_0000;
 #[repr(C,align(4096))] struct UserStack([u8;PAGE]);
@@ -1099,7 +1099,7 @@ pub fn run_slice(programs:[Option<&[u8]>;4]) {
  let before=unsafe{read_volatile(addr_of!(SLICE_TOTAL))};let dispatches=unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))};let exits=unsafe{read_volatile(addr_of!(SLICE_EXITS))};let delta=unsafe{read_volatile(addr_of!(SLICE_DELTA))};check(delta!=0,"slice not initialized");
 
  let counts_before=[unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>())},unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>().add(1))}];
- let allocations_before=super::HEAP_NEXT.load(Ordering::Relaxed);
+ let allocations_before=super::heap::allocation_attempts();
  let mut sentinel=[0u64;2];let p=sentinel.as_mut_ptr();let ptr=physical(p as usize);
  let bottom=physical(addr_of!(__stack_bottom) as usize);let top=physical(addr_of!(__stack_top) as usize);
  check(ptr>=bottom && ptr.checked_add(16).is_some_and(|v|v<=top),"service sentinel stack");
@@ -1116,7 +1116,7 @@ pub fn run_slice(programs:[Option<&[u8]>;4]) {
  let counts_after=[unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>())},unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>().add(1))}];
  let selected=current as usize;
  if !loaded_before {check(counts_after[selected]>counts_before[selected] || states_after[selected]==3,"EL0 slice progress")}
- check(super::HEAP_NEXT.load(Ordering::Relaxed)==allocations_before,"IRQ allocation");
+ check(super::heap::allocation_attempts()==allocations_before,"IRQ allocation");
  check(unsafe{read_volatile(p)}==0x1122_3344_5566_7788 && unsafe{read_volatile(p.add(1))}==0x0102_0304_0506_0708,"service stack sentinel");
  let mut timer:u64;unsafe{asm!("mrs {},CNTV_CTL_EL0",out(reg) timer);asm!("mrs {},DAIF",out(reg) daif);}
  check(timer&1==0 && daif&(1<<7)!=0 && super::mmu::active_root()==super::mmu::root(0),"slice timer, IRQ mask or service root");

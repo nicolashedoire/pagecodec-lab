@@ -100,11 +100,6 @@ class Guest:
         diagnostic=self.log.read().decode('utf-8',errors='replace')
         if diagnostic:print('QEMU diagnostic: '+diagnostic,file=sys.stderr)
     def exchange(self,req):
-        # One initialized notification also consumes the guest's 64-line
-        # budget. Stop locally before reaching the hard limit, rather than
-        # provoking its terminal error and halting the guest.
-        if isinstance(req.get('id'),int) and req['id']>=63:
-            raise RuntimeError('runner message budget exhausted before guest limit')
         self.stream.write(json.dumps(req,separators=(',',':')).encode()+b'\n')
         raw=self.stream.readline()
         try:reply=json.loads(raw)
