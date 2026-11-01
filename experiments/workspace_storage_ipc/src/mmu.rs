@@ -26,6 +26,17 @@ fn query(address:usize,write:bool,user:bool)->u64 {
   else {asm!("at s1e1r, {a}","isb","mrs {p}, PAR_EL1",a=in(reg) address,p=out(reg) par);}
  } par
 }
+// Best-effort diagnostics after a fatal exception in this QEMU-only fixture.
+// Page-table memory is statically reserved and identically mapped in each root.
+pub fn report_fault(address:usize) {
+ let active=active_root();
+ let a=root(0);let b=root(1);
+ let (l0,l1)=if active==a {(addr_of!(L0_A),addr_of!(L1_A))}else{(addr_of!(L0_B),addr_of!(L1_B))};
+ let read=|p:*const Table,i:usize| unsafe{p.cast::<u64>().add(i).read_volatile()};
+ let entries=[active,query(address,false,false),query(address,true,false),read(l0,(address>>39)&511),read(l1,(address>>30)&511),read(addr_of!(L2_LOW),(address>>21)&511),read(addr_of!(L3_VIRTIO),(address>>12)&511)];
+ super::write(" roots=");super::write_decimal(a as usize);super::write(",");super::write_decimal(b as usize);
+ for (i,v) in entries.iter().enumerate(){super::write(" e");super::write_decimal(i);super::write("=");super::write_decimal(*v as usize);}
+}
 pub fn root(index:usize)->u64 {assert!(index<2);unsafe{read_volatile(addr_of!(ROOTS).cast::<u64>().add(index))}}
 pub fn active_root()->u64 {let v:u64;unsafe{asm!("mrs {}, TTBR0_EL1",out(reg) v)}v}
 pub fn switch_root(root:u64) {unsafe{asm!("dsb ishst","msr TTBR0_EL1, {r}","isb","tlbi vmalle1","dsb ish","isb",r=in(reg) root);}}

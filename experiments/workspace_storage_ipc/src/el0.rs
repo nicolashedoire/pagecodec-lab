@@ -154,7 +154,7 @@ extern "C" fn irq_report(frame:*const Frame,family:u64)->! {
 #[no_mangle]
 extern "C" fn unexpected_vector(slot:u64)->! {
  let mut elr:u64;let mut spsr:u64;let mut esr:u64;let mut far:u64;unsafe{asm!("mrs {},ELR_EL1",out(reg) elr);asm!("mrs {},SPSR_EL1",out(reg) spsr);asm!("mrs {},ESR_EL1",out(reg) esr);asm!("mrs {},FAR_EL1",out(reg) far);}
- super::write("FAIL IRQ no_frame slot=");super::write_decimal(slot as usize);super::write(" elr=");super::write_decimal(elr as usize);super::write(" spsr=");super::write_decimal(spsr as usize);super::write(" esr=");super::write_decimal(esr as usize);super::write(" far=");super::write_decimal(far as usize);super::write("\n");loop{unsafe{asm!("wfe",options(nomem,nostack))}}
+ super::write("FAIL IRQ no_frame slot=");super::write_decimal(slot as usize);super::write(" elr=");super::write_decimal(elr as usize);super::write(" spsr=");super::write_decimal(spsr as usize);super::write(" esr=");super::write_decimal(esr as usize);super::write(" far=");super::write_decimal(far as usize);if slot==4 && (far as usize)>=0x0a00_0000 && (far as usize)<0x0a00_4000 {super::mmu::report_fault(far as usize);}super::write("\n");loop{unsafe{asm!("wfe",options(nomem,nostack))}}
 }
 fn halt()->! {super::write("FAIL EL0 HALT\n");loop{unsafe{asm!("wfe",options(nomem,nostack))}}}
 fn check(ok:bool,msg:&str){if !ok{super::write("FAIL EL0 ");super::write(msg);super::write("\r\n");halt()}}
