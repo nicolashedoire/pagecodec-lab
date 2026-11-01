@@ -119,3 +119,14 @@ python3 run_demo.py --qemu /path/to/qemu-system-aarch64 \
 ```
 
 The harness records synthetic MCP I/O, guest hash and QEMU version and checks the image hash did not change. Inter glyphs are distributed under the [SIL Open Font License](assets/OFL.txt).
+
+### Interactive launcher and boot identity
+
+`launch_vm.py` provisions a virtual VirtIO entropy device along with its GPU,
+tablet and disposable or explicitly requested persistent disk. The guest uses
+entropy to create a fresh boot identity; independent process admission and
+stop require that identity. The launcher does not attach a host network or
+physical device. Entropy availability and random generation remain subject to
+the virtual device; the identity is a freshness value, not authentication. A
+[synthetic launcher trace](evidence/launcher-rng.json) records a process
+admission and cleanup using a temporary VM disk.

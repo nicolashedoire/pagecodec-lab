@@ -55,6 +55,7 @@ def main():
                "-cpu", "cortex-a57", "-smp", "1", "-m", "128M", "-nodefaults",
                "-display", args.display, "-nic", "none", "-monitor", "none", "-no-reboot",
                "-device", "virtio-gpu-device", "-device", "virtio-tablet-device",
+               "-device", "virtio-rng-device",
                "-chardev", f"socket,id=mcp,path={serial},server=on,wait=off",
                "-serial", "chardev:mcp", "-kernel", str(guest),
                "-global", "virtio-mmio.force-legacy=false",
