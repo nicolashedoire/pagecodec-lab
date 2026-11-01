@@ -577,5 +577,9 @@ The single-CPU scheduler selects the next ready slot by a bounded circular
 search after timer interrupts, a blocking wait, or task exit. If neither slot is
 ready after a wait or exit, control returns to the service loop; device polling
 and MCP can continue. This refactor does not increase process capacity: the
-guest still has exactly two real contexts/address spaces and fixed resources,
-with no general SMP or starvation-freedom guarantee.
+guest still admits exactly two process contexts, with no general SMP or
+starvation-freedom guarantee. A third page-table root (ASID 3) and a pool of
+nine user frames prepare a third context; boot checks exercise that root's
+permissions and map/unmap using a temporarily reserved frame. The integrated
+modern QEMU scenario passed with the existing two processes. This preparation
+does not admit or run a third process; the older legacy trace predates it.

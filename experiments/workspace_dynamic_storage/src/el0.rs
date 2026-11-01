@@ -5,6 +5,7 @@ use core::{arch::{asm,global_asm},ptr::{addr_of,addr_of_mut,read_volatile,write_
 // This is still the exact number of real contexts and address spaces.
 // Widen only together with tables, resources, ownership and admission.
 const PROCESS_CAPACITY:usize=2;
+pub const FRAME_CAPACITY:usize=9;
 const PAGE:usize=4096;
 const GICD:usize=0x0800_0000;const GICC:usize=0x0801_0000;
 #[repr(C,align(4096))] struct UserStack([u8;PAGE]);
@@ -13,8 +14,8 @@ const GICD:usize=0x0800_0000;const GICC:usize=0x0801_0000;
 const EMPTY:Frame=Frame{regs:[0;31],sp:0,elr:0,spsr:0};
 // Fixed boot-reserved frame pool, not a general physical-memory allocator.
 // Frames are exclusively assigned to task addresses and zeroed before mapping.
-#[link_section=".userstack"] static mut USER_FRAMES:[UserStack;6]=[const {UserStack([0;PAGE])};6];
-static mut FRAME_BITMAP:u8=0;
+#[link_section=".userstack"] static mut USER_FRAMES:[UserStack;FRAME_CAPACITY]=[const {UserStack([0;PAGE])};FRAME_CAPACITY];
+static mut FRAME_BITMAP:u16=0;
 static mut TASK_FRAMES:[usize;2]=[0;2];
 static mut CROSS_READ_DENIED:[bool;2]=[false;2];
 static mut KERNEL_DATA:u64=0x0123_4567_89ab_cdef;
@@ -925,7 +926,7 @@ pub fn private_stacks()->(usize,usize) {
 fn allocate_task_frame(actor:usize)->usize {
  check(actor<2 && unsafe{read_volatile(addr_of!(TASK_FRAMES).cast::<usize>().add(actor))}==0,"task already owns a frame");
  let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
- let slot=(0..6).find(|i|used&(1<<i)==0).unwrap_or_else(||halt());
+ let slot=(0..FRAME_CAPACITY).find(|i|used&(1<<i)==0).unwrap_or_else(||halt());
  let frame=unsafe{addr_of_mut!(USER_FRAMES).cast::<UserStack>().add(slot)} as *mut u8;
  for i in 0..PAGE {unsafe{write_volatile(frame.add(i),0)}}
  for i in 0..PAGE {check(unsafe{read_volatile(frame.add(i))}==0,"frame allocation scrub")}
@@ -956,9 +957,20 @@ pub fn start()->! {
  let mut sp:usize;let mut sctlr:u64;unsafe{asm!("mov {},sp",out(reg) sp);asm!("mrs {},SCTLR_EL1",out(reg) sctlr);}
  check(sctlr&1!=0 && sctlr&((1<<2)|(1<<12))==0 && sp>kb && sp<=kt && sp%16==0,"MMU or kernel stack");
  check(start<text_end && text_end<=ut0 && ut0<ut1 && us0<us1 && us1==end && kt<=us0,"section bounds");
- check(ut0%PAGE==0 && ut0.checked_add(PAGE)==Some(split) && split.checked_add(PAGE)==Some(ut1) && us0.checked_add(6*PAGE)==Some(us1) && a%PAGE==0 && b%PAGE==0 && a>=us0 && b>=us0 && a+PAGE<=us1 && b+PAGE<=us1 && (a+PAGE<=b || b+PAGE<=a),"EL0 stack bounds");
+ check(ut0%PAGE==0 && ut0.checked_add(PAGE)==Some(split) && split.checked_add(PAGE)==Some(ut1) && us0.checked_add(FRAME_CAPACITY*PAGE)==Some(us1) && a%PAGE==0 && b%PAGE==0 && a>=us0 && b>=us0 && a+PAGE<=us1 && b+PAGE<=us1 && (a+PAGE<=b || b+PAGE<=a),"EL0 stack bounds");
  check(apc>=ut0 && apc<aend && aend<=split && bpc>=split && bpc<bend && bend<=ut1,"EL0 code bounds");
  check(vector%2048==0 && vector>=start && vector+2048<=text_end,"VBAR bounds");
+ // Borrow one genuinely free pool frame to validate the exact mapping paths
+ // that slot 2 will use. Reserve and return it before any EL0 task can run.
+ let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
+ let scratch=(0..FRAME_CAPACITY).find(|i|used&(1u16<<i)==0).unwrap_or_else(||halt());
+ let scratch_frame=unsafe{addr_of_mut!(USER_FRAMES).cast::<UserStack>().add(scratch)} as *mut u8;
+ unsafe{write_volatile(addr_of_mut!(FRAME_BITMAP),used|(1u16<<scratch))};
+ for i in 0..PAGE {unsafe{write_volatile(scratch_frame.add(i),0)}}
+ check(super::mmu::validate_third_frame(scratch_frame as usize,a,b),"third root mapping");
+ for i in 0..PAGE {unsafe{write_volatile(scratch_frame.add(i),0)}}
+ unsafe{write_volatile(addr_of_mut!(FRAME_BITMAP),used)};
+ check(unsafe{read_volatile(addr_of!(FRAME_BITMAP))}==used,"third frame reservation");
  check(core::mem::size_of::<Frame>()==272 && core::mem::size_of::<Event>()==56,"frame layout");
  for p in [a as *const u8,b as *const u8] {for i in 0..PAGE {check(unsafe{read_volatile(p.add(i))}==0,"frame not zeroed")}}
  unsafe{asm!("msr VBAR_EL1, {}","isb",in(reg) vector);}
@@ -1002,7 +1014,7 @@ pub fn approved_program(which:usize)->Option<Vec<u8>> {
 fn allocate_code_frame()->usize {
  let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
  check(unsafe{read_volatile(addr_of!(CODE_FRAME))}==0,"code frame already assigned");
- let slot=(0..6).find(|i|used&(1<<i)==0).unwrap_or_else(||halt());
+ let slot=(0..FRAME_CAPACITY).find(|i|used&(1<<i)==0).unwrap_or_else(||halt());
  let frame=unsafe{addr_of_mut!(USER_FRAMES).cast::<UserStack>().add(slot)} as *mut u8;
  for i in 0..PAGE {unsafe{write_volatile(frame.add(i),0)}}
  for i in 0..PAGE {check(unsafe{read_volatile(frame.add(i))}==0,"code frame allocation scrub")}
@@ -1016,8 +1028,8 @@ fn reclaim_code_frame() {
  for i in 0..PAGE {unsafe{write_volatile((frame as *mut u8).add(i),0)}}
  for i in 0..PAGE {check(unsafe{read_volatile((frame as *const u8).add(i))}==0,"code frame scrub")}
  let base=addr_of_mut!(USER_FRAMES) as usize;let offset=frame.checked_sub(base).unwrap_or_else(||halt());
- check(offset%PAGE==0 && offset/PAGE<6,"code frame outside pool");
- let bit=1u8<<(offset/PAGE);let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};check(used&bit!=0,"code frame already free");
+ check(offset%PAGE==0 && offset/PAGE<FRAME_CAPACITY,"code frame outside pool");
+ let bit=1u16<<(offset/PAGE);let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};check(used&bit!=0,"code frame already free");
  unsafe{write_volatile(addr_of_mut!(CODE_FRAME),0);write_volatile(addr_of_mut!(FRAME_BITMAP),used&!bit);write_volatile(addr_of_mut!(CODE_FRAME_SCRUBBED),true)}
 }
 
@@ -1065,7 +1077,7 @@ fn start_programs(a:&[u8],b:Option<&[u8]>)->Result<(), &'static str> {
   let image=images[i].as_ref().unwrap_or_else(||halt());
   data[i]=allocate_task_frame(i);
   let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
-  let slot=(0..6).find(|n|used&(1<<n)==0).unwrap_or_else(||halt());
+  let slot=(0..FRAME_CAPACITY).find(|n|used&(1<<n)==0).unwrap_or_else(||halt());
   let ptr=unsafe{addr_of_mut!(USER_FRAMES).cast::<UserStack>().add(slot)} as *mut u8;
   for n in 0..PAGE {unsafe{write_volatile(ptr.add(n),0)}}
   for (n,byte) in image.code.iter().enumerate() {unsafe{write_volatile(ptr.add(n),*byte)}}
@@ -1105,8 +1117,8 @@ fn start_programs(a:&[u8],b:Option<&[u8]>)->Result<(), &'static str> {
 fn free_unpublished_frame(frame:usize) {
  for i in 0..PAGE {unsafe{write_volatile((frame as *mut u8).add(i),0)}}
  let offset=frame.checked_sub(addr_of_mut!(USER_FRAMES) as usize).unwrap_or_else(||halt());
- check(offset%PAGE==0 && offset/PAGE<6,"rollback frame outside pool");
- let bit=1u8<<(offset/PAGE);let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};check(used&bit!=0,"rollback frame not allocated");
+ check(offset%PAGE==0 && offset/PAGE<FRAME_CAPACITY,"rollback frame outside pool");
+ let bit=1u16<<(offset/PAGE);let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};check(used&bit!=0,"rollback frame not allocated");
  unsafe{write_volatile(addr_of_mut!(FRAME_BITMAP),used&!bit)};
 }
 /// Admit one independent ELF into an actually free slot at an EL1 service
@@ -1130,7 +1142,7 @@ pub fn start_independent(bytes:&[u8])->Result<(usize,u64), &'static str> {
  let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
  if active {
   let base=addr_of_mut!(USER_FRAMES) as usize;
-  let bit=|p:usize| -> Option<u8> {let off=p.checked_sub(base)?;if off%PAGE!=0 || off/PAGE>=6 {return None};Some(1u8<<(off/PAGE))};
+  let bit=|p:usize| -> Option<u16> {let off=p.checked_sub(base)?;if off%PAGE!=0 || off/PAGE>=FRAME_CAPACITY {return None};Some(1u16<<(off/PAGE))};
   let Some(data_bit)=bit(frames[peer]) else{return Err("process slots unavailable")};
   let Some(code_bit)=bit(codes[peer]) else{return Err("process slots unavailable")};
   let mut expected=data_bit|code_bit;
@@ -1139,7 +1151,7 @@ pub fn start_independent(bytes:&[u8])->Result<(usize,u64), &'static str> {
  }
  let image=super::loader::parse(bytes).ok_or("invalid ELF")?;
  let need=if image.data.is_some() {3}else{2};
- if 6usize.saturating_sub(used.count_ones() as usize)<need {return Err("no free process frames")}
+ if FRAME_CAPACITY.saturating_sub(used.count_ones() as usize)<need {return Err("no free process frames")}
  if !super::mmu::slot_available(slot) {return Err("process mappings unavailable")}
  let incarnation_id=unsafe{read_volatile(addr_of!(NEXT_INCARNATION))};
  let next=incarnation_id.checked_add(1).ok_or("incarnation exhausted")?;
@@ -1150,14 +1162,14 @@ pub fn start_independent(bytes:&[u8])->Result<(usize,u64), &'static str> {
   for i in 0..rw.mem_size {let expected=if i<rw.bytes.len() {rw.bytes[i]}else{0};check(unsafe{read_volatile((data as *const u8).add(i))}==expected,"RW initialization")}
  }
  let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
- let index=(0..6).find(|i|used&(1<<i)==0).unwrap_or_else(||halt());
+ let index=(0..FRAME_CAPACITY).find(|i|used&(1<<i)==0).unwrap_or_else(||halt());
  let code=unsafe{addr_of_mut!(USER_FRAMES).cast::<UserStack>().add(index)} as *mut u8;
  for i in 0..PAGE {unsafe{write_volatile(code.add(i),0)}}
  for (i,byte) in image.code.iter().enumerate() {unsafe{write_volatile(code.add(i),*byte)}}
  unsafe{write_volatile(addr_of_mut!(FRAME_BITMAP),used|(1<<index))};
  let stack=if image.data.is_some() {
   let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
-  let index=(0..6).find(|i|used&(1<<i)==0).unwrap_or_else(||halt());
+  let index=(0..FRAME_CAPACITY).find(|i|used&(1<<i)==0).unwrap_or_else(||halt());
   let p=unsafe{addr_of_mut!(USER_FRAMES).cast::<UserStack>().add(index)} as *mut u8;
   for i in 0..PAGE {unsafe{write_volatile(p.add(i),0)}}
   unsafe{write_volatile(addr_of_mut!(FRAME_BITMAP),used|(1<<index))};p as usize
@@ -1294,8 +1306,8 @@ fn reclaim_pair(actor:usize) {
   for n in 0..PAGE {unsafe{write_volatile((ptr as *mut u8).add(n),0)}}
   for n in 0..PAGE {check(unsafe{read_volatile((ptr as *const u8).add(n))}==0,"pair frame scrub")}
   let offset=ptr.checked_sub(addr_of_mut!(USER_FRAMES) as usize).unwrap_or_else(||halt());
-  check(offset%PAGE==0 && offset/PAGE<6,"pair frame outside pool");
-  let bit=1u8<<(offset/PAGE);let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};check(used&bit!=0,"pair frame already free");
+  check(offset%PAGE==0 && offset/PAGE<FRAME_CAPACITY,"pair frame outside pool");
+  let bit=1u16<<(offset/PAGE);let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};check(used&bit!=0,"pair frame already free");
   unsafe{write_volatile(addr_of_mut!(FRAME_BITMAP),used&!bit)};
  }
  unsafe {
@@ -1326,8 +1338,8 @@ fn reclaim_exited(actor:usize) {
  unsafe{write_volatile(addr_of_mut!(FRAME_SCRUBBED).cast::<bool>().add(actor),true)};
  let base=addr_of_mut!(USER_FRAMES) as usize;
  let offset=frame.checked_sub(base).unwrap_or_else(||halt());
- check(offset%PAGE==0 && offset/PAGE<6,"frame outside pool");
- let bit=1u8<<(offset/PAGE);
+ check(offset%PAGE==0 && offset/PAGE<FRAME_CAPACITY,"frame outside pool");
+ let bit=1u16<<(offset/PAGE);
  if actor==0 {
   if unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} {
    check(unsafe{read_volatile(addr_of!(SPAWN_EXECUTED))} ^ unsafe{read_volatile(addr_of!(SPAWN_FAILED))},"spawn exit result");
@@ -1495,7 +1507,7 @@ pub fn status()->Value {
  let states=unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|s|match s {1=>"ready",2=>"running",3=>"exited",4=>"waiting",_=>"invalid"});
  let outcomes=unsafe{read_volatile(addr_of!(IMAGE_OUTCOMES))}.map(|v|match v {0=>"pending",1=>"success",2=>"fault",3=>"bad_svc",4=>"file_error",5=>"timeout",6=>"exit_error",_=>"invalid"});
  let reclaimed=[unsafe{read_volatile(addr_of!(IMAGE1_RECLAIMED))},unsafe{read_volatile(addr_of!(IMAGE2_RECLAIMED))},unsafe{read_volatile(addr_of!(IMAGE3_RECLAIMED))},unsafe{read_volatile(addr_of!(IMAGE4_RECLAIMED))}];
- json!({"validated":done,"ticks":8,"el":"EL0","events":events,"timer":"disabled","interrupts":"masked","slice_ticks":slice_ticks,"slice_counts":counts,"mode":"service-boundary","private_values":values,"service_asid":super::mmu::active_root()>>48,"cross_code_read_denied":unsafe{read_volatile(addr_of!(CROSS_READ_DENIED))},"task_states":states,"frame_scrubbed":unsafe{read_volatile(addr_of!(FRAME_SCRUBBED))},"alias_removed":unsafe{read_volatile(addr_of!(ALIAS_REMOVED))},"dispatches":unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))},"loader_rejected":unsafe{read_volatile(addr_of!(LOADER_REJECTED))},"image_loaded":unsafe{read_volatile(addr_of!(IMAGE_LOADED))},"code_alias_removed":unsafe{read_volatile(addr_of!(CODE_ALIAS_REMOVED))},"code_frame_scrubbed":unsafe{read_volatile(addr_of!(CODE_FRAME_SCRUBBED))},"image_outcomes":outcomes,"image_exit_codes":unsafe{read_volatile(addr_of!(IMAGE_EXIT_CODES))},"image_irq_x19_max_seen":unsafe{read_volatile(addr_of!(IMAGE_IRQ_X19_MAX_SEEN))},"images_reclaimed":reclaimed,"completions_revoked":unsafe{read_volatile(addr_of!(COMPLETIONS_REVOKED))},"pending_cancelled":unsafe{read_volatile(addr_of!(PENDING_CANCELLED))},"stale_response_blocked":unsafe{read_volatile(addr_of!(STALE_RESPONSE_BLOCKED))},"image_incarnations":unsafe{read_volatile(addr_of!(IMAGE_INCARNATIONS))},"stale_generation_rejected":unsafe{read_volatile(addr_of!(STALE_GENERATION_REJECTED))},"image_count":unsafe{read_volatile(addr_of!(IMAGE_COUNT))},"image1_exited":unsafe{read_volatile(addr_of!(IMAGE1_EXITED))},"image2_exited":unsafe{read_volatile(addr_of!(IMAGE2_EXITED))},"image1_reclaimed":unsafe{read_volatile(addr_of!(IMAGE1_RECLAIMED))},"image2_reclaimed":unsafe{read_volatile(addr_of!(IMAGE2_RECLAIMED))},"spawn_admitted":unsafe{read_volatile(addr_of!(SPAWN_ADMITTED))},"spawn_executed":unsafe{read_volatile(addr_of!(SPAWN_EXECUTED))},"spawn_failed":unsafe{read_volatile(addr_of!(SPAWN_FAILED))},"spawn_exited":unsafe{read_volatile(addr_of!(SPAWN_EXITED))},"spawn_interrupts":unsafe{read_volatile(addr_of!(SPAWN_TICKS))},"spawn_irq_x19_max_seen":unsafe{read_volatile(addr_of!(SPAWN_IRQ_X19_MAX_SEEN))},"spawn_reused_frame":unsafe{read_volatile(addr_of!(SPAWN_REUSED))},"frame_pool_capacity":6,"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()})
+ json!({"validated":done,"ticks":8,"el":"EL0","events":events,"timer":"disabled","interrupts":"masked","slice_ticks":slice_ticks,"slice_counts":counts,"mode":"service-boundary","private_values":values,"service_asid":super::mmu::active_root()>>48,"cross_code_read_denied":unsafe{read_volatile(addr_of!(CROSS_READ_DENIED))},"task_states":states,"frame_scrubbed":unsafe{read_volatile(addr_of!(FRAME_SCRUBBED))},"alias_removed":unsafe{read_volatile(addr_of!(ALIAS_REMOVED))},"dispatches":unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))},"loader_rejected":unsafe{read_volatile(addr_of!(LOADER_REJECTED))},"image_loaded":unsafe{read_volatile(addr_of!(IMAGE_LOADED))},"code_alias_removed":unsafe{read_volatile(addr_of!(CODE_ALIAS_REMOVED))},"code_frame_scrubbed":unsafe{read_volatile(addr_of!(CODE_FRAME_SCRUBBED))},"image_outcomes":outcomes,"image_exit_codes":unsafe{read_volatile(addr_of!(IMAGE_EXIT_CODES))},"image_irq_x19_max_seen":unsafe{read_volatile(addr_of!(IMAGE_IRQ_X19_MAX_SEEN))},"images_reclaimed":reclaimed,"completions_revoked":unsafe{read_volatile(addr_of!(COMPLETIONS_REVOKED))},"pending_cancelled":unsafe{read_volatile(addr_of!(PENDING_CANCELLED))},"stale_response_blocked":unsafe{read_volatile(addr_of!(STALE_RESPONSE_BLOCKED))},"image_incarnations":unsafe{read_volatile(addr_of!(IMAGE_INCARNATIONS))},"stale_generation_rejected":unsafe{read_volatile(addr_of!(STALE_GENERATION_REJECTED))},"image_count":unsafe{read_volatile(addr_of!(IMAGE_COUNT))},"image1_exited":unsafe{read_volatile(addr_of!(IMAGE1_EXITED))},"image2_exited":unsafe{read_volatile(addr_of!(IMAGE2_EXITED))},"image1_reclaimed":unsafe{read_volatile(addr_of!(IMAGE1_RECLAIMED))},"image2_reclaimed":unsafe{read_volatile(addr_of!(IMAGE2_RECLAIMED))},"spawn_admitted":unsafe{read_volatile(addr_of!(SPAWN_ADMITTED))},"spawn_executed":unsafe{read_volatile(addr_of!(SPAWN_EXECUTED))},"spawn_failed":unsafe{read_volatile(addr_of!(SPAWN_FAILED))},"spawn_exited":unsafe{read_volatile(addr_of!(SPAWN_EXITED))},"spawn_interrupts":unsafe{read_volatile(addr_of!(SPAWN_TICKS))},"spawn_irq_x19_max_seen":unsafe{read_volatile(addr_of!(SPAWN_IRQ_X19_MAX_SEEN))},"spawn_reused_frame":unsafe{read_volatile(addr_of!(SPAWN_REUSED))},"frame_pool_capacity":FRAME_CAPACITY,"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()})
 }
 
 global_asm!(r#"
