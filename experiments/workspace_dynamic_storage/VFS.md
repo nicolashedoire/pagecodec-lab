@@ -153,8 +153,7 @@ assigned slot. They are not a general permissions system.
 ## Temporary ELF uploads
 
 The persistent VFS retains its 512-byte per-file bound. A separate in-memory
-staging area accepts one ELF of at most 4,216 bytes (a 120-byte header and up
-to 4,096 bytes of code) through `upload_begin`, sequential `upload_chunk`
+staging area accepts one ELF of at most 16,384 bytes through `upload_begin`, sequential `upload_chunk`
 requests of at most 512 bytes, then `upload_seal`. The caller supplies the
 size and a canonical 16-digit FNV-1a-64 checksum. Sealing checks exact length,
 checksum and the restricted ELF format; `process_spawn_staged` accepts only a
@@ -177,10 +176,24 @@ the volatile staging state after restart. The VM scenario uses a real compiled R
 program padded with unreachable ARM64 NOPs to fill the 4,096-byte code page.
 It checks partial, stale, out-of-order, oversized, corrupt and invalid ELF
 refusals, including an oversized and internally inconsistent segment. A
-coherent 4,100-byte code image is refused by the upload-size limit before the
-ELF parser sees it. The accepted upload runs and its separate VFS write is
+coherent 4,100-byte code segment is refused by the ELF parser after staging.
+The accepted upload runs and its separate VFS write is
 verified after reboot. The restricted loader is not a full native executable
 environment.
+
+The loader also accepts a restricted static AArch64 ELF with two `PT_LOAD`
+segments: up to one RX code page and one RW data/BSS page. These processes use
+a separate RW stack page and an unmapped guard page. The integrated scenario
+uploads a real 8,552-byte Rust `no_std` ELF with initialized `.data` and zeroed
+`.bss`, launches two independent copies, and verifies their data initialization,
+mapping checks, distinct stack cleanup and completed file effects. Both copies
+check their own data and stack contents after running concurrently. The SVC file
+ABI accepts buffers only from the RW data page, not the stack. The fixed
+persistent program area still accepts at most 4,216 bytes and refuses the larger
+ELF; there is no multi-segment persistence migration yet. This is a narrow ELF
+subset, with no interpreter, dynamic linker or runtime relocations. Mapping
+verification errors have controlled rollback, but internal MMU assertions may
+still halt the guest; no general recovery from page-table corruption is claimed.
 
 `heap_status` exposes allocation, release, live-byte, high-water and free-space
 counters, and `heap_exercise` runs a bounded allocator self-check. The integrated

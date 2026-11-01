@@ -4,6 +4,7 @@ const PAGE:usize=4096;const RAM_BASE:usize=0x4000_0000;const RAM_END:usize=RAM_B
 const UART:usize=0x0900_0000;const VIRTIO:usize=0x0a00_0000;const GICD:usize=0x0800_0000;const GICC:usize=0x0801_0000;
 pub const ALIAS:usize=0x5000_0000;
 pub const USER_CODE:usize=ALIAS+PAGE;
+pub const USER_STACK:usize=ALIAS+3*PAGE;
 const AF:u64=1<<10;const SH:u64=3<<8;const RO:u64=1<<7;const USER:u64=1<<6;const NORMAL:u64=1<<2;
 const NG:u64=1<<11;const PXN:u64=1<<53;const UXN:u64=1<<54;const DESC:u64=3;const PA_MASK:u64=0x0000_ffff_ffff_f000;
 #[repr(C,align(4096))] struct Table([u64;512]);
@@ -74,6 +75,44 @@ pub fn map_task_code(actor:usize,frame:usize) {
   assert!(other_desc&PA_MASK!=(frame as u64&PA_MASK) && other_result&1==0 && other_result&PA_MASK==other_desc&PA_MASK);
  } else {assert!(other_desc==0 && other_result&1!=0)}
  switch_root(root(0));
+}
+/// Ensure a slot is unmapped before publishing any new user pages.
+pub fn slot_available(actor:usize)->bool {
+ if actor>=2 || active_root()!=root(0) {return false}
+ switch_root(root(actor));let ok=query(ALIAS,false,true)&1!=0 && query(USER_CODE,false,true)&1!=0
+  && query(USER_STACK-PAGE,false,true)&1!=0 && query(USER_STACK,false,true)&1!=0;
+ switch_root(root(0));ok
+}
+/// Map a dedicated RW/NX user stack. The preceding page remains unmapped.
+pub fn map_task_stack(actor:usize,frame:usize) {
+ assert!(actor<2 && frame%PAGE==0 && active_root()==root(0));
+ let table=if actor==0 {addr_of_mut!(L3_ALIAS_A)}else{addr_of_mut!(L3_ALIAS_B)};
+ let entry=unsafe{table.cast::<u64>().add((USER_STACK>>12)&511)};
+ assert!(unsafe{read_volatile(entry)}==0);
+ unsafe{write_volatile(entry,frame as u64|AF|SH|NORMAL|USER|PXN|UXN|NG|DESC);asm!("dsb ishst","tlbi vmalle1","dsb ish","isb");}
+ switch_root(root(actor));let r=query(USER_STACK,false,true);
+ assert!(r&1==0 && r&PA_MASK==frame as u64 && query(USER_STACK,true,true)&1==0);
+ switch_root(root(0));
+}
+pub fn unmap_task_stack(actor:usize,frame:usize) {
+ assert!(actor<2 && active_root()==root(0));
+ let table=if actor==0 {addr_of_mut!(L3_ALIAS_A)}else{addr_of_mut!(L3_ALIAS_B)};
+ let entry=unsafe{table.cast::<u64>().add((USER_STACK>>12)&511)};
+ let old=unsafe{read_volatile(entry)};assert!(old&3==DESC && old&PA_MASK==(frame as u64&PA_MASK));
+ unsafe{write_volatile(entry,0);asm!("dsb ishst","tlbi vmalle1","dsb ish","isb");}
+ switch_root(root(actor));assert!(query(USER_STACK,false,true)&1!=0 && query(USER_STACK,true,true)&1!=0);switch_root(root(0));
+}
+/// Verify private stack mappings and the lower guard in both roots; no user physical alias.
+pub fn verify_stack(actor:usize,frame:usize,peer:Option<usize>)->bool {
+ if actor>=2 || active_root()!=root(0) || frame%PAGE!=0 || peer.is_some_and(|p|p%PAGE!=0 || p==frame) {return false}
+ switch_root(root(actor));let r=query(USER_STACK,false,true);
+ let mut ok=r&1==0 && r&PA_MASK==frame as u64 && query(USER_STACK,true,true)&1==0
+  && query(USER_STACK-PAGE,false,true)&1!=0 && query(frame,false,true)&1!=0;
+ if let Some(p)=peer {ok &= query(p,false,true)&1!=0}
+ switch_root(root(1-actor));ok &= query(USER_STACK-PAGE,false,true)&1!=0 && query(frame,false,true)&1!=0;
+ if let Some(p)=peer {let r=query(USER_STACK,false,true);ok &= r&1==0 && r&PA_MASK==p as u64 && query(USER_STACK,true,true)&1==0}
+ else {ok &= query(USER_STACK,false,true)&1!=0}
+ switch_root(root(0));ok
 }
 /// Verify one slot's mappings with a possibly live peer. This is run only at
 /// a masked service boundary on the sole CPU; it is not an SMP page-table API.
@@ -163,7 +202,7 @@ pub fn init(heap:usize,heap_len:usize,dma:usize,dma_len:usize,a:usize,b:usize) {
  let mut sp:usize;let mut sctlr:u64;unsafe{asm!("mov {},sp",out(reg) sp);asm!("mrs {},SCTLR_EL1",out(reg) sctlr);}
  assert!(sctlr&((1<<0)|(1<<2)|(1<<12)|(1<<25))==0);
  assert!(start>=RAM_BASE && end<=RAM_END && start%PAGE==0 && end%PAGE==0 && start<text_end && text_end<=ut0 && ut0<ut1 && ut1<=ro_end && ro_end==data && data<us0 && us0<us1 && us1==end);
- assert!([ut0,ut1,us0,us1,a,b].iter().all(|x|x%PAGE==0) && ut0.checked_add(PAGE)==Some(split) && split.checked_add(PAGE)==Some(ut1) && us0.checked_add(4*PAGE)==Some(us1));
+ assert!([ut0,ut1,us0,us1,a,b].iter().all(|x|x%PAGE==0) && ut0.checked_add(PAGE)==Some(split) && split.checked_add(PAGE)==Some(ut1) && us0.checked_add(6*PAGE)==Some(us1));
  assert!(a>=us0 && b>=us0 && a.checked_add(PAGE).is_some_and(|v|v<=us1) && b.checked_add(PAGE).is_some_and(|v|v<=us1) && (a+PAGE<=b || b+PAGE<=a));
  assert!(guard==bss_end && guard%PAGE==0 && guard.checked_add(PAGE)==Some(stack_bottom) && stack_bottom.checked_add(0x40000)==Some(stack_top));
  assert!(sp>stack_bottom && sp<=stack_top && stack_top<=us0 && sp%16==0);

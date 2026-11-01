@@ -10,7 +10,7 @@ const GICD:usize=0x0800_0000;const GICC:usize=0x0801_0000;
 const EMPTY:Frame=Frame{regs:[0;31],sp:0,elr:0,spsr:0};
 // Fixed boot-reserved frame pool, not a general physical-memory allocator.
 // Frames are exclusively assigned to task addresses and zeroed before mapping.
-#[link_section=".userstack"] static mut USER_FRAMES:[UserStack;4]=[const {UserStack([0;PAGE])};4];
+#[link_section=".userstack"] static mut USER_FRAMES:[UserStack;6]=[const {UserStack([0;PAGE])};6];
 static mut FRAME_BITMAP:u8=0;
 static mut TASK_FRAMES:[usize;2]=[0;2];
 static mut CROSS_READ_DENIED:[bool;2]=[false;2];
@@ -84,6 +84,10 @@ static mut PAIR_OLD_INCARNATION_REJECTED:[bool;2]=[false;2];
 static mut PAIR_DONE:bool=false;
 static mut PAIR_INCARNATIONS:[u64;2]=[0;2];
 static mut PAIR_CODE_FRAMES:[usize;2]=[0;2];
+static mut PAIR_STACK_FRAMES:[usize;2]=[0;2];
+static mut PAIR_STACK_SCRUBBED:[bool;2]=[false;2];
+static mut PAIR_RW_INIT_VERIFIED:[bool;2]=[false;2];
+static mut PAIR_TWO_SEGMENT:[bool;2]=[false;2];
 static mut PAIR_CODE_LEN:[u64;2]=[0;2];
 static mut PAIR_IRQS:[u64;2]=[0;2];
 static mut PAIR_BARRIER_SEEN:[bool;2]=[false;2];
@@ -621,7 +625,7 @@ pub fn private_stacks()->(usize,usize) {
 fn allocate_task_frame(actor:usize)->usize {
  check(actor<2 && unsafe{read_volatile(addr_of!(TASK_FRAMES).cast::<usize>().add(actor))}==0,"task already owns a frame");
  let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
- let slot=(0..4).find(|i|used&(1<<i)==0).unwrap_or_else(||halt());
+ let slot=(0..6).find(|i|used&(1<<i)==0).unwrap_or_else(||halt());
  let frame=unsafe{addr_of_mut!(USER_FRAMES).cast::<UserStack>().add(slot)} as *mut u8;
  for i in 0..PAGE {unsafe{write_volatile(frame.add(i),0)}}
  for i in 0..PAGE {check(unsafe{read_volatile(frame.add(i))}==0,"frame allocation scrub")}
@@ -652,7 +656,7 @@ pub fn start()->! {
  let mut sp:usize;let mut sctlr:u64;unsafe{asm!("mov {},sp",out(reg) sp);asm!("mrs {},SCTLR_EL1",out(reg) sctlr);}
  check(sctlr&1!=0 && sctlr&((1<<2)|(1<<12))==0 && sp>kb && sp<=kt && sp%16==0,"MMU or kernel stack");
  check(start<text_end && text_end<=ut0 && ut0<ut1 && us0<us1 && us1==end && kt<=us0,"section bounds");
- check(ut0%PAGE==0 && ut0.checked_add(PAGE)==Some(split) && split.checked_add(PAGE)==Some(ut1) && us0.checked_add(4*PAGE)==Some(us1) && a%PAGE==0 && b%PAGE==0 && a>=us0 && b>=us0 && a+PAGE<=us1 && b+PAGE<=us1 && (a+PAGE<=b || b+PAGE<=a),"EL0 stack bounds");
+ check(ut0%PAGE==0 && ut0.checked_add(PAGE)==Some(split) && split.checked_add(PAGE)==Some(ut1) && us0.checked_add(6*PAGE)==Some(us1) && a%PAGE==0 && b%PAGE==0 && a>=us0 && b>=us0 && a+PAGE<=us1 && b+PAGE<=us1 && (a+PAGE<=b || b+PAGE<=a),"EL0 stack bounds");
  check(apc>=ut0 && apc<aend && aend<=split && bpc>=split && bpc<bend && bend<=ut1,"EL0 code bounds");
  check(vector%2048==0 && vector>=start && vector+2048<=text_end,"VBAR bounds");
  check(core::mem::size_of::<Frame>()==272 && core::mem::size_of::<Event>()==56,"frame layout");
@@ -698,7 +702,7 @@ pub fn approved_program(which:usize)->Option<Vec<u8>> {
 fn allocate_code_frame()->usize {
  let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
  check(unsafe{read_volatile(addr_of!(CODE_FRAME))}==0,"code frame already assigned");
- let slot=(0..4).find(|i|used&(1<<i)==0).unwrap_or_else(||halt());
+ let slot=(0..6).find(|i|used&(1<<i)==0).unwrap_or_else(||halt());
  let frame=unsafe{addr_of_mut!(USER_FRAMES).cast::<UserStack>().add(slot)} as *mut u8;
  for i in 0..PAGE {unsafe{write_volatile(frame.add(i),0)}}
  for i in 0..PAGE {check(unsafe{read_volatile(frame.add(i))}==0,"code frame allocation scrub")}
@@ -712,7 +716,7 @@ fn reclaim_code_frame() {
  for i in 0..PAGE {unsafe{write_volatile((frame as *mut u8).add(i),0)}}
  for i in 0..PAGE {check(unsafe{read_volatile((frame as *const u8).add(i))}==0,"code frame scrub")}
  let base=addr_of_mut!(USER_FRAMES) as usize;let offset=frame.checked_sub(base).unwrap_or_else(||halt());
- check(offset%PAGE==0 && offset/PAGE<4,"code frame outside pool");
+ check(offset%PAGE==0 && offset/PAGE<6,"code frame outside pool");
  let bit=1u8<<(offset/PAGE);let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};check(used&bit!=0,"code frame already free");
  unsafe{write_volatile(addr_of_mut!(CODE_FRAME),0);write_volatile(addr_of_mut!(FRAME_BITMAP),used&!bit);write_volatile(addr_of_mut!(CODE_FRAME_SCRUBBED),true)}
 }
@@ -726,7 +730,7 @@ fn external_admission_ready()->bool {
  fixture_policy && unsafe{read_volatile(addr_of!(INITIAL_TASKS_RECLAIMED))}
   && !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} && !unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))}
   && unsafe{read_volatile(addr_of!(TASK_STATE))}==[3,3] && unsafe{read_volatile(addr_of!(FRAME_BITMAP))}==0
-  && unsafe{read_volatile(addr_of!(TASK_FRAMES))}==[0,0] && unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES))}==[0,0]
+  && unsafe{read_volatile(addr_of!(TASK_FRAMES))}==[0,0] && unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES))}==[0,0] && unsafe{read_volatile(addr_of!(PAIR_STACK_FRAMES))}==[0,0]
   && unsafe{read_volatile(addr_of!(GENERIC_IO))}.iter().all(Option::is_none)
   && ipc.full_consumed && ipc.len==0 && ipc.completions[7..9].iter().all(|c|c.id==0)
   && super::mmu::active_root()==super::mmu::root(0)
@@ -752,6 +756,8 @@ fn start_programs(a:&[u8],b:Option<&[u8]>)->Result<(), &'static str> {
  let error=if count==2 {"invalid pair ELF"} else {"invalid ELF"};
  let a=super::loader::parse(a).ok_or(error)?;
  let b=match b {Some(bytes)=>Some(super::loader::parse(bytes).ok_or(error)?),None=>None};
+ // Two-segment images are supported only by independent admission.
+ if a.data.is_some() || b.as_ref().is_some_and(|image|image.data.is_some()) {return Err(error)}
  let first=unsafe{read_volatile(addr_of!(NEXT_INCARNATION))};
  let next=first.checked_add(count as u64).ok_or("incarnation exhausted")?;
  let images=[Some(a),b];let mut data=[0usize;2];let mut code=[0usize;2];
@@ -759,7 +765,7 @@ fn start_programs(a:&[u8],b:Option<&[u8]>)->Result<(), &'static str> {
   let image=images[i].as_ref().unwrap_or_else(||halt());
   data[i]=allocate_task_frame(i);
   let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
-  let slot=(0..4).find(|n|used&(1<<n)==0).unwrap_or_else(||halt());
+  let slot=(0..6).find(|n|used&(1<<n)==0).unwrap_or_else(||halt());
   let ptr=unsafe{addr_of_mut!(USER_FRAMES).cast::<UserStack>().add(slot)} as *mut u8;
   for n in 0..PAGE {unsafe{write_volatile(ptr.add(n),0)}}
   for (n,byte) in image.code.iter().enumerate() {unsafe{write_volatile(ptr.add(n),*byte)}}
@@ -780,6 +786,7 @@ fn start_programs(a:&[u8],b:Option<&[u8]>)->Result<(), &'static str> {
   write_volatile(addr_of_mut!(PAIR_IO_SUBMITTED),[0;2]);write_volatile(addr_of_mut!(PAIR_IO_COMPLETED),[0;2]);write_volatile(addr_of_mut!(PAIR_IO_CANCELLED),[0;2]);
   write_volatile(addr_of_mut!(PAIR_EXIT_CODES),[None;2]);write_volatile(addr_of_mut!(PAIR_MARKERS),[0;2]);
   write_volatile(addr_of_mut!(PAIR_DATA_SCRUBBED),[false;2]);write_volatile(addr_of_mut!(PAIR_CODE_SCRUBBED),[false;2]);
+  write_volatile(addr_of_mut!(PAIR_STACK_SCRUBBED),[false;2]);write_volatile(addr_of_mut!(PAIR_RW_INIT_VERIFIED),[false;2]);write_volatile(addr_of_mut!(PAIR_TWO_SEGMENT),[false;2]);
   write_volatile(addr_of_mut!(PAIR_DONE),false);write_volatile(addr_of_mut!(PAIR_RUN_ID),run_id);
   write_volatile(addr_of_mut!(PAIR_CODE_FRAMES),code);
   write_volatile(addr_of_mut!(PAIR_CODE_LEN),[images[0].as_ref().unwrap_or_else(||halt()).code.len() as u64,images[1].as_ref().map_or(0,|image|image.code.len() as u64)]);
@@ -794,6 +801,14 @@ fn start_programs(a:&[u8],b:Option<&[u8]>)->Result<(), &'static str> {
  }
  Ok(())
 }
+// Rollback only a never-published frame, at a masked service boundary.
+fn free_unpublished_frame(frame:usize) {
+ for i in 0..PAGE {unsafe{write_volatile((frame as *mut u8).add(i),0)}}
+ let offset=frame.checked_sub(addr_of_mut!(USER_FRAMES) as usize).unwrap_or_else(||halt());
+ check(offset%PAGE==0 && offset/PAGE<6,"rollback frame outside pool");
+ let bit=1u8<<(offset/PAGE);let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};check(used&bit!=0,"rollback frame not allocated");
+ unsafe{write_volatile(addr_of_mut!(FRAME_BITMAP),used&!bit)};
+}
 /// Admit one independent ELF into an actually free slot at an EL1 service
 /// boundary. The other slot's frame, registers, scheduling and IPC are intact.
 pub fn start_independent(bytes:&[u8])->Result<(usize,u64), &'static str> {
@@ -802,40 +817,66 @@ pub fn start_independent(bytes:&[u8])->Result<(usize,u64), &'static str> {
  if active && unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {return Err("incompatible active mode")}
  if unsafe{read_volatile(addr_of!(IMAGE_COUNT))}<4 && !unsafe{read_volatile(addr_of!(FIXTURE_PAUSE_REQUESTED))} {return Err("fixture admission not paused")}
  if !unsafe{read_volatile(addr_of!(INITIAL_TASKS_RECLAIMED))} || unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} || super::mmu::active_root()!=super::mmu::root(0) {return Err("process slots unavailable")}
- let states=unsafe{read_volatile(addr_of!(TASK_STATE))};let frames=unsafe{read_volatile(addr_of!(TASK_FRAMES))};let codes=unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES))};
+ let states=unsafe{read_volatile(addr_of!(TASK_STATE))};let frames=unsafe{read_volatile(addr_of!(TASK_FRAMES))};let codes=unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES))};let stacks=unsafe{read_volatile(addr_of!(PAIR_STACK_FRAMES))};
  let ipc=unsafe{&*addr_of!(IPC)};let pending=unsafe{read_volatile(addr_of!(GENERIC_IO))};
  if !ipc.full_consumed {return Err("process slots unavailable")}
- let slot=(0..2).find(|&i|states[i]==3 && frames[i]==0 && codes[i]==0 && pending[i].is_none()
+ let slot=(0..2).find(|&i|states[i]==3 && frames[i]==0 && codes[i]==0 && stacks[i]==0 && pending[i].is_none()
   && ipc.completions[7+i].id==0 && !ipc.queue.iter().flatten().any(|r|r.actor==i)).ok_or("no free process slot")?;
  let peer=1-slot;
  // A live peer must be a real independent READY task at this boundary. Never
  // infer ownership from an old status entry or reuse a partially cleaned slot.
  if active && (states[peer]!=1 || frames[peer]==0 || codes[peer]==0) {return Err("process slots unavailable")}
- if !active && (states!=[3,3] || frames!=[0,0] || codes!=[0,0] || unsafe{read_volatile(addr_of!(FRAME_BITMAP))}!=0 || ipc.len!=0 || ipc.completions[7..9].iter().any(|c|c.id!=0) || pending.iter().any(Option::is_some)) {return Err("process slots unavailable")}
+ if !active && (states!=[3,3] || frames!=[0,0] || codes!=[0,0] || stacks!=[0,0] || unsafe{read_volatile(addr_of!(FRAME_BITMAP))}!=0 || ipc.len!=0 || ipc.completions[7..9].iter().any(|c|c.id!=0) || pending.iter().any(Option::is_some)) {return Err("process slots unavailable")}
  let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
  if active {
   let base=addr_of_mut!(USER_FRAMES) as usize;
-  let bit=|p:usize| -> Option<u8> {let off=p.checked_sub(base)?;if off%PAGE!=0 || off/PAGE>=4 {return None};Some(1u8<<(off/PAGE))};
+  let bit=|p:usize| -> Option<u8> {let off=p.checked_sub(base)?;if off%PAGE!=0 || off/PAGE>=6 {return None};Some(1u8<<(off/PAGE))};
   let Some(data_bit)=bit(frames[peer]) else{return Err("process slots unavailable")};
   let Some(code_bit)=bit(codes[peer]) else{return Err("process slots unavailable")};
-  if data_bit==code_bit || used!=data_bit|code_bit {return Err("process slots unavailable")}
+  let mut expected=data_bit|code_bit;
+  if stacks[peer]!=0 {let Some(bit)=bit(stacks[peer]) else{return Err("process slots unavailable")};if expected&bit!=0 {return Err("process slots unavailable")};expected|=bit}
+  if data_bit==code_bit || used!=expected {return Err("process slots unavailable")}
  }
- if used.count_ones()>2 {return Err("no free process frames")}
  let image=super::loader::parse(bytes).ok_or("invalid ELF")?;
+ let need=if image.data.is_some() {3}else{2};
+ if 6usize.saturating_sub(used.count_ones() as usize)<need {return Err("no free process frames")}
+ if !super::mmu::slot_available(slot) {return Err("process mappings unavailable")}
  let incarnation_id=unsafe{read_volatile(addr_of!(NEXT_INCARNATION))};
  let next=incarnation_id.checked_add(1).ok_or("incarnation exhausted")?;
  let run=unsafe{read_volatile(addr_of!(PAIR_RUN_ID))}.checked_add(1).ok_or("pair run exhausted")?;
  let data=allocate_task_frame(slot);
+ if let Some(rw)=image.data.as_ref() {
+  for (i,byte) in rw.bytes.iter().enumerate() {unsafe{write_volatile((data as *mut u8).add(i),*byte)}}
+  for i in 0..rw.mem_size {let expected=if i<rw.bytes.len() {rw.bytes[i]}else{0};check(unsafe{read_volatile((data as *const u8).add(i))}==expected,"RW initialization")}
+ }
  let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
- let index=(0..4).find(|i|used&(1<<i)==0).unwrap_or_else(||halt());
+ let index=(0..6).find(|i|used&(1<<i)==0).unwrap_or_else(||halt());
  let code=unsafe{addr_of_mut!(USER_FRAMES).cast::<UserStack>().add(index)} as *mut u8;
  for i in 0..PAGE {unsafe{write_volatile(code.add(i),0)}}
  for (i,byte) in image.code.iter().enumerate() {unsafe{write_volatile(code.add(i),*byte)}}
  unsafe{write_volatile(addr_of_mut!(FRAME_BITMAP),used|(1<<index))};
+ let stack=if image.data.is_some() {
+  let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
+  let index=(0..6).find(|i|used&(1<<i)==0).unwrap_or_else(||halt());
+  let p=unsafe{addr_of_mut!(USER_FRAMES).cast::<UserStack>().add(index)} as *mut u8;
+  for i in 0..PAGE {unsafe{write_volatile(p.add(i),0)}}
+  unsafe{write_volatile(addr_of_mut!(FRAME_BITMAP),used|(1<<index))};p as usize
+ }else{0};
  super::mmu::map_task_alias(slot,data);super::mmu::map_task_code(slot,code as usize);
- check(super::mmu::verify_slot(slot,data,code as usize,if active {Some((frames[peer],codes[peer]))}else{None}),"independent mapping verification");
+ if stack!=0 {super::mmu::map_task_stack(slot,stack)}
+ let verified=super::mmu::verify_slot(slot,data,code as usize,if active {Some((frames[peer],codes[peer]))}else{None})
+  && if stack!=0 {super::mmu::verify_stack(slot,stack,if active && stacks[peer]!=0 {Some(stacks[peer])}else{None})}
+     else if active && stacks[peer]!=0 {super::mmu::verify_stack(peer,stacks[peer],None)}else{true};
+ if !verified {
+  if stack!=0 {super::mmu::unmap_task_stack(slot,stack)}
+  super::mmu::unmap_task_code(slot,code as usize);super::mmu::unmap_task_alias(slot,data);
+  for ptr in [data,code as usize,stack] {if ptr!=0 {free_unpublished_frame(ptr)}}
+  unsafe{write_volatile(addr_of_mut!(TASK_FRAMES).cast::<usize>().add(slot),0)};
+  return Err("mapping verification failed")
+ }
  unsafe {
-  let context=frame(slot as u64,super::mmu::ALIAS+PAGE,super::mmu::USER_CODE+image.entry_offset);
+  let stack_top=if stack!=0 {super::mmu::USER_STACK+PAGE}else{super::mmu::ALIAS+PAGE};
+  let context=frame(slot as u64,stack_top,super::mmu::USER_CODE+image.entry_offset);
   if slot==0 {write_volatile(addr_of_mut!(A_FRAME),context)}else{write_volatile(addr_of_mut!(B_FRAME),context)}
   let old=read_volatile(addr_of!(PAIR_LAST_TOKENS).cast::<Option<CompletionToken>>().add(slot));
   write_volatile(addr_of_mut!(PAIR_STALE_TOKENS).cast::<Option<CompletionToken>>().add(slot),old);
@@ -849,6 +890,10 @@ pub fn start_independent(bytes:&[u8])->Result<(usize,u64), &'static str> {
   write_volatile(addr_of_mut!(PAIR_MARKERS).cast::<u64>().add(slot),0);
   write_volatile(addr_of_mut!(PAIR_DATA_SCRUBBED).cast::<bool>().add(slot),false);write_volatile(addr_of_mut!(PAIR_CODE_SCRUBBED).cast::<bool>().add(slot),false);
   write_volatile(addr_of_mut!(PAIR_CODE_FRAMES).cast::<usize>().add(slot),code as usize);
+  write_volatile(addr_of_mut!(PAIR_STACK_FRAMES).cast::<usize>().add(slot),stack);
+  write_volatile(addr_of_mut!(PAIR_STACK_SCRUBBED).cast::<bool>().add(slot),false);
+  write_volatile(addr_of_mut!(PAIR_RW_INIT_VERIFIED).cast::<bool>().add(slot),image.data.is_some());
+  write_volatile(addr_of_mut!(PAIR_TWO_SEGMENT).cast::<bool>().add(slot),image.data.is_some());
   write_volatile(addr_of_mut!(PAIR_CODE_LEN).cast::<u64>().add(slot),image.code.len() as u64);
   write_volatile(addr_of_mut!(PAIR_INCARNATIONS).cast::<u64>().add(slot),incarnation_id);
   write_volatile(addr_of_mut!(TASK_INCARNATIONS).cast::<u64>().add(slot),incarnation_id);
@@ -903,7 +948,7 @@ pub fn pair_status()->Value {json!({
  "slot_states":unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|v|match v {1=>"ready",2=>"running",3=>"exited",_=>"invalid"}),
  "io_submitted":unsafe{read_volatile(addr_of!(PAIR_IO_SUBMITTED))},"io_completed":unsafe{read_volatile(addr_of!(PAIR_IO_COMPLETED))},"io_cancelled_before_apply":unsafe{read_volatile(addr_of!(PAIR_IO_CANCELLED))},"irq_counts":unsafe{read_volatile(addr_of!(PAIR_IRQS))},"exit_codes":unsafe{read_volatile(addr_of!(PAIR_EXIT_CODES))},"outcomes":unsafe{read_volatile(addr_of!(PAIR_OUTCOMES))},"barrier_seen":unsafe{read_volatile(addr_of!(PAIR_BARRIER_SEEN))},"live_markers":if unsafe{read_volatile(addr_of!(PAIR_MODE))}==3 {None}else{Some(unsafe{read_volatile(addr_of!(PAIR_LIVE_MARKERS))})},
  "markers":if unsafe{read_volatile(addr_of!(PAIR_MODE))}==3 {None}else{Some(unsafe{read_volatile(addr_of!(PAIR_MARKERS))})},"data_scrubbed":unsafe{read_volatile(addr_of!(PAIR_DATA_SCRUBBED))},
- "code_scrubbed":unsafe{read_volatile(addr_of!(PAIR_CODE_SCRUBBED))},"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()
+ "code_scrubbed":unsafe{read_volatile(addr_of!(PAIR_CODE_SCRUBBED))},"stack_scrubbed":unsafe{read_volatile(addr_of!(PAIR_STACK_SCRUBBED))},"rw_init_verified":unsafe{read_volatile(addr_of!(PAIR_RW_INIT_VERIFIED))},"two_segment":unsafe{read_volatile(addr_of!(PAIR_TWO_SEGMENT))},"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()
 })}
 #[no_mangle]
 extern "C" fn pair_irq_check(f:*const Frame)->u64 {
@@ -915,7 +960,9 @@ extern "C" fn pair_irq_check(f:*const Frame)->u64 {
  let count=unsafe{read_volatile(p)}.checked_add(1).unwrap_or_else(||halt());
  unsafe{write_volatile(p,count)};
  let timeout=count>256 && unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3;
- if frame.spsr&0xf!=0 || frame.elr<lo || frame.elr>=lo+len || frame.sp<super::mmu::ALIAS as u64 || frame.sp>(super::mmu::ALIAS+PAGE) as u64 || timeout {
+ let stack=unsafe{read_volatile(addr_of!(PAIR_STACK_FRAMES).cast::<usize>().add(actor))};
+ let sp_lo=if stack!=0 {super::mmu::USER_STACK}else{super::mmu::ALIAS} as u64;
+ if frame.spsr&0xf!=0 || frame.elr<lo || frame.elr>=lo+len || frame.sp<sp_lo || frame.sp>sp_lo+PAGE as u64 || timeout {
   unsafe{write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(actor),if timeout {3}else{2})};return 1
  }
  0
@@ -934,20 +981,23 @@ fn reclaim_pair(actor:usize) {
  let c=&mut state.completions[7+actor];
  check(c.id==0 || (c.actor==actor && c.incarnation==generation),"pair completion ownership");
  *c=EMPTY_COMPLETION;clear_generic_io(actor);
- let data=task_frame(actor);let code=unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES).cast::<usize>().add(actor))};
+ let data=task_frame(actor);let code=unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES).cast::<usize>().add(actor))};let stack=unsafe{read_volatile(addr_of!(PAIR_STACK_FRAMES).cast::<usize>().add(actor))};
  check(code!=0,"pair missing code");let marker=if unsafe{read_volatile(addr_of!(PAIR_MODE))}==3 {0}else{unsafe{read_volatile(data as *const u64)}};
+ if stack!=0 {super::mmu::unmap_task_stack(actor,stack)}
  super::mmu::unmap_task_code(actor,code);super::mmu::unmap_task_alias(actor,data);
- for ptr in [data,code] {
+ for ptr in [data,code,stack] {if ptr==0 {continue}
   for n in 0..PAGE {unsafe{write_volatile((ptr as *mut u8).add(n),0)}}
   for n in 0..PAGE {check(unsafe{read_volatile((ptr as *const u8).add(n))}==0,"pair frame scrub")}
   let offset=ptr.checked_sub(addr_of_mut!(USER_FRAMES) as usize).unwrap_or_else(||halt());
-  check(offset%PAGE==0 && offset/PAGE<4,"pair frame outside pool");
+  check(offset%PAGE==0 && offset/PAGE<6,"pair frame outside pool");
   let bit=1u8<<(offset/PAGE);let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};check(used&bit!=0,"pair frame already free");
   unsafe{write_volatile(addr_of_mut!(FRAME_BITMAP),used&!bit)};
  }
  unsafe {
   write_volatile(addr_of_mut!(TASK_FRAMES).cast::<usize>().add(actor),0);
   write_volatile(addr_of_mut!(PAIR_CODE_FRAMES).cast::<usize>().add(actor),0);
+  write_volatile(addr_of_mut!(PAIR_STACK_FRAMES).cast::<usize>().add(actor),0);
+  write_volatile(addr_of_mut!(PAIR_STACK_SCRUBBED).cast::<bool>().add(actor),stack!=0);
   write_volatile(addr_of_mut!(PAIR_MARKERS).cast::<u64>().add(actor),marker);
   write_volatile(addr_of_mut!(PAIR_DATA_SCRUBBED).cast::<bool>().add(actor),true);
   write_volatile(addr_of_mut!(PAIR_CODE_SCRUBBED).cast::<bool>().add(actor),true);
@@ -971,7 +1021,7 @@ fn reclaim_exited(actor:usize) {
  unsafe{write_volatile(addr_of_mut!(FRAME_SCRUBBED).cast::<bool>().add(actor),true)};
  let base=addr_of_mut!(USER_FRAMES) as usize;
  let offset=frame.checked_sub(base).unwrap_or_else(||halt());
- check(offset%PAGE==0 && offset/PAGE<4,"frame outside pool");
+ check(offset%PAGE==0 && offset/PAGE<6,"frame outside pool");
  let bit=1u8<<(offset/PAGE);
  if actor==0 {
   if unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} {
@@ -1088,6 +1138,7 @@ pub fn run_slice(programs:[Option<&[u8]>;4]) {
   if index>=4 || unsafe{read_volatile(addr_of!(FIXTURE_PAUSE_REQUESTED))} {return}
   let Some(bytes)=programs[index] else {unsafe{write_volatile(addr_of_mut!(LOADER_REJECTED),true)};return};
   let Some(image)=super::loader::parse(bytes) else {unsafe{write_volatile(addr_of_mut!(LOADER_REJECTED),true)};return};
+  if image.data.is_some() {unsafe{write_volatile(addr_of_mut!(LOADER_REJECTED),true)};return}
   unsafe{write_volatile(addr_of_mut!(LOADER_REJECTED),false)};
   admit_spawned_task(image.code,image.entry_offset);states_before=unsafe{read_volatile(addr_of!(TASK_STATE))};
  }
@@ -1133,7 +1184,7 @@ pub fn status()->Value {
  let states=unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|s|match s {1=>"ready",2=>"running",3=>"exited",_=>"invalid"});
  let outcomes=unsafe{read_volatile(addr_of!(IMAGE_OUTCOMES))}.map(|v|match v {0=>"pending",1=>"success",2=>"fault",3=>"bad_svc",4=>"file_error",5=>"timeout",6=>"exit_error",_=>"invalid"});
  let reclaimed=[unsafe{read_volatile(addr_of!(IMAGE1_RECLAIMED))},unsafe{read_volatile(addr_of!(IMAGE2_RECLAIMED))},unsafe{read_volatile(addr_of!(IMAGE3_RECLAIMED))},unsafe{read_volatile(addr_of!(IMAGE4_RECLAIMED))}];
- json!({"validated":done,"ticks":8,"el":"EL0","events":events,"timer":"disabled","interrupts":"masked","slice_ticks":slice_ticks,"slice_counts":counts,"mode":"service-boundary","private_values":values,"service_asid":super::mmu::active_root()>>48,"cross_code_read_denied":unsafe{read_volatile(addr_of!(CROSS_READ_DENIED))},"task_states":states,"frame_scrubbed":unsafe{read_volatile(addr_of!(FRAME_SCRUBBED))},"alias_removed":unsafe{read_volatile(addr_of!(ALIAS_REMOVED))},"dispatches":unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))},"loader_rejected":unsafe{read_volatile(addr_of!(LOADER_REJECTED))},"image_loaded":unsafe{read_volatile(addr_of!(IMAGE_LOADED))},"code_alias_removed":unsafe{read_volatile(addr_of!(CODE_ALIAS_REMOVED))},"code_frame_scrubbed":unsafe{read_volatile(addr_of!(CODE_FRAME_SCRUBBED))},"image_outcomes":outcomes,"image_exit_codes":unsafe{read_volatile(addr_of!(IMAGE_EXIT_CODES))},"image_irq_x19_max_seen":unsafe{read_volatile(addr_of!(IMAGE_IRQ_X19_MAX_SEEN))},"images_reclaimed":reclaimed,"completions_revoked":unsafe{read_volatile(addr_of!(COMPLETIONS_REVOKED))},"pending_cancelled":unsafe{read_volatile(addr_of!(PENDING_CANCELLED))},"stale_response_blocked":unsafe{read_volatile(addr_of!(STALE_RESPONSE_BLOCKED))},"image_incarnations":unsafe{read_volatile(addr_of!(IMAGE_INCARNATIONS))},"stale_generation_rejected":unsafe{read_volatile(addr_of!(STALE_GENERATION_REJECTED))},"image_count":unsafe{read_volatile(addr_of!(IMAGE_COUNT))},"image1_exited":unsafe{read_volatile(addr_of!(IMAGE1_EXITED))},"image2_exited":unsafe{read_volatile(addr_of!(IMAGE2_EXITED))},"image1_reclaimed":unsafe{read_volatile(addr_of!(IMAGE1_RECLAIMED))},"image2_reclaimed":unsafe{read_volatile(addr_of!(IMAGE2_RECLAIMED))},"spawn_admitted":unsafe{read_volatile(addr_of!(SPAWN_ADMITTED))},"spawn_executed":unsafe{read_volatile(addr_of!(SPAWN_EXECUTED))},"spawn_failed":unsafe{read_volatile(addr_of!(SPAWN_FAILED))},"spawn_exited":unsafe{read_volatile(addr_of!(SPAWN_EXITED))},"spawn_interrupts":unsafe{read_volatile(addr_of!(SPAWN_TICKS))},"spawn_irq_x19_max_seen":unsafe{read_volatile(addr_of!(SPAWN_IRQ_X19_MAX_SEEN))},"spawn_reused_frame":unsafe{read_volatile(addr_of!(SPAWN_REUSED))},"frame_pool_capacity":4,"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()})
+ json!({"validated":done,"ticks":8,"el":"EL0","events":events,"timer":"disabled","interrupts":"masked","slice_ticks":slice_ticks,"slice_counts":counts,"mode":"service-boundary","private_values":values,"service_asid":super::mmu::active_root()>>48,"cross_code_read_denied":unsafe{read_volatile(addr_of!(CROSS_READ_DENIED))},"task_states":states,"frame_scrubbed":unsafe{read_volatile(addr_of!(FRAME_SCRUBBED))},"alias_removed":unsafe{read_volatile(addr_of!(ALIAS_REMOVED))},"dispatches":unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))},"loader_rejected":unsafe{read_volatile(addr_of!(LOADER_REJECTED))},"image_loaded":unsafe{read_volatile(addr_of!(IMAGE_LOADED))},"code_alias_removed":unsafe{read_volatile(addr_of!(CODE_ALIAS_REMOVED))},"code_frame_scrubbed":unsafe{read_volatile(addr_of!(CODE_FRAME_SCRUBBED))},"image_outcomes":outcomes,"image_exit_codes":unsafe{read_volatile(addr_of!(IMAGE_EXIT_CODES))},"image_irq_x19_max_seen":unsafe{read_volatile(addr_of!(IMAGE_IRQ_X19_MAX_SEEN))},"images_reclaimed":reclaimed,"completions_revoked":unsafe{read_volatile(addr_of!(COMPLETIONS_REVOKED))},"pending_cancelled":unsafe{read_volatile(addr_of!(PENDING_CANCELLED))},"stale_response_blocked":unsafe{read_volatile(addr_of!(STALE_RESPONSE_BLOCKED))},"image_incarnations":unsafe{read_volatile(addr_of!(IMAGE_INCARNATIONS))},"stale_generation_rejected":unsafe{read_volatile(addr_of!(STALE_GENERATION_REJECTED))},"image_count":unsafe{read_volatile(addr_of!(IMAGE_COUNT))},"image1_exited":unsafe{read_volatile(addr_of!(IMAGE1_EXITED))},"image2_exited":unsafe{read_volatile(addr_of!(IMAGE2_EXITED))},"image1_reclaimed":unsafe{read_volatile(addr_of!(IMAGE1_RECLAIMED))},"image2_reclaimed":unsafe{read_volatile(addr_of!(IMAGE2_RECLAIMED))},"spawn_admitted":unsafe{read_volatile(addr_of!(SPAWN_ADMITTED))},"spawn_executed":unsafe{read_volatile(addr_of!(SPAWN_EXECUTED))},"spawn_failed":unsafe{read_volatile(addr_of!(SPAWN_FAILED))},"spawn_exited":unsafe{read_volatile(addr_of!(SPAWN_EXITED))},"spawn_interrupts":unsafe{read_volatile(addr_of!(SPAWN_TICKS))},"spawn_irq_x19_max_seen":unsafe{read_volatile(addr_of!(SPAWN_IRQ_X19_MAX_SEEN))},"spawn_reused_frame":unsafe{read_volatile(addr_of!(SPAWN_REUSED))},"frame_pool_capacity":6,"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()})
 }
 
 global_asm!(r#"

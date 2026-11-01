@@ -3,7 +3,7 @@
 use alloc::vec::Vec;
 use serde_json::{json,Value};
 
-pub const MAX_IMAGE:usize=120+4096;
+pub const MAX_IMAGE:usize=16384;
 pub const MAX_CHUNK:usize=512;
 
 pub struct Staging {

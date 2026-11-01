@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """QEMU FIFO-requested synthetic snapshot save and startup restore."""
-import argparse,json,tempfile,subprocess,time
+import argparse,json,struct,tempfile,subprocess,time
 from pathlib import Path
 from vm_harness import Guest,SIZE,create,sha,fnv
 
@@ -35,6 +35,18 @@ def stage_program(g,image):
   g.call('upload_chunk',{'id':upload_id,'offset':offset,'hex':image[offset:offset+512].hex()})
  if g.call('upload_seal',{'id':upload_id})!={'sealed':True}:raise RuntimeError('program fixture upload failed')
  return upload_id
+
+def compact_two_segment(elf):
+ # Repack the actual linked segments only for negative loader tests. Preserve
+ # their virtual addresses and contents; remove unneeded section headers.
+ if len(elf)<176 or struct.unpack_from('<H',elf,56)[0]!=2:raise RuntimeError('expected two-segment ELF')
+ out=bytearray(elf[:176]);struct.pack_into('<Q',out,40,0);struct.pack_into('<HHH',out,58,0,0,0)
+ for i in range(2):
+  at=64+i*56;off=struct.unpack_from('<Q',elf,at+8)[0];size=struct.unpack_from('<Q',elf,at+32)[0]
+  segment=elf[off:off+size]
+  if len(segment)!=size:raise RuntimeError('bad fixture segment bounds')
+  struct.pack_into('<Q',out,at+8,len(out));struct.pack_into('<Q',out,at+48,1);out.extend(segment)
+ return bytes(out)
 
 def wait_rust_program(g,admitted):
  state=g.wait_independent(lambda s:s.get('slot_states',[None,None])[0]=='exited','stored Rust ELF exited')
@@ -580,11 +592,15 @@ def main():
   g=Guest(a.qemu,guest,disk,tmp,30,out,a.transport)
   try:
    g.progress('before staged Rust ELF',timeout_image=True,expected_exit_code=0)
-   reject(g,'upload_begin',{'size':4217,'checksum':'0000000000000000'},'upload size outside bound')
-   # A coherent RX segment larger than one page cannot enter staging.
+   reject(g,'upload_begin',{'size':16385,'checksum':'0000000000000000'},'upload size outside bound')
+   # A coherent legacy RX segment larger than one page enters staging but
+   # must fail loader validation before it can be admitted.
    too_large=bytearray(rust_elf)+bytes.fromhex('1f2003d5')
    too_large[96:104]=(4100).to_bytes(8,'little');too_large[104:112]=(4100).to_bytes(8,'little')
-   reject(g,'upload_begin',{'size':len(too_large),'checksum':fnv64(too_large)},'upload size outside bound')
+   too_large_id=g.call('upload_begin',{'size':len(too_large),'checksum':fnv64(too_large)})['id']
+   for offset in range(0,len(too_large),512):g.call('upload_chunk',{'id':too_large_id,'offset':offset,'hex':too_large[offset:offset+512].hex()})
+   reject(g,'upload_seal',{'id':too_large_id},'invalid staged ELF')
+   g.call('upload_reset',{'id':too_large_id})
    checksum=fnv64(rust_elf)
    damaged=bytearray(rust_elf);damaged[-1]^=1
    bad_id=g.call('upload_begin',{'size':len(damaged),'checksum':checksum})['id']
@@ -694,6 +710,56 @@ def main():
   duplicate=bytearray(program_base);record=bytearray(duplicate[30*512:40*512]);record[8:16]=(1).to_bytes(8,'little')
   payload_len=int.from_bytes(record[16:20],'little');record[20:28]=int(fnv64(record[8:20]+record[512:512+payload_len]),16).to_bytes(8,'little');duplicate[30*512:40*512]=record
   program_case(38,duplicate,['valid','valid'],'invalid','duplicate program generations','duplicate program generations')
+  # Real linked Rust executable with RX, RW/BSS and a separate guarded stack.
+  linked=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-two-segment.hex').read_text().strip())
+  if not 4216<len(linked)<=16384:raise RuntimeError('linked Rust ELF does not exercise extended staging')
+  g=Guest(a.qemu,guest,disk,tmp,41,out,a.transport)
+  try:
+   g.progress('before linked Rust tasks',timeout_image=True,expected_exit_code=0);g.wait_boot_identity()
+   compact=compact_two_segment(linked)
+   # A compact repack of the genuine linked segments is accepted first;
+   # each subsequent image changes one structural property at a time.
+   baseline=stage_program(g,compact);g.call('upload_reset',{'id':baseline})
+   malformed=[]
+   bad=bytearray(compact);struct.pack_into('<I',bad,124,7);malformed.append(bad) # RWX
+   bad=bytearray(compact);struct.pack_into('<Q',bad,160,4);malformed.append(bad) # filesz > memsz
+   bad=bytearray(compact);struct.pack_into('<Q',bad,160,4097);malformed.append(bad) # RW beyond page
+   bad=bytearray(compact);struct.pack_into('<Q',bad,128,struct.unpack_from('<Q',bad,72)[0]);malformed.append(bad) # file overlap
+   bad=bytearray(compact);struct.pack_into('<Q',bad,24,0x50000000);malformed.append(bad) # entry outside RX
+   bad=bytearray(compact);struct.pack_into('<Q',bad,168,4096);malformed.append(bad) # bad p_align congruence
+   bad=bytearray(compact);struct.pack_into('<I',bad,120,3);malformed.append(bad) # PT_INTERP
+   for image in malformed:
+    invalid_id=g.call('upload_begin',{'size':len(image),'checksum':fnv64(image)})['id']
+    for offset in range(0,len(image),512):g.call('upload_chunk',{'id':invalid_id,'offset':offset,'hex':image[offset:offset+512].hex()})
+    reject(g,'upload_seal',{'id':invalid_id},'invalid staged ELF')
+    g.call('upload_reset',{'id':invalid_id})
+   for side in ('a','b'):
+    if not g.call('file_put',{'name':side+'-gate','data':'0'}).get('readback_verified'):raise RuntimeError('linked Rust gate not saved')
+   upload_id=stage_program(g,linked)
+   before=disk.read_bytes();reject(g,'program_store_commit',{'id':upload_id},'invalid staged ELF')
+   if disk.read_bytes()!=before:raise RuntimeError('oversized persistent program modified disk')
+   task_a=g.call('process_spawn_staged',{'id':upload_id})
+   if task_a.get('slot')!=0:raise RuntimeError('linked Rust A admission failed')
+   state=g.wait_independent(lambda s:s.get('slot_states',[None,None])[0]=='ready' and s.get('io_completed',[0,0])[0]>=2,'linked Rust A active')
+   task_b=g.call('process_spawn_staged',{'id':upload_id})
+   if task_b.get('slot')!=1 or task_b.get('incarnation',0)<=task_a.get('incarnation',0):raise RuntimeError('linked Rust B admission failed')
+   state=g.wait_independent(lambda s:s.get('slot_states')==['ready','ready'] and min(s.get('io_completed',[0,0]))>=2,'both linked Rust tasks active')
+   if state.get('incarnations')!=[task_a['incarnation'],task_b['incarnation']] or state.get('two_segment')!=[True,True] or state.get('rw_init_verified')!=[True,True] or state.get('slot_mappings_verified')!=[True,True] or state.get('frame_pool_assigned')!=6:raise RuntimeError('linked Rust mappings or initialization invalid: '+str(state))
+   for side in ('a','b'):
+    if g.call('file_get',{'name':side+'-rust'})!={'name':side+'-rust','hex':'52'}:raise RuntimeError('linked Rust task did not write its file')
+   b_reads=state['io_completed'][1]
+   if not g.call('file_put',{'name':'a-gate','data':'1'}).get('readback_verified'):raise RuntimeError('linked Rust A release failed')
+   state=g.wait_independent(lambda s:s.get('slot_states')==['exited','ready'] and s.get('io_completed',[0,0])[1]>b_reads,'linked Rust B active after A exit')
+   if state.get('incarnations')!=[task_a['incarnation'],task_b['incarnation']] or state.get('exit_codes',[None,None])[0]!=0 or state.get('stack_scrubbed')!=[True,False] or state.get('frame_pool_assigned')!=3:raise RuntimeError('linked Rust A cleanup disturbed B: '+str(state))
+   if not g.call('file_put',{'name':'b-gate','data':'1'}).get('readback_verified'):raise RuntimeError('linked Rust B release failed')
+   state=g.wait_independent(lambda s:s.get('slot_states')==['exited','exited'],'linked Rust tasks exited')
+   if state.get('outcomes')!=[1,1] or state.get('exit_codes')!=[0,0] or state.get('data_scrubbed')!=[True,True] or state.get('code_scrubbed')!=[True,True] or state.get('stack_scrubbed')!=[True,True] or state.get('frame_pool_assigned')!=0:raise RuntimeError('linked Rust teardown invalid: '+str(state))
+   g.call('upload_reset',{'id':upload_id})
+   for side in ('a','b'):
+    for suffix in ('-gate','-rust'):
+     if not g.call('file_delete',{'name':side+suffix}).get('readback_verified'):raise RuntimeError('linked Rust fixture cleanup failed')
+   traces.append(g.trace);states.append(g.call('storage_status',{}))
+  finally:g.close()
   if a.exercise_storage_fault:
    # A postcommit error makes the shared disk write state uncertain.  The
    # restarted VM reconciles this disposable program store from both records.
