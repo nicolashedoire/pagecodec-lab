@@ -19,6 +19,7 @@ static mut GRANT_ACTIVE:bool=false;
 static mut GRANT_ID:u64=0;
 static mut GRANT_NEXT:u64=1;
 static mut GRANT_IDENTITIES:[u64;2]=[0;2];
+static mut GRANT_SLOTS:[usize;2]=[0;2];
 #[cfg(feature="storage-fault-test")] static mut RX_HOLD:[bool;2]=[false;2];
 #[cfg(feature="storage-fault-test")] static mut RX_HELD_READY:[bool;2]=[false;2];
 /// Test only: retain the device-owned RX buffer; never inspect it while held.
@@ -48,17 +49,19 @@ fn take_slot(base:*mut [Option<Packet>;2],actor:usize)->Option<Packet> {
 }
 /// Open and close are called only by the EL1 service after validating the
 /// current boot ID and both live task incarnations. A grant is not a secret.
-pub fn open_grant(ids:[u64;2])->Result<u64,&'static str> {
+pub fn open_grant(slots:[usize;2],ids:[u64;2])->Result<u64,&'static str> {
+ if slots[0]>=3 || slots[1]>=3 || slots[0]>=slots[1] || ids[0]==0 || ids[1]==0 {return Err("invalid network slots")}
  if unsafe{read_volatile(addr_of!(GRANT_ACTIVE))} {return Err("network grant already active")}
  if !available() {return Err("network unavailable")}
  let id=unsafe{read_volatile(addr_of!(GRANT_NEXT))};
  let next=id.checked_add(1).ok_or("network grant ids exhausted")?;
  for i in 0..2 {if unsafe{read_volatile(addr_of!(TX).cast::<Option<Packet>>().add(i))}.is_some() || unsafe{read_volatile(addr_of!(RX).cast::<Option<Packet>>().add(i))}.is_some() {return Err("network queues not clean")}}
- unsafe{write_volatile(addr_of_mut!(GRANT_IDENTITIES),ids);write_volatile(addr_of_mut!(GRANT_ID),id);write_volatile(addr_of_mut!(GRANT_NEXT),next);write_volatile(addr_of_mut!(GRANT_ACTIVE),true)};Ok(id)
+ unsafe{write_volatile(addr_of_mut!(GRANT_SLOTS),slots);write_volatile(addr_of_mut!(GRANT_IDENTITIES),ids);write_volatile(addr_of_mut!(GRANT_ID),id);write_volatile(addr_of_mut!(GRANT_NEXT),next);write_volatile(addr_of_mut!(GRANT_ACTIVE),true)};Ok(id)
 }
-pub fn grant_for(ids:[u64;2])->Option<u64> {
- if !unsafe{read_volatile(addr_of!(GRANT_ACTIVE))} || unsafe{read_volatile(addr_of!(GRANT_IDENTITIES))}!=ids {None}
- else {Some(unsafe{read_volatile(addr_of!(GRANT_ID))})}
+/// The binding is public control metadata, not authentication.
+pub fn binding()->Option<([usize;2],[u64;2],u64)> {
+ if !unsafe{read_volatile(addr_of!(GRANT_ACTIVE))} {return None}
+ Some((unsafe{read_volatile(addr_of!(GRANT_SLOTS))},unsafe{read_volatile(addr_of!(GRANT_IDENTITIES))},unsafe{read_volatile(addr_of!(GRANT_ID))}))
 }
 fn purge_queues() {
  for actor in 0..2 {for base in [addr_of_mut!(TX),addr_of_mut!(RX)] {
@@ -68,7 +71,7 @@ fn purge_queues() {
 pub fn close_grant(id:u64)->Result<(),&'static str> {
  if !unsafe{read_volatile(addr_of!(GRANT_ACTIVE))} {return Err("network grant not active")}
  if id==0 || unsafe{read_volatile(addr_of!(GRANT_ID))}!=id {return Err("stale network grant")}
- unsafe{write_volatile(addr_of_mut!(GRANT_ACTIVE),false);write_volatile(addr_of_mut!(GRANT_IDENTITIES),[0;2])};
+ unsafe{write_volatile(addr_of_mut!(GRANT_ACTIVE),false);write_volatile(addr_of_mut!(GRANT_SLOTS),[0;2]);write_volatile(addr_of_mut!(GRANT_IDENTITIES),[0;2])};
  purge_queues();Ok(())
 }
 pub fn available()->bool {(unsafe{read_volatile(addr_of!(AVAILABLE))})==[true,true]}
@@ -84,25 +87,16 @@ pub fn discard(actor:usize) {if actor<2 && take_slot(addr_of_mut!(RX),actor).is_
 /// Remove software queues involving an exiting incarnation. DMA in-flight is
 /// not cancelled; any resulting late frame fails boot/incarnation validation.
 pub fn revoke(actor:usize,incarnation:u64) {
- if actor>=2{return}
- if unsafe{read_volatile(addr_of!(GRANT_ACTIVE))} && unsafe{read_volatile(addr_of!(GRANT_IDENTITIES).cast::<u64>().add(actor))}==incarnation {
-  unsafe{write_volatile(addr_of_mut!(GRANT_ACTIVE),false);write_volatile(addr_of_mut!(GRANT_IDENTITIES),[0;2])};purge_queues();
- }
- for index in 0..2 {
-  for tx in [true,false] {
-   let base=if tx {addr_of_mut!(TX)}else{addr_of_mut!(RX)};
-   let p=unsafe{base.cast::<Option<Packet>>().add(index)};
-   let matches=unsafe{read_volatile(p)}.is_some_and(|packet| {
-    let source_actor=if tx {index}else{1-index};
-    (source_actor==actor && packet.source==incarnation) || (1-source_actor==actor && packet.destination==incarnation)
-   });
-   if matches {take_slot(base,index);inc(addr_of_mut!(DROPPED),index)}
-  }
- }
+ let Some((slots,ids,_))=binding() else{return};
+ let Some(port)=slots.iter().position(|slot|*slot==actor) else{return};
+ if ids[port]!=incarnation {return}
+ unsafe{write_volatile(addr_of_mut!(GRANT_ACTIVE),false);write_volatile(addr_of_mut!(GRANT_SLOTS),[0;2]);write_volatile(addr_of_mut!(GRANT_IDENTITIES),[0;2])};
+ // DMA operations already submitted retain their buffers until completion.
+ purge_queues();
 }
 pub fn status()->Value {
  let tx=unsafe{&*addr_of!(TX)}.each_ref().map(Option::is_some);let rx=unsafe{&*addr_of!(RX)}.each_ref().map(Option::is_some);
- #[allow(unused_mut)] let mut out=json!({"available":available(),"grant_active":unsafe{read_volatile(addr_of!(GRANT_ACTIVE))},"grant_generation":unsafe{read_volatile(addr_of!(GRANT_ID))},"grant_incarnations":unsafe{read_volatile(addr_of!(GRANT_IDENTITIES))},"ports":unsafe{read_volatile(addr_of!(AVAILABLE))},"tx_queued":tx,"rx_queued":rx,"tx_submitted":unsafe{read_volatile(addr_of!(TX_SUBMITTED))},"tx_completed":unsafe{read_volatile(addr_of!(TX_COMPLETED))},"rx_accepted":unsafe{read_volatile(addr_of!(RX_ACCEPTED))},"rx_delivered":unsafe{read_volatile(addr_of!(RX_DELIVERED))},"dropped":unsafe{read_volatile(addr_of!(DROPPED))}});
+ #[allow(unused_mut)] let mut out=json!({"available":available(),"grant_active":unsafe{read_volatile(addr_of!(GRANT_ACTIVE))},"grant_generation":unsafe{read_volatile(addr_of!(GRANT_ID))},"grant_slots":binding().map(|(slots,_,_)|slots),"grant_incarnations":unsafe{read_volatile(addr_of!(GRANT_IDENTITIES))},"ports":unsafe{read_volatile(addr_of!(AVAILABLE))},"tx_queued":tx,"rx_queued":rx,"tx_submitted":unsafe{read_volatile(addr_of!(TX_SUBMITTED))},"tx_completed":unsafe{read_volatile(addr_of!(TX_COMPLETED))},"rx_accepted":unsafe{read_volatile(addr_of!(RX_ACCEPTED))},"rx_delivered":unsafe{read_volatile(addr_of!(RX_DELIVERED))},"dropped":unsafe{read_volatile(addr_of!(DROPPED))}});
  #[cfg(feature="storage-fault-test")] {out["rx_held_ready"]=json!(unsafe{read_volatile(addr_of!(RX_HELD_READY))});}
  out
 }
@@ -172,8 +166,8 @@ impl<'a> Network<'a> {
    if !port.failed && port.tx.is_none() && port.driver.can_send() {
     let queued=unsafe{read_volatile(addr_of!(TX).cast::<Option<Packet>>().add(actor))};
     if let Some(packet)=queued {
-     let live=crate::el0::network_identities();let boot=crate::boot_identity::identifier();
-     if live.is_none_or(|ids|ids[actor]!=packet.source || ids[1-actor]!=packet.destination || grant_for(ids)!=Some(packet.grant)) || boot.is_none() {
+     let grant=binding();let boot=crate::boot_identity::identifier();
+     if grant.is_none_or(|(slots,ids,id)|crate::el0::network_identities(slots)!=Some(ids) || ids[actor]!=packet.source || ids[1-actor]!=packet.destination || id!=packet.grant) || boot.is_none() {
       take_slot(addr_of_mut!(TX),actor);inc(addr_of_mut!(DROPPED),actor);
      } else {
       let ptr=unsafe{addr_of_mut!(TX_BYTES).cast::<[u8;BUF]>().add(actor).cast::<u8>()};
@@ -198,10 +192,11 @@ impl<'a> Network<'a> {
 }
 fn accept_frame(actor:usize,frame:&[u8]) {
  let Some(boot)=crate::boot_identity::identifier() else{inc(addr_of_mut!(DROPPED),actor);return};
- let Some(ids)=crate::el0::network_identities() else{inc(addr_of_mut!(DROPPED),actor);return};
+ let Some((slots,ids,active_grant))=binding() else{inc(addr_of_mut!(DROPPED),actor);return};
+ if crate::el0::network_identities(slots)!=Some(ids) {inc(addr_of_mut!(DROPPED),actor);return}
  if frame.len()<ETH+META || frame[..6]!=MAC[actor] || frame[6..12]!=MAC[1-actor] || frame[12..14]!=[0x88,0xb5] || &frame[14..18]!=b"CNET" || frame[18..34]!=boot {inc(addr_of_mut!(DROPPED),actor);return}
  let src=u64::from_le_bytes(frame[34..42].try_into().unwrap());let dst=u64::from_le_bytes(frame[42..50].try_into().unwrap());let grant=u64::from_le_bytes(frame[50..58].try_into().unwrap());let len=usize::from(frame[58]);
- if src!=ids[1-actor] || dst!=ids[actor] || grant_for(ids)!=Some(grant) || len==0 || len>MAX || 59+len>frame.len() {inc(addr_of_mut!(DROPPED),actor);return}
+ if src!=ids[1-actor] || dst!=ids[actor] || active_grant!=grant || len==0 || len>MAX || 59+len>frame.len() {inc(addr_of_mut!(DROPPED),actor);return}
  let p=unsafe{addr_of_mut!(RX).cast::<Option<Packet>>().add(actor)};
  if unsafe{read_volatile(p)}.is_some() {inc(addr_of_mut!(DROPPED),actor);return}
  let mut packet=Packet{source:src,destination:dst,grant,len,bytes:[0;MAX]};packet.bytes[..len].copy_from_slice(&frame[59..59+len]);

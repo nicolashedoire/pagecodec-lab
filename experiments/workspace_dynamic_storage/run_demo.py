@@ -1186,7 +1186,7 @@ def main():
    state=g.wait_independent(lambda s:s.get('slot_states')==['exited','exited'],'VirtIO network round trips')
    if state.get('incarnations')!=[task_a['incarnation'],task_b['incarnation']] or state.get('outcomes')!=[1,1] or state.get('exit_codes')!=[0,0] or state.get('data_scrubbed')!=[True,True] or state.get('code_scrubbed')!=[True,True] or state.get('stack_scrubbed')!=[True,True] or state.get('frame_pool_assigned')!=0:raise RuntimeError('network exchange or process cleanup failed: '+str(state))
    network_status=g.call('network_status',{})
-   keys={'available','ports','grant_active','grant_generation','grant_incarnations','tx_queued','rx_queued','tx_submitted','tx_completed','rx_accepted','rx_delivered','dropped'}
+   keys={'available','ports','grant_active','grant_generation','grant_slots','grant_incarnations','tx_queued','rx_queued','tx_submitted','tx_completed','rx_accepted','rx_delivered','dropped'}
    if a.exercise_storage_fault:keys.add('rx_held_ready')
    expected_accepted=[2,2] if a.exercise_storage_fault else [2,3]
    if set(network_status)!=keys or network_status.get('grant_active') is not False or network_status.get('tx_queued')!=[False,False] or network_status.get('rx_queued')!=[False,False] or network_status.get('tx_submitted')!=[3,2] or network_status.get('tx_completed')!=[3,2] or network_status.get('rx_accepted')!=expected_accepted or network_status.get('rx_delivered')!=[2,2] or network_status.get('dropped',[0,0])[1]<1:raise RuntimeError('VirtIO queues or grant cleanup invalid: '+str(network_status))
@@ -1194,6 +1194,71 @@ def main():
     if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('network fixture cleanup failed')
    if g.call('file_list',{})!=files_before:raise RuntimeError('network fixture did not restore file catalogue')
    g.call('upload_reset',{'id':upload_id})
+   if a.exercise_storage_fault:
+    # Reuse the same two NICs for 1↔2 then 0↔2; no host network.
+    for name in ('a-ngate','b-ngate','c-ngate'):
+     if any(entry.get('name')==name for entry in files_before):raise RuntimeError('network-three gate already exists')
+     if not g.call('file_put',{'name':name,'data':'0'}).get('readback_verified'):raise RuntimeError('network-three setup failed')
+    image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-net-three.hex').read_text().strip())
+    up=stage_program(g,image)
+    na=g.call('process_spawn_staged',{'id':up});nb=g.call('process_spawn_staged',{'id':up});nc=g.call('process_spawn_staged',{'id':up})
+    if [na.get('slot'),nb.get('slot'),nc.get('slot')]!=[0,1,2] or len({na.get('boot_id'),nb.get('boot_id'),nc.get('boot_id')})!=1:raise RuntimeError('network-three admission failed')
+    def nthree_tasks(predicate,label):
+     for _ in range(80):
+      snapshot=g.call('process_status',{})
+      if predicate(snapshot):return snapshot
+      time.sleep(.2)
+     raise RuntimeError('network-three tasks did not reach '+label+': '+str(snapshot))
+    def ngate(name,value):
+     if not g.call('file_put',{'name':name,'data':value}).get('readback_verified'):raise RuntimeError('network-three gate failed')
+    def nphase(name,value):
+     for _ in range(80):
+      result=g.call('file_get',{'name':name}).get('hex')
+      if result==value.encode().hex():return
+      time.sleep(.2)
+     raise RuntimeError('network-three phase not reached: '+str((name,value,result)))
+    nthree_tasks(lambda x:x.get('all_slot_states')==['ready']*3 and min(x.get('all_io_completed',[0]*3))>0,'all tasks active')
+    bind12={'a_slot':2,'a_incarnation':nc['incarnation_text'],'b_slot':1,'b_incarnation':nb['incarnation_text'],'boot_id':na['boot_id']}
+    reject(g,'network_grant_open',dict(bind12,a_slot=3),'invalid network slots')
+    prior=g.call('network_status',{})
+    old=g.call('network_grant_open',bind12)['generation']
+    if g.call('network_status',{}).get('grant_slots')!=[1,2]:raise RuntimeError('network endpoints not sorted')
+    for name in ('a-ngate','b-ngate','c-ngate'):ngate(name,'1')
+    nphase('a-ngate','v')  # Nonmember 0 observed -13 on send and recv.
+    ngate('b-ngate','2');nphase('b-ngate','p');nphase('c-ngate','p')
+    wait_network(lambda x:x.get('rx_delivered')==[prior['rx_delivered'][i]+1 for i in range(2)],'1-to-2 real VirtIO exchange')
+    if g.call('debug_network_hold_rx',{'slot':1,'hold':True})!={'held':True}:raise RuntimeError('network-three hold failed')
+    ngate('b-ngate','3');nphase('b-ngate','s')
+    held=wait_network(lambda x:x.get('rx_held_ready',[False,False])[1] is True,'1-to-2 old frame completed in DMA')
+    stopped=g.call('process_stop',{'slot':2,'incarnation':nc['incarnation_text'],'boot_id':nc['boot_id']})
+    if stopped.get('stopped') is not True:raise RuntimeError('network-three member stop failed')
+    revoked=wait_network(lambda x:x.get('grant_active') is False,'network member exit revoked grant')
+    if revoked.get('rx_held_ready',[False,False])[1] is not True:raise RuntimeError('old DMA frame not held over revocation')
+    ngate('c-ngate','0');nc2=g.call('process_spawn_staged',{'id':up})
+    if nc2.get('slot')!=2 or nc2.get('incarnation',0)<=nc['incarnation']:raise RuntimeError('network member readmission failed')
+    nthree_tasks(lambda x:x.get('all_slot_states')==['ready']*3,'network member readmitted')
+    stale={'a_slot':2,'a_incarnation':nc['incarnation_text'],'b_slot':0,'b_incarnation':na['incarnation_text'],'boot_id':na['boot_id']}
+    reject(g,'network_grant_open',stale,'stale process incarnation')
+    current=g.call('network_grant_open',dict(stale,a_incarnation=nc2['incarnation_text']))['generation']
+    if int(current)<=int(old) or g.call('network_status',{}).get('grant_slots')!=[0,2]:raise RuntimeError('0-to-2 network grant invalid')
+    reject(g,'network_grant_close',{'generation':old,'boot_id':na['boot_id']},'stale network grant')
+    dropped_before=g.call('network_status',{})['dropped'][1]
+    if g.call('debug_network_hold_rx',{'slot':1,'hold':False})!={'held':False}:raise RuntimeError('network-three RX release failed')
+    after_drop=wait_network(lambda x:x.get('dropped',[0,0])[1]>dropped_before,'late frame rejected after new grant')
+    ngate('b-ngate','7');nphase('b-ngate','v')  # Nonmember 1 refused.
+    ngate('a-ngate','4');ngate('c-ngate','4')
+    nphase('a-ngate','n');nphase('c-ngate','n')
+    wait_network(lambda x:x.get('grant_slots')==[0,2] and x.get('rx_delivered')==[after_drop['rx_delivered'][i]+1 for i in range(2)],'0-to-2 real VirtIO exchange')
+    if g.call('network_grant_close',{'generation':current,'boot_id':na['boot_id']})!={'closed':True}:raise RuntimeError('network-three close failed')
+    for name in ('a-ngate','b-ngate','c-ngate'):ngate(name,'9')
+    done=nthree_tasks(lambda x:x.get('all_slot_states')==['exited']*3,'network-three teardown')
+    if done.get('all_outcomes')!=[1]*3 or done.get('all_exit_codes')!=[0]*3 or done.get('all_data_scrubbed')!=[True]*3 or done.get('all_code_scrubbed')!=[True]*3 or done.get('all_stack_scrubbed')!=[True]*3 or done.get('frame_pool_assigned')!=0:raise RuntimeError('network-three cleanup invalid: '+str(done))
+    network_final=g.call('network_status',{})
+    if network_final.get('grant_active') is not False or network_final.get('grant_slots') is not None or network_final.get('tx_queued')!=[False,False] or network_final.get('rx_queued')!=[False,False]:raise RuntimeError('network-three grant cleanup invalid: '+str(network_final))
+    g.call('upload_reset',{'id':up})
+    for name in ('a-ngate','b-ngate','c-ngate'):
+     if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('network-three gate cleanup failed')
+    if g.call('file_list',{})!=files_before:raise RuntimeError('network-three fixture left files')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
   if a.exercise_storage_fault:

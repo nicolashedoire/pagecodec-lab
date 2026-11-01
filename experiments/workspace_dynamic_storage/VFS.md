@@ -484,15 +484,23 @@ this observation is intermittent and is not evidence of a fix.
 
 ### Experimental VirtIO Ethernet in QEMU
 
-The integrated guest can discover two VirtIO network devices and assign them to
-the two independent process slots by their expected MAC addresses. The QEMU
+The integrated guest can discover two VirtIO network devices by their expected
+MAC addresses and map them to any two distinct independent slots among 0–2.
+For a grant, sorted slot order defines NIC ports 0 and 1; this does not add NICs
+or permit multiple concurrent grants. The QEMU
 scenario attaches both devices to an in-process hub with no host network
 backend. It is a bounded Ethernet experiment, not IP, TCP, a general network
 stack, or support for a physical Apple network adapter.
 
-SVC `0x170` sends one 1–64-byte private Data/Stack buffer, and `0x171` receives
-into one such buffer and reports the source slot and incarnation. Buffers,
-lengths, live process identities and the boot identity are checked. A send
+For the historical pair [0,1], legacy SVCs `0x170`/`0x171` use the currently
+active grant implicitly; they do not bind the caller’s intent to a particular
+generation or peer. They return -38 for other pairs. For any granted pair,
+`0x174` reports its port, actual peer slot, peer incarnation and grant
+generation; `0x172`/`0x173` require those expected peer and generation values
+before sending or receiving one 1–64-byte private Data/Stack buffer. Stale
+values return -116; a nonmember receives -13. A successful receive reports the
+actual peer slot and incarnation. Buffers, lengths, live identities and boot
+identity are checked. A send
 queues a message in the guest; it does not itself promise delivery. The guest
 encapsulates it in a private EtherType Ethernet frame and the receiver checks
 the embedded boot, incarnation and grant-generation values. These identifiers
@@ -582,8 +590,8 @@ search after timer interrupts, a blocking wait, or task exit. If no slot is
 ready, control returns to the service loop; device polling and MCP can continue.
 The guest admits up to three independent fixed contexts, with a third page-table
 root (ASID 3) and a pool of nine user frames. This is not SMP, arbitrary task
-capacity, or a general starvation-freedom guarantee. The single direct IPC channel can bind any two slots; VirtIO networking
-remains limited to slots 0 and 1, and network calls from slot 2 return -38.
+capacity, or a general starvation-freedom guarantee. The single direct IPC channel and the single two-port network grant can each
+bind any two slots; neither permits arbitrary simultaneous channels or grants.
 
 The integrated modern QEMU scenario runs three copies of the linked Rust ELF,
 checks separate mappings, initialized private data/stacks and timer preemption,
@@ -605,3 +613,17 @@ The same feature-enabled test verifies the slot 1 outsider on the 0↔2 channel.
 It does not force stopping a nonmember while a channel remains active, nor a
 timed expiration with all three actors asleep. Ordinary builds do not expose
 the test clock and do not run this extended three-actor scenario.
+
+The feature-enabled network scenario also reuses the two NICs for grants 1↔2
+then 0↔2. It checks real port/slot mapping, outsider refusal, legacy-SVC refusal
+for those pairs, strict stale peer/generation rejection, stop and readmission.
+A frame held in an actual completed RX DMA descriptor across grant replacement
+is rejected after release. Earlier [0,1] runs remain in the same test. These
+checks use a QEMU-only hub and do not authenticate MCP clients or imply that
+legacy SVCs provide generation-bound intent.
+The first modern integration run reached the final storage injection but failed
+its snapshot assertion because the new network test accidentally overwrote the
+runner's expected-document variable with a network-status object. The runner
+now uses a distinct name. The failed run's temporary disk was removed and was
+not available for inspection; this failure alone did not establish storage
+corruption.

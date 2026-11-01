@@ -430,25 +430,29 @@ fn retire_direct(c:&mut DirectChannel) {
  c.scrubbed=c.queues.iter().flatten().all(|m|m.len==0 && m.bytes.iter().all(|b|*b==0));
  if !c.scrubbed {halt()}
 }
-/// Current two-process identities for the isolated VM Ethernet service.
-pub fn network_identities()->Option<[u64;2]> {
+/// Current incarnations for the selected real slots. Caller also checks the
+/// active grant generation; slots are ordered by virtual NIC port.
+pub fn network_identities(slots:[usize;2])->Option<[u64;2]> {
+ if slots[0]>=PROCESS_CAPACITY || slots[1]>=PROCESS_CAPACITY || slots[0]>=slots[1] {return None}
  if !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} || unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {return None}
- let state=unsafe{read_volatile(addr_of!(TASK_STATE))};if !state[..2].iter().all(|s|matches!(*s,1|2|4)) {return None}
- let ids=unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS))};
- if ids[0]==0 || ids[1]==0 || ids[0]!=incarnation(0) || ids[1]!=incarnation(1) {return None}Some([ids[0],ids[1]])
+ let state=unsafe{read_volatile(addr_of!(TASK_STATE))};
+ if !slots.iter().all(|&s|matches!(state[s],1|2|4)) {return None}
+ let all=unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS))};let ids=[all[slots[0]],all[slots[1]]];
+ if ids[0]==0 || ids[1]==0 || ids[0]!=incarnation(slots[0]) || ids[1]!=incarnation(slots[1]) {return None}Some(ids)
 }
-/// Grant both current independent processes access to the isolated VM link.
-/// The public boot identity is freshness information, not authentication.
+/// One grant joins two selected independent slots to the two virtual NICs.
 pub fn network_grant_open(a:usize,ai:u64,b:usize,bi:u64,boot:[u8;16])->Result<u64,&'static str> {
  let current=super::boot_identity::identifier().ok_or("boot identity unavailable")?;
  if boot!=current {return Err("stale boot identity")}
- if a>=2 || b>=2 || a==b {return Err("invalid network slots")}
+ if a>=PROCESS_CAPACITY || b>=PROCESS_CAPACITY || a==b {return Err("invalid network slots")}
  let mut daif:u64;let mut timer:u64;unsafe{asm!("mrs {},DAIF",out(reg) daif);asm!("mrs {},CNTV_CTL_EL0",out(reg) timer)}
  if daif&(1<<7)==0 || timer&1!=0 || super::mmu::active_root()!=super::mmu::root(0) {return Err("network grant requires service boundary")}
- let ids=network_identities().ok_or("independent processes not active")?;
- if unsafe{read_volatile(addr_of!(TASK_STATE))}[..2]!=[1,1] {return Err("process is not ready")}
- if ai==0 || bi==0 || ids[a]!=ai || ids[b]!=bi {return Err("stale process incarnation")}
- super::net::open_grant(ids)
+ let (slots,expected)=if a<b {([a,b],[ai,bi])}else{([b,a],[bi,ai])};
+ let ids=network_identities(slots).ok_or("independent processes not active")?;
+ let state=unsafe{read_volatile(addr_of!(TASK_STATE))};
+ if slots.iter().any(|&slot|state[slot]!=1) {return Err("process is not ready")}
+ if ai==0 || bi==0 || ids!=expected {return Err("stale process incarnation")}
+ super::net::open_grant(slots,ids)
 }
 pub fn network_grant_close(id:u64,boot:[u8;16])->Result<(), &'static str> {
  let current=super::boot_identity::identifier().ok_or("boot identity unavailable")?;
@@ -457,29 +461,40 @@ pub fn network_grant_close(id:u64,boot:[u8;16])->Result<(), &'static str> {
  if daif&(1<<7)==0 || timer&1!=0 || super::mmu::active_root()!=super::mmu::root(0) {return Err("network grant requires service boundary")}
  super::net::close_grant(id)
 }
-fn network_send(f:&mut Frame,actor:usize) {
- if actor>=2 {direct_result(f,-38);return}
+fn network_info(f:&mut Frame,actor:usize) {
  if !super::net::available() {direct_result(f,-19);return}
- let Some(ids)=network_identities() else{direct_result(f,-107);return};
- let Some(grant)=super::net::grant_for(ids) else{direct_result(f,-13);return};
+ let Some((slots,ids,grant))=super::net::binding() else{direct_result(f,-13);return};
+ let Some(port)=slots.iter().position(|slot|*slot==actor) else{direct_result(f,-13);return};
+ if network_identities(slots)!=Some(ids) {direct_result(f,-107);return}
+ f.regs[0]=port as u64;f.regs[1]=slots[1-port] as u64;f.regs[2]=ids[1-port];f.regs[3]=grant;
+}
+fn network_send(f:&mut Frame,actor:usize,strict:bool) {
+ if !super::net::available() {direct_result(f,-19);return}
+ let Some((slots,ids,grant))=super::net::binding() else{direct_result(f,-13);return};
+ let Some(port)=slots.iter().position(|slot|*slot==actor) else{direct_result(f,-13);return};
+ if network_identities(slots)!=Some(ids) {direct_result(f,-107);return}
+ if !strict && slots!=[0,1] {direct_result(f,-38);return}
+ if strict && (f.regs[2]!=grant || f.regs[3]!=slots[1-port] as u64 || f.regs[4]!=ids[1-port]) {direct_result(f,-116);return}
  let address=f.regs[0];let len=f.regs[1];if len==0 || len>64 {direct_result(f,-22);return}
  let len=len as usize;if user_location(actor,address,len,false,false).is_none() {direct_result(f,-14);return}
- let mut packet=super::net::Packet{source:ids[actor],destination:ids[1-actor],grant,len,bytes:[0;64]};
+ let mut packet=super::net::Packet{source:ids[port],destination:ids[1-port],grant,len,bytes:[0;64]};
  for i in 0..len {packet.bytes[i]=unsafe{readbyte(address+i as u64)}}
- if super::net::enqueue(actor,packet) {direct_result(f,0)}else{direct_result(f,-11)}
+ if super::net::enqueue(port,packet) {direct_result(f,0)}else{direct_result(f,-11)}
 }
-fn network_recv(f:&mut Frame,actor:usize) {
- if actor>=2 {direct_result(f,-38);return}
+fn network_recv(f:&mut Frame,actor:usize,strict:bool) {
  if !super::net::available() {direct_result(f,-19);return}
- let Some(ids)=network_identities() else{direct_result(f,-107);return};
- let Some(grant)=super::net::grant_for(ids) else{direct_result(f,-13);return};
+ let Some((slots,ids,grant))=super::net::binding() else{direct_result(f,-13);return};
+ let Some(port)=slots.iter().position(|slot|*slot==actor) else{direct_result(f,-13);return};
+ if network_identities(slots)!=Some(ids) {direct_result(f,-107);return}
+ if !strict && slots!=[0,1] {direct_result(f,-38);return}
+ if strict && (f.regs[2]!=grant || f.regs[3]!=slots[1-port] as u64 || f.regs[4]!=ids[1-port]) {direct_result(f,-116);return}
  let cap=f.regs[1];if cap==0 || cap>64 {direct_result(f,-22);return}
- let Some(packet)=super::net::peek(actor) else{direct_result(f,-11);return};
- if packet.source!=ids[1-actor] || packet.destination!=ids[actor] || packet.grant!=grant {super::net::discard(actor);direct_result(f,-11);return}
+ let Some(packet)=super::net::peek(port) else{direct_result(f,-11);return};
+ if packet.source!=ids[1-port] || packet.destination!=ids[port] || packet.grant!=grant {super::net::discard(port);direct_result(f,-11);return}
  if packet.len>cap as usize {direct_result(f,-34);return}
  let address=f.regs[0];if user_location(actor,address,cap as usize,true,false).is_none() {direct_result(f,-14);return}
  for i in 0..packet.len {unsafe{writebyte(address+i as u64,packet.bytes[i])}}
- super::net::consume(actor);f.regs[0]=packet.len as u64;f.regs[1]=(1-actor) as u64;f.regs[2]=packet.source;
+ super::net::consume(port);f.regs[0]=packet.len as u64;f.regs[1]=slots[1-port] as u64;f.regs[2]=packet.source;
 }
 unsafe fn read64(p:u64)->u64 {let v:u64;asm!("ldr {v}, [{p}]",p=in(reg)p,v=out(reg)v,options(nostack,preserves_flags));v}
 unsafe fn write64(p:u64,v:u64){asm!("str {v}, [{p}]",p=in(reg)p,v=in(reg)v,options(nostack,preserves_flags));}
@@ -739,8 +754,11 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
   if !valid {unsafe{write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(actor),2)};return 1}
   match esr&0xffff {
    0x150=>{if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=2 {f.regs[0]=(-38i64) as u64;return 0};unsafe{write_volatile(addr_of_mut!(PAIR_BARRIER_SEEN).cast::<bool>().add(actor),true)};let counts=unsafe{read_volatile(addr_of!(PAIR_IRQS))};let seen=unsafe{read_volatile(addr_of!(PAIR_BARRIER_SEEN))};let frames=unsafe{read_volatile(addr_of!(TASK_FRAMES))};let live=if frames[..2].iter().all(|p|*p!=0) {unsafe{[read_volatile(frames[0] as *const u64),read_volatile(frames[1] as *const u64)]}} else {[0;2]};if counts[0]>0 && counts[1]>0 && seen==[true,true] && frames[..2].iter().all(|p|*p!=0) {unsafe{write_volatile(addr_of_mut!(PAIR_LIVE_MARKERS),live);write_volatile(addr_of_mut!(PAIR_BARRIER_OPEN),true)}};f.regs[0]=if unsafe{read_volatile(addr_of!(PAIR_BARRIER_OPEN))} {0} else {(-11i64) as u64};return 0},
-   0x170=>{network_send(f,actor);return 0},
-   0x171=>{network_recv(f,actor);return 0},
+   0x170=>{network_send(f,actor,false);return 0},
+   0x171=>{network_recv(f,actor,false);return 0},
+   0x172=>{network_send(f,actor,true);return 0},
+   0x173=>{network_recv(f,actor,true);return 0},
+   0x174=>{network_info(f,actor);return 0},
    0x160=>{direct_peer(f,actor);return 0},
    0x161=>{direct_send(f,actor);return 0},
    0x162=>{direct_recv(f,actor);return 0},
