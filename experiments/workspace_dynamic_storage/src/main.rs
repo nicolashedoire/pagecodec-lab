@@ -608,6 +608,8 @@ pub extern "C" fn graph_main() -> ! {
                     let data=request.value.get(..request.value_len);
                     let mut reply=[0u8;32];
                     let mut reply_len=0usize;
+                    let mut reply_too_large=false;
+                    let mut reply_invalid_name=false;
                     let success=if request.actor!=0 {false} else if let (Some(key),Some(data))=(key,data) {
                         match request.file_op {
                             1=>{
@@ -619,12 +621,15 @@ pub extern "C" fn graph_main() -> ! {
                             }
                             2=>match files.get(key) {
                                 Ok(bytes) if bytes.len()<=reply.len()=>{reply_len=bytes.len();reply[..reply_len].copy_from_slice(bytes);true},
+                                Ok(_) if request.id>=8=>{reply_too_large=true;false},
+                                Err("invalid filename") if request.id>=8=>{reply_invalid_name=true;false},
                                 _=>false,
                             },
                             _=>false,
                         }
                     } else {false};
-                    if !el0::complete_file(&request,success,&reply[..reply_len]) {halt()}
+                    let completed=if reply_too_large {el0::complete_file_oversize(&request)} else if reply_invalid_name {el0::complete_file_invalid_name(&request)} else {el0::complete_file(&request,success,&reply[..reply_len])};
+                    if !completed {halt()}
                     continue;
                 }
                 let success=if request.save {

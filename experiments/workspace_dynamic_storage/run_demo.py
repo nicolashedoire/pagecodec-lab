@@ -16,17 +16,20 @@ def legacy_slot(generation,snapshot):
  slot[20:24]=fnv(slot[8:20]+payload).to_bytes(4,'little');slot[24]=0xa5
  return bytes(slot)
 
-def independent_exit_elf(reference_hex,exit_code):
+def independent_elf(reference_hex,code):
  # Reuse only the bounded ELF header; instructions are supplied by the
  # launcher, persisted in VFS, and not linked into the kernel image.
  reference=bytes.fromhex(reference_hex)
- if len(reference)<120 or reference[:4]!=b'\x7fELF' or not 0<=exit_code<=65535:raise RuntimeError('invalid external program template')
+ if len(reference)<120 or reference[:4]!=b'\x7fELF' or not code or len(code)%4 or len(code)>392:raise RuntimeError('invalid external program template')
+ elf=bytearray(reference[:120]);elf[96:104]=len(code).to_bytes(8,'little');elf[104:112]=len(code).to_bytes(8,'little')
+ return (elf+code).hex()
+
+def independent_exit_elf(reference_hex,exit_code):
+ if not 0<=exit_code<=65535:raise RuntimeError('invalid external exit code')
  instructions=(0xd2800000 | (exit_code<<5),
                0xd4000001 | (0x123<<5))
  code=b''.join(i.to_bytes(4,'little') for i in instructions)
- elf=bytearray(reference[:120]);elf[96:104]=len(code).to_bytes(8,'little');elf[104:112]=len(code).to_bytes(8,'little')
- elf+=code
- return elf.hex()
+ return independent_elf(reference_hex,code)
 
 def reject(g,tool,args,message):
  g.call(tool,args,rejected=True)
@@ -228,6 +231,32 @@ def main():
     if g.call('file_get',{'name':'next.bin'})!={'name':'next.bin','hex':external_hex}:raise RuntimeError('external ELF not restored')
     g.progress('external program execution',timeout_image=True,expected_exit_code=exit_code)
     if g.call('document_snapshot',{})!=final:raise RuntimeError('external ELF changed workspace')
+    traces.append(g.trace);states.append(g.call('storage_status',{}))
+   finally:g.close()
+  # Two independently assembled programs exercise the generic file-read SVC.
+  # Both are stored through VFS and executed only after a complete VM restart.
+  # Their source and reproducible machine code are in fixtures/.
+  for attempt,fixture in enumerate(('generic-read','generic-oversize')):
+   code=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/(fixture+'.hex')).read_text().strip())
+   external_hex=independent_elf(next_hex,code)
+   g=Guest(a.qemu,guest,disk,tmp,17+attempt*2,out,a.transport)
+   try:
+    g.progress('before generic file reader',timeout_image=True,expected_exit_code=42 if attempt==0 else 0)
+    if attempt==0:
+     if not g.call('file_put',{'name':'big','data':'x'*33}).get('readback_verified'):raise RuntimeError('oversize file was not saved')
+    saved=g.call('file_put_hex',{'name':'next.bin','hex':external_hex})
+    if saved.get('readback_verified') is not True:raise RuntimeError('generic reader ELF was not saved')
+    if g.call('file_get',{'name':'next.bin'})!={'name':'next.bin','hex':external_hex}:raise RuntimeError('generic reader differs before restart')
+    traces.append(g.trace);states.append(g.call('storage_status',{}))
+   finally:g.close()
+   g=Guest(a.qemu,guest,disk,tmp,18+attempt*2,out,a.transport)
+   try:
+    if g.call('file_get',{'name':'next.bin'})!={'name':'next.bin','hex':external_hex}:raise RuntimeError('generic reader ELF not restored')
+    g.progress('generic file-reader execution',timeout_image=True,expected_exit_code=0)
+    ipc=g.call('ipc_status',{});expected_reads=3 if attempt==0 else 2
+    if ipc.get('generic_read_submitted')!=expected_reads or ipc.get('generic_read_completed')!=expected_reads:raise RuntimeError('generic file service did not complete expected reads: '+str(ipc))
+    if g.call('file_get',{'name':'note'})!={'name':'note','hex':b'hello'.hex()} or g.call('file_get',{'name':'big'})!={'name':'big','hex':(b'x'*33).hex()}:raise RuntimeError('generic reader changed files')
+    if g.call('document_snapshot',{})!=final:raise RuntimeError('generic reader changed workspace')
     traces.append(g.trace);states.append(g.call('storage_status',{}))
    finally:g.close()
   if a.exercise_storage_fault:

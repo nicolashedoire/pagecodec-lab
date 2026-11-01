@@ -87,10 +87,34 @@ pub struct Request {pub actor:usize,pub incarnation:u64,pub id:u64,pub save:bool
 // from an exited task must not be retained in this fixture.
 #[derive(Clone,Copy)] struct CompletionToken {actor:usize,incarnation:u64,id:u64}
 impl Request {fn token(&self)->CompletionToken {CompletionToken{actor:self.actor,incarnation:self.incarnation,id:self.id}}}
-#[derive(Clone,Copy,PartialEq,Eq)] struct Completion {actor:usize,incarnation:u64,id:u64,popped:bool,applied:bool,success:bool,delivered:bool,consumed:bool,data:[u8;32],data_len:usize}
-const EMPTY_COMPLETION:Completion=Completion{actor:0,incarnation:0,id:0,popped:false,applied:false,success:false,delivered:false,consumed:false,data:[0;32],data_len:0};
-struct Ipc {queue:[Option<Request>;2],head:usize,len:usize,completions:[Completion;7],accepted:[u64;8],accepted_len:usize,applied:[u64;8],applied_len:usize,consumed:[u64;8],consumed_len:usize,full:bool,full_consumed:bool,range:[bool;2],overflow:[bool;2],duplicate:[bool;2],utf8:[bool;2],spoof:[bool;2],save_denied:bool,denial_consumed:bool}
-static mut IPC:Ipc=Ipc{queue:[None;2],head:0,len:0,completions:[EMPTY_COMPLETION;7],accepted:[0;8],accepted_len:0,applied:[0;8],applied_len:0,consumed:[0;8],consumed_len:0,full:false,full_consumed:false,range:[false;2],overflow:[false;2],duplicate:[false;2],utf8:[false;2],spoof:[false;2],save_denied:false,denial_consumed:false};
+#[derive(Clone,Copy,PartialEq,Eq)] struct Completion {actor:usize,incarnation:u64,id:u64,popped:bool,applied:bool,success:bool,oversize:bool,invalid_name:bool,delivered:bool,consumed:bool,data:[u8;32],data_len:usize}
+const EMPTY_COMPLETION:Completion=Completion{actor:0,incarnation:0,id:0,popped:false,applied:false,success:false,oversize:false,invalid_name:false,delivered:false,consumed:false,data:[0;32],data_len:0};
+struct Ipc {queue:[Option<Request>;2],head:usize,len:usize,completions:[Completion;8],accepted:[u64;8],accepted_len:usize,applied:[u64;8],applied_len:usize,consumed:[u64;8],consumed_len:usize,full:bool,full_consumed:bool,range:[bool;2],overflow:[bool;2],duplicate:[bool;2],utf8:[bool;2],spoof:[bool;2],save_denied:bool,denial_consumed:bool}
+static mut IPC:Ipc=Ipc{queue:[None;2],head:0,len:0,completions:[EMPTY_COMPLETION;8],accepted:[0;8],accepted_len:0,applied:[0;8],applied_len:0,consumed:[0;8],consumed_len:0,full:false,full_consumed:false,range:[false;2],overflow:[false;2],duplicate:[false;2],utf8:[false;2],spoof:[false;2],save_denied:false,denial_consumed:false};
+// A loaded process can have one generic file read in flight. Only copied
+// bytes and offsets within its private page are retained, never Rust borrows.
+#[derive(Clone,Copy)]
+struct GenericRead {token:CompletionToken,name:[u8;16],name_len:usize,name_offset:usize,dest_offset:usize,capacity:usize}
+static mut GENERIC_READ:Option<GenericRead>=None;
+static mut NEXT_GENERIC_ID:u64=8;
+// Aggregate only; never expose filenames, user addresses or file contents.
+static mut GENERIC_READ_SUBMITTED:u64=0;
+static mut GENERIC_READ_COMPLETED:u64=0;
+fn clear_generic_read() {
+ // Writing `None` alone may leave the old Option payload bytes in memory.
+ // Volatile-zero the copied name, offsets and token while the variant is
+ // still Some, then clear the discriminant. Single CPU, SVC/service only.
+ let p=addr_of_mut!(GENERIC_READ);
+ if let Some(mut old)=unsafe{read_volatile(p)} {
+  old.name=[0;16];old.name_len=0;old.name_offset=0;old.dest_offset=0;old.capacity=0;
+  old.token=CompletionToken{actor:0,incarnation:0,id:0};
+  unsafe{write_volatile(p,Some(old))};
+ }
+ unsafe{write_volatile(p,None)};
+}
+fn completion_slot(id:u64)->Option<usize> {
+ match id {1..=7=>Some((id-1) as usize),8.. =>Some(7),_=>None}
+}
 fn incarnation(actor:usize)->u64 {
  assert!(actor<2);
  let id=unsafe{read_volatile(addr_of!(TASK_INCARNATIONS).cast::<u64>().add(actor))};
@@ -114,37 +138,37 @@ fn descriptor(actor:usize,index:usize,id:u64)->Option<Request> {
  Some(req)
 }
 fn submit(state:&mut Ipc,req:Request)->bool {
- let Some(i)=req.id.checked_sub(1).and_then(|id|usize::try_from(id).ok()) else {return false};
- if i>=7 || req.incarnation!=incarnation(req.actor) || state.completions[i].id!=0 || state.len==2 || state.accepted_len>=state.accepted.len() {return false}
+ let Some(i)=completion_slot(req.id) else{return false};
+ if req.actor>=2 || req.incarnation!=incarnation(req.actor) || state.completions[i].id!=0 || state.len==2 || (req.id<=7 && state.accepted_len>=state.accepted.len()) {return false}
  let slot=(state.head+state.len)%2;state.queue[slot]=Some(req);state.len+=1;
  state.completions[i]=Completion{actor:req.actor,incarnation:req.incarnation,id:req.id,..EMPTY_COMPLETION};
- state.accepted[state.accepted_len]=req.id;state.accepted_len+=1;true
+ if req.id<=7 {state.accepted[state.accepted_len]=req.id;state.accepted_len+=1;}true
 }
 pub fn pop_request()->Option<Request> {
  let s=unsafe{&mut *addr_of_mut!(IPC)};
  // Keep both requests in the queue until the guest has actually seen it full.
  if !s.full_consumed || s.len==0 {return None}
  let r=s.queue[s.head].take()?;s.head=(s.head+1)%2;s.len-=1;
- let c=&mut s.completions[(r.id-1) as usize];
+ let c=&mut s.completions[completion_slot(r.id).unwrap_or_else(||halt())];
  if c.actor!=r.actor || c.incarnation!=r.incarnation || c.id!=r.id || r.incarnation!=incarnation(r.actor) {halt()}
  c.popped=true;Some(r)
 }
 /// Check a popped request before a service effect. The service is synchronous
 /// on one CPU; this is not an atomic lease across future async/SMP execution.
 pub fn request_is_live(request:&Request)->bool {
- if request.actor>=2 || request.incarnation!=incarnation(request.actor) || request.id==0 || request.id>7 {return false}
+ if request.actor>=2 || request.incarnation!=incarnation(request.actor) {return false}
  let state=unsafe{read_volatile(addr_of!(TASK_STATE).cast::<u64>().add(request.actor))};
  if state!=1 && state!=2 {return false}
  let s=unsafe{&*addr_of!(IPC)};
- let c=&s.completions[(request.id-1) as usize];
+ let Some(i)=completion_slot(request.id) else{return false};let c=&s.completions[i];
  c.actor==request.actor && c.incarnation==request.incarnation && c.id==request.id && c.popped && !c.applied
 }
 fn apply_completion(s:&mut Ipc,token:CompletionToken,success:bool,data:&[u8])->bool {
- if token.actor>=2 || token.incarnation!=incarnation(token.actor) || token.id==0 || token.id>7 || data.len()>32 {return false}
- let c=&mut s.completions[(token.id-1) as usize];
- if c.actor!=token.actor || c.incarnation!=token.incarnation || c.id!=token.id || !c.popped || c.applied || s.applied_len>=s.applied.len() {return false}
+ if token.actor>=2 || token.incarnation!=incarnation(token.actor) || data.len()>32 {return false}
+ let Some(i)=completion_slot(token.id) else{return false};let c=&mut s.completions[i];
+ if c.actor!=token.actor || c.incarnation!=token.incarnation || c.id!=token.id || !c.popped || c.applied || (token.id<=7 && s.applied_len>=s.applied.len()) {return false}
  c.data[..data.len()].copy_from_slice(data);c.data_len=data.len();
- c.applied=true;c.success=success;s.applied[s.applied_len]=token.id;s.applied_len+=1;true
+ c.applied=true;c.success=success;if token.id<=7 {s.applied[s.applied_len]=token.id;s.applied_len+=1;}true
 }
 pub fn complete(request:&Request,success:bool)->bool {
  let s=unsafe{&mut *addr_of_mut!(IPC)};
@@ -153,7 +177,7 @@ pub fn complete(request:&Request,success:bool)->bool {
 /// Complete the file operation in the bounded queue. Bytes are copied into
 /// kernel-owned completion storage before the caller's buffers can change.
 pub fn complete_file(request:&Request,success:bool,data:&[u8])->bool {
- if !(request.id==6 || request.id==7) || data.len()>32 || (request.id==6 && !data.is_empty()) {return false}
+ if !(request.id>=8 || request.id==6 || request.id==7) || data.len()>32 || (request.id==6 && !data.is_empty()) || (request.id>=8 && request.file_op!=2) {return false}
  let s=unsafe{&mut *addr_of_mut!(IPC)};
  // The stale request is captured from an actual earlier loaded task. Try it
  // while the newer incarnation's same-ID completion is genuinely popped.
@@ -166,13 +190,27 @@ pub fn complete_file(request:&Request,success:bool,data:&[u8])->bool {
  }
  apply_completion(s,request.token(),success,data)
 }
+/// Report an existing file whose contents exceed the generic read limit.
+pub fn complete_file_oversize(request:&Request)->bool {
+ if request.id<8 || request.file_op!=2 {return false}
+ let s=unsafe{&mut *addr_of_mut!(IPC)};
+ if !apply_completion(s,request.token(),false,&[]) {return false}
+ s.completions[7].oversize=true;true
+}
+/// Report an invalid generic filename separately from a missing file.
+pub fn complete_file_invalid_name(request:&Request)->bool {
+ if request.id<8 || request.file_op!=2 {return false}
+ let s=unsafe{&mut *addr_of_mut!(IPC)};
+ if !apply_completion(s,request.token(),false,&[]) {return false}
+ s.completions[7].invalid_name=true;true
+}
 pub fn ipc_status()->Value {
  let s=unsafe{&*addr_of!(IPC)};
  let initial_finished=s.consumed_len>=4 && s.applied_len>=4 && s.full && s.full_consumed && s.range==[true;2] && s.overflow==[true;2] && s.duplicate==[true;2] && s.utf8==[true;2] && s.spoof==[true;2] && s.save_denied && s.denial_consumed && s.completions[..4].iter().all(|c|c.success);
  // This bit is set only after EL0 has consumed both completions and checked
  // the returned bytes. Completion buffers themselves are revoked at exit.
  let file_finished=unsafe{read_volatile(addr_of!(FILE_EL0_VERIFIED))};
- json!({"finished":initial_finished && file_finished,"initial_finished":initial_finished,"file_finished":file_finished,"capacity":2,"queue_len":s.len,"accepted":&s.accepted[..s.accepted_len],"applied":&s.applied[..s.applied_len],"consumed":&s.consumed[..s.consumed_len],"full_rejected":s.full,"full_consumed":s.full_consumed,"range_rejected":s.range,"overflow_rejected":s.overflow,"duplicate_rejected":s.duplicate,"utf8_rejected":s.utf8,"spoof_rejected":s.spoof,"save_denied":s.save_denied,"denial_consumed":s.denial_consumed,"source":"synthetic descriptors and bytes constructed by EL0"})
+ json!({"finished":initial_finished && file_finished,"initial_finished":initial_finished,"file_finished":file_finished,"capacity":2,"queue_len":s.len,"accepted":&s.accepted[..s.accepted_len],"applied":&s.applied[..s.applied_len],"consumed":&s.consumed[..s.consumed_len],"generic_read_submitted":unsafe{read_volatile(addr_of!(GENERIC_READ_SUBMITTED))},"generic_read_completed":unsafe{read_volatile(addr_of!(GENERIC_READ_COMPLETED))},"full_rejected":s.full,"full_consumed":s.full_consumed,"range_rejected":s.range,"overflow_rejected":s.overflow,"duplicate_rejected":s.duplicate,"utf8_rejected":s.utf8,"spoof_rejected":s.spoof,"save_denied":s.save_denied,"denial_consumed":s.denial_consumed,"source":"synthetic descriptors and bytes constructed by EL0"})
 }
 // The one-CPU service is never active while EL0 executes. Drop only this
 // loaded task's queued file requests before returning control to the service.
@@ -197,6 +235,48 @@ fn stop_loaded_task(s:&mut Ipc,reason:u8)->u64 {
  cancel_loaded_requests(s);
  unsafe{write_volatile(addr_of_mut!(SPAWN_FAILED),true);write_volatile(addr_of_mut!(IMAGE_OUTCOMES).cast::<u8>().add(image-1),reason)};
  1
+}
+// SVC 0x140: poll one bounded read. x0=name VA, x1=name length,
+// x2=destination VA, x3=capacity; x0 is bytes read or a negative error.
+// -11 means retry, -2 unavailable, -34 too small, -14 invalid range,
+// -22 inconsistent arguments/encoding, -75 exhausted request IDs.
+fn generic_read(f:&mut Frame,s:&mut Ipc,actor:usize) {
+ let (name_va,name_len,dest_va,capacity)=(f.regs[0],f.regs[1],f.regs[2],f.regs[3]);
+ let result=|f:&mut Frame,v:i64|{f.regs[0]=v as u64};
+ if name_len==0 || name_len>16 || capacity==0 || capacity>32 {result(f,-22);return}
+ let (name_len,capacity)=(name_len as usize,capacity as usize);
+ let frame=task_frame(actor);
+ if !in_page(name_va,name_len) || !in_page(dest_va,capacity)
+   || !super::mmu::user_alias_matches(name_va,name_len,frame,false)
+   || !super::mmu::user_alias_matches(dest_va,capacity,frame,true) {result(f,-14);return}
+ let mut name=[0u8;16];
+ for (i,byte) in name[..name_len].iter_mut().enumerate() {*byte=unsafe{readbyte(name_va+i as u64)}}
+ if core::str::from_utf8(&name[..name_len]).is_err() {result(f,-22);return}
+ let name_offset=(name_va-super::mmu::ALIAS as u64) as usize;
+ let dest_offset=(dest_va-super::mmu::ALIAS as u64) as usize;
+ if let Some(pending)=unsafe{read_volatile(addr_of!(GENERIC_READ))} {
+  if pending.token.actor!=actor || pending.token.incarnation!=incarnation(actor)
+   || pending.name!=name || pending.name_len!=name_len || pending.name_offset!=name_offset
+   || pending.dest_offset!=dest_offset || pending.capacity!=capacity {result(f,-22);return}
+  let c=&mut s.completions[7];
+  if c.id!=pending.token.id || c.actor!=actor || c.incarnation!=pending.token.incarnation {halt()}
+  if !c.applied {result(f,-11);return}
+  let code=if c.invalid_name {-22} else if c.oversize {-34} else if !c.success {-2} else if c.data_len>capacity {-34} else {
+   // Revalidate the current mapping and incarnation immediately before the
+   // copy, since only guest offsets were retained while the service ran.
+   let dest=super::mmu::ALIAS.checked_add(pending.dest_offset).unwrap_or_else(||halt()) as u64;
+   if incarnation(actor)!=pending.token.incarnation || !super::mmu::user_alias_matches(dest,pending.capacity,task_frame(actor),true) {result(f,-14);return}
+   for i in 0..c.data_len {unsafe{writebyte(dest+i as u64,c.data[i])}}
+   c.data_len as i64
+  };
+  *c=EMPTY_COMPLETION;clear_generic_read();unsafe{let p=addr_of_mut!(GENERIC_READ_COMPLETED);write_volatile(p,read_volatile(p).saturating_add(1))};result(f,code);return
+ }
+ let id=unsafe{read_volatile(addr_of!(NEXT_GENERIC_ID))};
+ let Some(next)=id.checked_add(1) else{result(f,-75);return};
+ let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:2,key:name,key_len:name_len,value:[0;32],value_len:0};
+ if !submit(s,request) {result(f,-11);return}
+ unsafe{write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);write_volatile(addr_of_mut!(GENERIC_READ),Some(GenericRead{token:request.token(),name,name_len,name_offset,dest_offset,capacity}));let p=addr_of_mut!(GENERIC_READ_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1))};
+ result(f,-11);
 }
 #[no_mangle]
 extern "C" fn user_timeout() {
@@ -233,7 +313,7 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
  let s=unsafe{&mut *addr_of_mut!(IPC)};let op=esr&0xffff;
  let stage=unsafe{read_volatile(addr_of!(IMAGE_COUNT))};
  if loaded && ((op==0x130 && stage>3) || (op==0x131 && stage!=1)) {return stop_loaded_task(s,3)}
- if loaded && !matches!(op,0x103|0x105|0x121|0x122|0x123|0x130|0x131|0x7bad) {
+ if loaded && !matches!(op,0x103|0x105|0x121|0x122|0x123|0x130|0x131|0x140|0x7bad) {
   if op==0x666 && unsafe{read_volatile(addr_of!(IMAGE_COUNT))}==3 && unsafe{read64((super::mmu::ALIAS+136) as u64)}==1 {
    unsafe{write_volatile(addr_of_mut!(STALE_RESPONSE_BLOCKED),true)};
   }
@@ -318,6 +398,7 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
    unsafe{write_volatile(addr_of_mut!(SPAWN_EXECUTED),true);write_volatile(addr_of_mut!(IMAGE_OUTCOMES).cast::<u8>().add(image-1),1)};
    return 1;
   },
+  0x140 if loaded => generic_read(f,s,actor),
   0x7bad if loaded => {
    let expected=unsafe{read_volatile(addr_of!(IMAGE_COUNT))}==1 && f.elr==super::mmu::USER_CODE as u64+(addr_of!(spawned_fail_after_svc) as u64-addr_of!(spawned_entry) as u64);
    return stop_loaded_task(s,if expected {4}else{3});
@@ -327,8 +408,8 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
    return 1;
   },
   0x103 => {
-    if !s.completions.iter().any(|c|c.actor==actor && c.incarnation==incarnation(actor) && c.delivered && !c.consumed) {
-     if let Some(c)=s.completions.iter_mut().find(|c|c.id!=0 && c.actor==actor && c.incarnation==incarnation(actor) && c.applied && !c.delivered) {
+    if !s.completions.iter().any(|c|c.id<=7 && c.actor==actor && c.incarnation==incarnation(actor) && c.delivered && !c.consumed) {
+     if let Some(c)=s.completions.iter_mut().find(|c|c.id!=0 && c.id<=7 && c.actor==actor && c.incarnation==incarnation(actor) && c.applied && !c.delivered) {
       unsafe{
        write64((super::mmu::ALIAS+80) as u64,c.id);write64((super::mmu::ALIAS+112) as u64,if c.success {1}else{2});
        write64((super::mmu::ALIAS+800) as u64,c.data_len as u64);
@@ -339,7 +420,7 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
   },
   0x105 => {
    let observed=unsafe{read64((super::mmu::ALIAS+88) as u64)};let result=unsafe{read64((super::mmu::ALIAS+120) as u64)};
-   if let Some(c)=s.completions.iter_mut().find(|c|c.id==observed && c.id!=0 && c.actor==actor && c.incarnation==incarnation(actor) && c.delivered && !c.consumed && result==if c.success {1}else{2}) {
+   if let Some(c)=s.completions.iter_mut().find(|c|c.id==observed && c.id!=0 && c.id<=7 && c.actor==actor && c.incarnation==incarnation(actor) && c.delivered && !c.consumed && result==if c.success {1}else{2}) {
     if s.consumed_len>=s.consumed.len() {halt()} c.consumed=true;s.consumed[s.consumed_len]=observed;s.consumed_len+=1;
     unsafe{write64((super::mmu::ALIAS+80) as u64,0);write64((super::mmu::ALIAS+88) as u64,0);write64((super::mmu::ALIAS+112) as u64,0);write64((super::mmu::ALIAS+120) as u64,0)};
    }
@@ -516,11 +597,13 @@ fn reclaim_exited(actor:usize) {
    // Slots 0..4 belong to the earlier fixed tasks and must not be modified.
    let ipc=unsafe{&mut *addr_of_mut!(IPC)};
    check(!ipc.queue.iter().flatten().any(|r|r.actor==0 && r.id>=6),"pending loaded-task request");
-   for i in 5..7 {
+   for i in 5..8 {
     check(ipc.completions[i].id==0 || (ipc.completions[i].actor==0 && ipc.completions[i].incarnation==incarnation(0)),"completion belongs to another incarnation");
     ipc.completions[i]=EMPTY_COMPLETION;
     check(ipc.completions[i]==EMPTY_COMPLETION,"completion revoke");
    }
+   // Do not retain a prior incarnation's guest offsets or filename.
+   clear_generic_read();
    reclaim_code_frame();
    if !unsafe{read_volatile(addr_of!(SPAWN_FAILED))} {
     let count=unsafe{read_volatile(addr_of!(IMAGE_COUNT))};

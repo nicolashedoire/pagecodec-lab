@@ -5,10 +5,35 @@ of named files. `file_put`, `file_put_hex`, `file_get`, `file_list` and `file_de
 existing unauthenticated local guest serial interface. File names are 1–32
 ASCII letters, digits, `.`, `_`, or `-`, excluding `.` and `..`; slashes and
 directories are not supported. There are at most 10 files, at most 512 bytes
-each, and at most 1,100 bytes in total. `file_put` accepts UTF-8 strings;
+each, and at most 1,400 bytes in total. `file_put` accepts UTF-8 strings;
 `file_put_hex` accepts even-length lowercase hexadecimal so arbitrary binary
 bytes can be stored; reads return hexadecimal bytes. These limits are not a full filesystem
 and requests can also fail if the shared 3,584-byte snapshot payload is full.
+
+## Bounded reads from a loaded program
+
+`SVC #0x140` accepts a UTF-8 file name address and length in `x0`/`x1`, and a
+destination address and capacity in `x2`/`x3`. Both ranges must be inside the
+calling task's mapped private page; names are 1–16 bytes and destinations
+1–32 bytes. The call returns a byte count or a negative status in `x0`: `-11`
+means retry the same arguments, `-2` means absent/unavailable, `-34` means the
+file does not fit, `-14` means an invalid user range, `-22` means invalid or
+inconsistent arguments, and `-75` means request IDs are exhausted. A task can
+have one read in flight. The kernel assigns the ID and checks its incarnation;
+it revalidates the destination before copying and never performs a partial copy
+when the destination is too small. This is an experimental read interface,
+not a POSIX file descriptor API, authentication scheme, or general IPC ABI.
+
+The integrated scenario uses two standalone AArch64 programs whose sources are
+[`generic-read.S`](fixtures/generic-read.S) and
+[`generic-oversize.S`](fixtures/generic-oversize.S), stores each ELF using the
+VFS, restarts the same VM disk and checks its exit status. The first verifies a
+successful five-byte read, missing file, small buffer, a page-crossing pointer
+and neighboring guard bytes. The second verifies a present 33-byte file against
+a 32-byte destination, an invalid name, all destination bytes and both guards.
+The guest counts submitted/completed reads without logging file contents; the
+same scenario verifies 3/3 and 2/2 completions. `fixtures/rebuild.py` verifies
+the committed instruction bytes against the assembly without executing them.
 
 `init.bin`, `fault.bin`, `badsvc.bin` and `next.bin` are reserved boot-image names: `file_delete` refuses
 their removal, so a confirmed deletion cannot be silently undone by boot-time
