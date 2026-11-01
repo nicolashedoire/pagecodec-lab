@@ -46,8 +46,11 @@ static mut IMAGE2_RECLAIMED:bool=false;
 static mut IMAGE3_RECLAIMED:bool=false;
 static mut IMAGE4_RECLAIMED:bool=false;
 // 0 pending, 1 success, 2 synchronous fault, 3 unknown SVC,
-// 4 reported file error, 5 execution budget exceeded.
+// 4 reported file error, 5 execution budget exceeded, 6 nonzero exit.
 static mut IMAGE_OUTCOMES:[u8;4]=[0;4];
+// A generic exit records the caller's full x0 value before releasing its frame.
+static mut IMAGE_EXIT_CODES:[Option<u64>;4]=[None;4];
+static mut IMAGE_IRQ_X19_MAX_SEEN:[bool;4]=[false;4];
 static mut PENDING_CANCELLED:u64=0;
 static mut COMPLETIONS_REVOKED:[bool;4]=[false;4];
 static mut STALE_RESPONSE_BLOCKED:bool=false;
@@ -71,6 +74,8 @@ static mut LOADER_REJECTED:bool=false;
 static mut IMAGE_LOADED:bool=false;
 #[no_mangle] static mut SPAWN_CODE_LEN:u64=0;
 #[no_mangle] static mut SPAWN_TICKS:u64=0;
+// Diagnostic for the synthetic test: it does not affect scheduling.
+#[no_mangle] static mut SPAWN_IRQ_X19_MAX_SEEN:bool=false;
 #[no_mangle] static mut SLICE_COUNTS:[u64;2]=[0;2];
 #[no_mangle] static mut USER_TOPS:[u64;2]=[0;2];
 #[no_mangle] static mut SLICE_DELTA:u64=0;
@@ -171,10 +176,10 @@ pub fn ipc_status()->Value {
 }
 // The one-CPU service is never active while EL0 executes. Drop only this
 // loaded task's queued file requests before returning control to the service.
-fn stop_loaded_task(s:&mut Ipc,reason:u8)->u64 {
+fn cancel_loaded_requests(s:&mut Ipc) {
  let actor=unsafe{read_volatile(addr_of!(CURRENT))};
  let image=unsafe{read_volatile(addr_of!(IMAGE_COUNT))} as usize;
- if actor!=0 || !unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} || image==0 || image>4 || !(2..=5).contains(&reason) {halt()}
+ if actor!=0 || !unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} || image==0 || image>4 {halt()}
  let original=s.queue;let old_head=s.head;let old_len=s.len;
  s.queue=[None;2];s.head=0;s.len=0;
  for i in 0..old_len {
@@ -185,6 +190,11 @@ fn stop_loaded_task(s:&mut Ipc,reason:u8)->u64 {
    } else {s.queue[s.len]=Some(req);s.len+=1;}
   }
  }
+}
+fn stop_loaded_task(s:&mut Ipc,reason:u8)->u64 {
+ let image=unsafe{read_volatile(addr_of!(IMAGE_COUNT))} as usize;
+ if !(2..=6).contains(&reason) {halt()}
+ cancel_loaded_requests(s);
  unsafe{write_volatile(addr_of_mut!(SPAWN_FAILED),true);write_volatile(addr_of_mut!(IMAGE_OUTCOMES).cast::<u8>().add(image-1),reason)};
  1
 }
@@ -216,12 +226,14 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
  }
  if esr>>26!=0x15 || esr&(1<<25)==0 {halt()}
  let (lo,hi)=if actor==0 && unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} {(super::mmu::USER_CODE as u64,super::mmu::USER_CODE as u64+unsafe{read_volatile(addr_of!(SPAWN_CODE_LEN))})} else if actor==0 {(addr_of!(task_a_loop) as u64,addr_of!(task_a_end) as u64)} else {(addr_of!(task_b_loop) as u64,addr_of!(task_b_end) as u64)};
- if f.elr<lo || f.elr>=hi {if loaded {let s=unsafe{&mut *addr_of_mut!(IPC)};return stop_loaded_task(s,2)} else {halt()}}
+ // ELR after SVC points at the next instruction, which may be exactly one
+ // byte past the image when SVC is its last (aligned) instruction.
+ if (loaded && (f.elr<=lo || f.elr>hi || f.elr&3!=0)) || (!loaded && (f.elr<lo || f.elr>=hi)) {if loaded {let s=unsafe{&mut *addr_of_mut!(IPC)};return stop_loaded_task(s,2)} else {halt()}}
  if unsafe{read_volatile(addr_of!(SLICE_MODE))}==0 {return 0}
  let s=unsafe{&mut *addr_of_mut!(IPC)};let op=esr&0xffff;
  let stage=unsafe{read_volatile(addr_of!(IMAGE_COUNT))};
  if loaded && ((op==0x130 && stage>3) || (op==0x131 && stage!=1)) {return stop_loaded_task(s,3)}
- if loaded && !matches!(op,0x103|0x105|0x121|0x122|0x130|0x131|0x7bad) {
+ if loaded && !matches!(op,0x103|0x105|0x121|0x122|0x123|0x130|0x131|0x7bad) {
   if op==0x666 && unsafe{read_volatile(addr_of!(IMAGE_COUNT))}==3 && unsafe{read64((super::mmu::ALIAS+136) as u64)}==1 {
    unsafe{write_volatile(addr_of_mut!(STALE_RESPONSE_BLOCKED),true)};
   }
@@ -292,6 +304,19 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
   0x122 if actor==0 && unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} && unsafe{read_volatile(addr_of!(IMAGE_COUNT))}==4 => {
    if f.elr!=super::mmu::USER_CODE as u64+(addr_of!(second_after_svc) as u64-addr_of!(second_entry) as u64) || unsafe{read64((super::mmu::ALIAS+128) as u64)}!=0xa1a1 {return stop_loaded_task(s,3)}
    unsafe{write_volatile(addr_of_mut!(SPAWN_EXECUTED),true);write_volatile(addr_of_mut!(IMAGE_OUTCOMES).cast::<u8>().add(3),1)};return 1;
+  },
+  // Generic process exit: x0 is the exit status, independent of code address,
+  // image number and the demo's file protocol. Pending requests are dropped;
+  // already committed service effects are not rolled back.
+  0x123 if loaded => {
+   let image=usize::from(unsafe{read_volatile(addr_of!(IMAGE_COUNT))});
+   if image==0 || image>4 {halt()}
+   let exit_code=f.regs[0];
+   unsafe{write_volatile(addr_of_mut!(IMAGE_EXIT_CODES).cast::<Option<u64>>().add(image-1),Some(exit_code))};
+   if exit_code!=0 {return stop_loaded_task(s,6)}
+   cancel_loaded_requests(s);
+   unsafe{write_volatile(addr_of_mut!(SPAWN_EXECUTED),true);write_volatile(addr_of_mut!(IMAGE_OUTCOMES).cast::<u8>().add(image-1),1)};
+   return 1;
   },
   0x7bad if loaded => {
    let expected=unsafe{read_volatile(addr_of!(IMAGE_COUNT))}==1 && f.elr==super::mmu::USER_CODE as u64+(addr_of!(spawned_fail_after_svc) as u64-addr_of!(spawned_entry) as u64);
@@ -500,7 +525,7 @@ fn reclaim_exited(actor:usize) {
    if !unsafe{read_volatile(addr_of!(SPAWN_FAILED))} {
     let count=unsafe{read_volatile(addr_of!(IMAGE_COUNT))};
     if count==1 {unsafe{write_volatile(addr_of_mut!(IMAGE1_EXITED),true)}}
-    else if count==4 {unsafe{write_volatile(addr_of_mut!(IMAGE2_EXITED),true)}} else {halt()}
+    else if count==4 {unsafe{write_volatile(addr_of_mut!(IMAGE2_EXITED),true)}}
    }
    unsafe{write_volatile(addr_of_mut!(SPAWN_EXITED),true);write_volatile(addr_of_mut!(SPAWN_ACTIVE),false)}
   } else {unsafe{write_volatile(addr_of_mut!(FIRST_FRAME_A),frame)}}
@@ -511,7 +536,10 @@ fn reclaim_exited(actor:usize) {
  else if image_number==2 {unsafe{write_volatile(addr_of_mut!(IMAGE2_RECLAIMED),true)}}
  else if image_number==3 {unsafe{write_volatile(addr_of_mut!(IMAGE3_RECLAIMED),true)}}
  else if image_number==4 {unsafe{write_volatile(addr_of_mut!(IMAGE4_RECLAIMED),true)}}
- if (1..=4).contains(&image_number) {unsafe{write_volatile(addr_of_mut!(COMPLETIONS_REVOKED).cast::<bool>().add(image_number as usize-1),true)}}
+ if (1..=4).contains(&image_number) {unsafe{
+  write_volatile(addr_of_mut!(COMPLETIONS_REVOKED).cast::<bool>().add(image_number as usize-1),true);
+  write_volatile(addr_of_mut!(IMAGE_IRQ_X19_MAX_SEEN).cast::<bool>().add(image_number as usize-1),read_volatile(addr_of!(SPAWN_IRQ_X19_MAX_SEEN)));
+ }}
 }
 fn marker(actor:usize)->u64 {
  let frame=unsafe{read_volatile(addr_of!(TASK_FRAMES).cast::<usize>().add(actor))};
@@ -536,7 +564,6 @@ fn admit_spawned_task(program:&[u8],entry_offset:usize) {
  super::mmu::map_task_code(0,code_frame);
  let mut child=frame(0,super::mmu::ALIAS+PAGE,super::mmu::USER_CODE+entry_offset);
  child.regs[4]=1;
- child.regs[19]=unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>())}.checked_add(1).unwrap_or_else(||halt());
  unsafe {
   write_volatile(addr_of_mut!(A_FRAME),child);
   write_volatile(addr_of_mut!(FRAME_SCRUBBED).cast::<bool>(),false);
@@ -549,7 +576,7 @@ fn admit_spawned_task(program:&[u8],entry_offset:usize) {
   write_volatile(addr_of_mut!(NEXT_INCARNATION),next_process_id);
   write_volatile(addr_of_mut!(IMAGE_INCARNATIONS).cast::<u64>().add(count as usize),process_id);
   write_volatile(addr_of_mut!(IMAGE_COUNT),count+1);
-  write_volatile(addr_of_mut!(SPAWN_EXECUTED),false);write_volatile(addr_of_mut!(SPAWN_EXITED),false);write_volatile(addr_of_mut!(SPAWN_FAILED),false);write_volatile(addr_of_mut!(SPAWN_TICKS),0);
+  write_volatile(addr_of_mut!(SPAWN_EXECUTED),false);write_volatile(addr_of_mut!(SPAWN_EXITED),false);write_volatile(addr_of_mut!(SPAWN_FAILED),false);write_volatile(addr_of_mut!(SPAWN_TICKS),0);write_volatile(addr_of_mut!(SPAWN_IRQ_X19_MAX_SEEN),false);
   write_volatile(addr_of_mut!(IMAGE_LOADED),true);
   write_volatile(addr_of_mut!(SPAWN_REUSED),true);
   write_volatile(addr_of_mut!(SPAWN_ACTIVE),true);
@@ -632,9 +659,9 @@ pub fn status()->Value {
  let slice_ticks=unsafe{read_volatile(addr_of!(SLICE_TOTAL))};
  let values=[marker(0),marker(1)];
  let states=unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|s|match s {1=>"ready",2=>"running",3=>"exited",_=>"invalid"});
- let outcomes=unsafe{read_volatile(addr_of!(IMAGE_OUTCOMES))}.map(|v|match v {0=>"pending",1=>"success",2=>"fault",3=>"bad_svc",4=>"file_error",5=>"timeout",_=>"invalid"});
+ let outcomes=unsafe{read_volatile(addr_of!(IMAGE_OUTCOMES))}.map(|v|match v {0=>"pending",1=>"success",2=>"fault",3=>"bad_svc",4=>"file_error",5=>"timeout",6=>"exit_error",_=>"invalid"});
  let reclaimed=[unsafe{read_volatile(addr_of!(IMAGE1_RECLAIMED))},unsafe{read_volatile(addr_of!(IMAGE2_RECLAIMED))},unsafe{read_volatile(addr_of!(IMAGE3_RECLAIMED))},unsafe{read_volatile(addr_of!(IMAGE4_RECLAIMED))}];
- json!({"validated":done,"ticks":8,"el":"EL0","events":events,"timer":"disabled","interrupts":"masked","slice_ticks":slice_ticks,"slice_counts":counts,"mode":"service-boundary","private_values":values,"service_asid":super::mmu::active_root()>>48,"cross_code_read_denied":unsafe{read_volatile(addr_of!(CROSS_READ_DENIED))},"task_states":states,"frame_scrubbed":unsafe{read_volatile(addr_of!(FRAME_SCRUBBED))},"alias_removed":unsafe{read_volatile(addr_of!(ALIAS_REMOVED))},"dispatches":unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))},"loader_rejected":unsafe{read_volatile(addr_of!(LOADER_REJECTED))},"image_loaded":unsafe{read_volatile(addr_of!(IMAGE_LOADED))},"code_alias_removed":unsafe{read_volatile(addr_of!(CODE_ALIAS_REMOVED))},"code_frame_scrubbed":unsafe{read_volatile(addr_of!(CODE_FRAME_SCRUBBED))},"image_outcomes":outcomes,"images_reclaimed":reclaimed,"completions_revoked":unsafe{read_volatile(addr_of!(COMPLETIONS_REVOKED))},"pending_cancelled":unsafe{read_volatile(addr_of!(PENDING_CANCELLED))},"stale_response_blocked":unsafe{read_volatile(addr_of!(STALE_RESPONSE_BLOCKED))},"image_incarnations":unsafe{read_volatile(addr_of!(IMAGE_INCARNATIONS))},"stale_generation_rejected":unsafe{read_volatile(addr_of!(STALE_GENERATION_REJECTED))},"image_count":unsafe{read_volatile(addr_of!(IMAGE_COUNT))},"image1_exited":unsafe{read_volatile(addr_of!(IMAGE1_EXITED))},"image2_exited":unsafe{read_volatile(addr_of!(IMAGE2_EXITED))},"image1_reclaimed":unsafe{read_volatile(addr_of!(IMAGE1_RECLAIMED))},"image2_reclaimed":unsafe{read_volatile(addr_of!(IMAGE2_RECLAIMED))},"spawn_admitted":unsafe{read_volatile(addr_of!(SPAWN_ADMITTED))},"spawn_executed":unsafe{read_volatile(addr_of!(SPAWN_EXECUTED))},"spawn_failed":unsafe{read_volatile(addr_of!(SPAWN_FAILED))},"spawn_exited":unsafe{read_volatile(addr_of!(SPAWN_EXITED))},"spawn_reused_frame":unsafe{read_volatile(addr_of!(SPAWN_REUSED))},"frame_pool_capacity":4,"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()})
+ json!({"validated":done,"ticks":8,"el":"EL0","events":events,"timer":"disabled","interrupts":"masked","slice_ticks":slice_ticks,"slice_counts":counts,"mode":"service-boundary","private_values":values,"service_asid":super::mmu::active_root()>>48,"cross_code_read_denied":unsafe{read_volatile(addr_of!(CROSS_READ_DENIED))},"task_states":states,"frame_scrubbed":unsafe{read_volatile(addr_of!(FRAME_SCRUBBED))},"alias_removed":unsafe{read_volatile(addr_of!(ALIAS_REMOVED))},"dispatches":unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))},"loader_rejected":unsafe{read_volatile(addr_of!(LOADER_REJECTED))},"image_loaded":unsafe{read_volatile(addr_of!(IMAGE_LOADED))},"code_alias_removed":unsafe{read_volatile(addr_of!(CODE_ALIAS_REMOVED))},"code_frame_scrubbed":unsafe{read_volatile(addr_of!(CODE_FRAME_SCRUBBED))},"image_outcomes":outcomes,"image_exit_codes":unsafe{read_volatile(addr_of!(IMAGE_EXIT_CODES))},"image_irq_x19_max_seen":unsafe{read_volatile(addr_of!(IMAGE_IRQ_X19_MAX_SEEN))},"images_reclaimed":reclaimed,"completions_revoked":unsafe{read_volatile(addr_of!(COMPLETIONS_REVOKED))},"pending_cancelled":unsafe{read_volatile(addr_of!(PENDING_CANCELLED))},"stale_response_blocked":unsafe{read_volatile(addr_of!(STALE_RESPONSE_BLOCKED))},"image_incarnations":unsafe{read_volatile(addr_of!(IMAGE_INCARNATIONS))},"stale_generation_rejected":unsafe{read_volatile(addr_of!(STALE_GENERATION_REJECTED))},"image_count":unsafe{read_volatile(addr_of!(IMAGE_COUNT))},"image1_exited":unsafe{read_volatile(addr_of!(IMAGE1_EXITED))},"image2_exited":unsafe{read_volatile(addr_of!(IMAGE2_EXITED))},"image1_reclaimed":unsafe{read_volatile(addr_of!(IMAGE1_RECLAIMED))},"image2_reclaimed":unsafe{read_volatile(addr_of!(IMAGE2_RECLAIMED))},"spawn_admitted":unsafe{read_volatile(addr_of!(SPAWN_ADMITTED))},"spawn_executed":unsafe{read_volatile(addr_of!(SPAWN_EXECUTED))},"spawn_failed":unsafe{read_volatile(addr_of!(SPAWN_FAILED))},"spawn_exited":unsafe{read_volatile(addr_of!(SPAWN_EXITED))},"spawn_interrupts":unsafe{read_volatile(addr_of!(SPAWN_TICKS))},"spawn_irq_x19_max_seen":unsafe{read_volatile(addr_of!(SPAWN_IRQ_X19_MAX_SEEN))},"spawn_reused_frame":unsafe{read_volatile(addr_of!(SPAWN_REUSED))},"frame_pool_capacity":4,"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()})
 }
 
 global_asm!(r#"
@@ -838,6 +865,14 @@ slice_interrupt:
     add x7, x7, :lo12:SPAWN_ACTIVE
     ldrb w7, [x7]
     cbz w7, slice_fixed_registers
+    ldr x8, [sp, #152]       // saved user x19, diagnostic only
+    cmn x8, #1
+    b.ne 24f
+    adrp x7, SPAWN_IRQ_X19_MAX_SEEN
+    add x7, x7, :lo12:SPAWN_IRQ_X19_MAX_SEEN
+    mov w8, #1
+    strb w8, [x7]
+24:
     adrp x7, SPAWN_TICKS
     add x7, x7, :lo12:SPAWN_TICKS
     ldr x8, [x7]
@@ -1074,7 +1109,11 @@ slice_check_pc:
 slice_count_update:
     adrp x5, SLICE_COUNTS
     add x5, x5, :lo12:SLICE_COUNTS
-    ldr x6, [sp, #152]
+    // Scheduler accounting belongs to EL1. A loaded program controls x19
+    // and must never be able to overwrite the kernel's progress counter.
+    ldr x6, [x5, x2, lsl #3]
+    adds x6, x6, #1
+    b.cs irq_schedule_fail
     str x6, [x5, x2, lsl #3]
     adrp x5, SLICE_TOTAL
     add x5, x5, :lo12:SLICE_TOTAL

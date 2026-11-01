@@ -16,6 +16,18 @@ def legacy_slot(generation,snapshot):
  slot[20:24]=fnv(slot[8:20]+payload).to_bytes(4,'little');slot[24]=0xa5
  return bytes(slot)
 
+def independent_exit_elf(reference_hex,exit_code):
+ # Reuse only the bounded ELF header; instructions are supplied by the
+ # launcher, persisted in VFS, and not linked into the kernel image.
+ reference=bytes.fromhex(reference_hex)
+ if len(reference)<120 or reference[:4]!=b'\x7fELF' or not 0<=exit_code<=65535:raise RuntimeError('invalid external program template')
+ instructions=(0xd2800000 | (exit_code<<5),
+               0xd4000001 | (0x123<<5))
+ code=b''.join(i.to_bytes(4,'little') for i in instructions)
+ elf=bytearray(reference[:120]);elf[96:104]=len(code).to_bytes(8,'little');elf[104:112]=len(code).to_bytes(8,'little')
+ elf+=code
+ return elf.hex()
+
 def reject(g,tool,args,message):
  g.call(tool,args,rejected=True)
  result=g.trace[-1]['response']['result']
@@ -110,8 +122,10 @@ def main():
     if index==9:images['badsvc.bin']=loop_hex
     if loop_hex is None:
      loop=bytearray.fromhex(extra_images['badsvc.bin'])
-     if len(loop)<124 or loop[:4]!=b'\x7fELF':raise RuntimeError('bad timeout fixture ELF')
-     loop[120:124]=b'\x00\x00\x00\x14' # AArch64 `b .` at the ELF entry
+     if len(loop)<128 or loop[:4]!=b'\x7fELF':raise RuntimeError('bad timeout fixture ELF')
+     # User controls x19.  A timer preempts the infinite loop after this
+     # instruction; the next program must still be admitted after timeout.
+     loop[120:128]=bytes.fromhex('1300809200000014') # movn x19,#0; b .
      loop_hex=loop.hex()
     if index in (7,8) and g.call('file_get',{'name':'keep.bin'})!={'name':'keep.bin','hex':'00ff'}:raise RuntimeError('migration changed unrelated legacy file')
     if index==6 and g.call('file_list',{})!=expected_list({**images,'note':b'hello'.hex()}):raise RuntimeError('unexpected files after document-only migration')
@@ -197,6 +211,25 @@ def main():
    else:
     validate_slot(data[4*512:12*512],5,final,{**images,'keep.bin':'00ff','note':b'hello'.hex()})
     validate_slot(data[12*512:20*512],4,final,{**images,'keep.bin':'00ff','note':b'hello'.hex()})
+  # Persist new executable bytes via the VFS, then restart on the same disk.
+  # Two codes exercise both successful and unsuccessful task termination.
+  for attempt,exit_code in enumerate((0,42)):
+   external_hex=independent_exit_elf(next_hex,exit_code)
+   g=Guest(a.qemu,guest,disk,tmp,13+attempt*2,out,a.transport)
+   try:
+    g.progress('before external program',timeout_image=True,expected_exit_code=0 if attempt else None)
+    saved=g.call('file_put_hex',{'name':'next.bin','hex':external_hex})
+    if saved.get('readback_verified') is not True:raise RuntimeError('external ELF was not saved')
+    if g.call('file_get',{'name':'next.bin'})!={'name':'next.bin','hex':external_hex}:raise RuntimeError('external ELF differs before restart')
+    traces.append(g.trace);states.append(g.call('storage_status',{}))
+   finally:g.close()
+   g=Guest(a.qemu,guest,disk,tmp,14+attempt*2,out,a.transport)
+   try:
+    if g.call('file_get',{'name':'next.bin'})!={'name':'next.bin','hex':external_hex}:raise RuntimeError('external ELF not restored')
+    g.progress('external program execution',timeout_image=True,expected_exit_code=exit_code)
+    if g.call('document_snapshot',{})!=final:raise RuntimeError('external ELF changed workspace')
+    traces.append(g.trace);states.append(g.call('storage_status',{}))
+   finally:g.close()
   if a.exercise_storage_fault:
    # In the same integrated guest, fail confirmation after the commit flush.
    # The kernel must preserve the old in-memory view and deny further writes.

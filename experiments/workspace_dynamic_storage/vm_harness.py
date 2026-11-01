@@ -132,7 +132,7 @@ class Guest:
                         if 'return' in response:break
                 if request['execute']=='input-send-event':self.qmp_trace.append({'request':request,'response':response})
                 return response
-    def progress(self,label,timeout_image=False):
+    def progress(self,label,timeout_image=False,expected_exit_code=None):
         before=self.last_progress
         for _ in range(20):
             current=self.call('el0_status',{})
@@ -142,15 +142,22 @@ class Guest:
         if current.get('mode')!='service-boundary' or current.get('slice_ticks',0)<before.get('slice_ticks',0):raise RuntimeError('EL0 slices regressed across '+label)
         if current.get('private_values')!=[0xa1a1,0xb2b2] or current.get('service_asid')!=1:raise RuntimeError('private markers or service ASID changed across '+label)
         if current.get('dispatches',0)<before.get('dispatches',0) or current.get('frame_pool_assigned')!=0 or current.get('frame_scrubbed')!=[True,True] or current.get('alias_removed')!=[True,True]:raise RuntimeError('task teardown or reclamation invalid across '+label)
-        if any(current.get(k) is not True for k in ('spawn_admitted','spawn_reused_frame','spawn_executed','spawn_exited')):raise RuntimeError('new task did not reuse and release a frame across '+label)
-        expected=['success','fault','timeout' if timeout_image else 'bad_svc','success']
+        if any(current.get(k) is not True for k in ('spawn_admitted','spawn_reused_frame','spawn_exited')):raise RuntimeError('new task did not reuse and release a frame across '+label)
+        success=expected_exit_code is None or expected_exit_code==0
+        if current.get('spawn_executed') is not success:raise RuntimeError('wrong task exit state across '+label)
+        expected=['success','fault','timeout' if timeout_image else 'bad_svc','success' if success else 'exit_error']
         if current.get('image_count')!=4 or current.get('image_outcomes')!=expected or current.get('images_reclaimed')!=[True]*4:raise RuntimeError('fault containment or image cleanup invalid across '+label)
+        seen=current.get('image_irq_x19_max_seen')
+        if timeout_image and (not isinstance(seen,list) or len(seen)!=4 or seen[2] is not True):raise RuntimeError('timeout did not preempt x19=UINT64_MAX across '+label)
         if current.get('completions_revoked')!=[True]*4 or (not timeout_image and current.get('stale_response_blocked') is not True):raise RuntimeError('IPC response survived task exit across '+label)
         incarnations=current.get('image_incarnations')
         if not isinstance(incarnations,list) or len(incarnations)!=4 or any(not isinstance(x,int) or x<=0 for x in incarnations) or len(set(incarnations))!=4:raise RuntimeError('process incarnations not unique across '+label)
         if not timeout_image and current.get('stale_generation_rejected') is not True:raise RuntimeError('stale completion was not rejected across '+label)
         if current.get('loader_rejected') is not False or any(current.get(k) is not True for k in ('image_loaded','code_alias_removed','code_frame_scrubbed')):raise RuntimeError('program loading or code reclamation invalid across '+label)
+        exits=current.get('image_exit_codes')
+        if not isinstance(exits,list) or len(exits)!=4 or exits[3]!=expected_exit_code:raise RuntimeError('unexpected loaded program exit code across '+label)
         if len(current.get('slice_counts',[]))!=2 or any(a<b for a,b in zip(current['slice_counts'],before['slice_counts'])):raise RuntimeError('EL0 counts regressed across '+label)
+        if any(count >= (1<<63) for count in current['slice_counts']):raise RuntimeError('user register corrupted a kernel counter across '+label)
         again=self.call('el0_status',{})
         if again.get('task_states')!=['exited','exited'] or any(again.get(k)!=current.get(k) for k in ('slice_ticks','dispatches','slice_counts','frame_pool_assigned','frame_scrubbed','alias_removed','spawn_admitted','spawn_reused_frame','spawn_executed','spawn_exited','loader_rejected','image_loaded','code_alias_removed','code_frame_scrubbed','image_count','image_outcomes','images_reclaimed','completions_revoked','stale_response_blocked')):raise RuntimeError('exited task was dispatched again across '+label)
         self.last_progress=current

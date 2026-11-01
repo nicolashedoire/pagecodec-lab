@@ -8,9 +8,9 @@ At startup the EL1 service reads the two synthetic slots **before** the scripted
 
 ## QEMU scenario
 
-The integrated scenario runs nine sequential QEMU processes with exclusively created temporary 1 MiB disk images. The first boot starts with blank slots; A and B perform their FIFO edits and save the workspace. A task loaded from `init.bin` sends FIFO PUT and GET requests for `note=hello`, checks the returned five bytes, then exits. Two further loaded programs trigger an EL0 memory fault and an unknown SVC; the guest stops each task, cleans its frames and then runs `next.bin`. Another boot exercises a looping program and its interrupt budget. Synthetic MCP requests also create, list, delete and restore files, including non-UTF-8 bytes. Recorded traces cover this flow with [modern](evidence/workspace-dynamic-storage-modern.json) and [legacy](evidence/workspace-dynamic-storage-legacy.json) VirtIO.
+The integrated scenario runs multiple sequential QEMU processes with exclusively created temporary 1 MiB disk images. The first boot starts with blank slots; A and B perform their FIFO edits and save the workspace. A task loaded from `init.bin` sends FIFO PUT and GET requests for `note=hello`, checks the returned five bytes, then exits. Two further loaded programs trigger an EL0 memory fault and an unknown SVC; the guest stops each task, cleans its frames and then runs `next.bin`. Another boot exercises a looping program and its interrupt budget. Synthetic MCP requests also create, list, delete and restore files, including non-UTF-8 bytes. Recorded traces cover this flow with [modern](evidence/workspace-dynamic-storage-modern.json) and [legacy](evidence/workspace-dynamic-storage-legacy.json) VirtIO.
 
-The [CI run for commit `fa75bdb`](https://github.com/nicolashedoire/pagecodec-lab/actions/runs/41331732325) passed all jobs, including the integrated guest on both modern and legacy VirtIO. This result applies to that commit, not later changes.
+The [CI run for commit `1e68cee`](https://github.com/nicolashedoire/pagecodec-lab/actions/runs/41332960943) passed all jobs, including the integrated guest on both modern and legacy VirtIO. This result applies to that commit, not later changes.
 
 The next boots restore the saved files, then recover from a deliberately corrupted newest slot. The first VM also receives a synthetic QMP tablet click and an MCP assistant click; neither changes the saved document. An invalid `init.bin` is refused before frames are allocated; after repair through MCP the program loads again. A subsequent full-catalog boot makes its file PUT fail and checks that the task reports failure, exits and releases its code and data frames. The last two boots exercise migration from synthetic legacy snapshots. The host terminates QEMU after each completed scenario and never attaches a physical block device or host directory to the guest.
 
@@ -30,6 +30,15 @@ completion, delivery and acknowledgment. In this synchronous one-CPU guest,
 the scenario rejects a real late completion even when the next task has reused
 its request ID. This is not authenticated user identity, multicore safety or
 general cancellation of an effect that has already happened.
+
+Loaded ELF tasks can terminate with `SVC #0x123`; the kernel records the full
+`x0` exit code before revoking their mappings and scrubbing their frames.
+The integrated scenario writes different ELF images through the VFS, restarts
+the guest and checks exit codes 0 and 42. Other system calls, the task slots,
+and parts of the scheduler remain fixture-specific. The slice counter is now
+maintained by EL1 rather than copied from the user-controlled `x19` register;
+the VM exercises an interrupt with `x19` at its maximum value before running
+the next program.
 
 The two fixed EL0 tasks use separate physical code pages and separate L3 page tables. In each address space, the other task's code page is privileged and non-executable at EL0; startup checks the expected access permissions using address-translation probes. This is not a general process loader or a proof of complete isolation.
 
