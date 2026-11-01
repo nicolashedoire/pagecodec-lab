@@ -74,6 +74,15 @@ mappings and scrubs all four frames. This is time-slicing on one virtual CPU
 with a fixture-specific barrier; it is not multicore execution, a general
 process manager or an authenticated access-control system.
 
+After both slots and the queue have been cleaned, this guest can admit another
+pair during the same boot. The scenario runs successive pairs with fresh
+incarnations and checks that old completion tokens are rejected. It separately
+constructs a token with the current request ID but an earlier incarnation to
+exercise the incarnation check itself. Refusal while an earlier pair is still
+active is implemented but is not exercised deterministically by this scenario;
+internal failures after allocation may still halt the guest instead of rolling
+back cleanly.
+
 The two fixed EL0 tasks use separate physical code pages and separate L3 page tables. In each address space, the other task's code page is privileged and non-executable at EL0; startup checks the expected access permissions using address-translation probes. This is not a general process loader or a proof of complete isolation.
 
 ## IRQ diagnostic experiment

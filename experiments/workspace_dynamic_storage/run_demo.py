@@ -322,24 +322,39 @@ def main():
    if pair.get('io_submitted')!=[4,4] or pair.get('io_completed')!=[4,4]:raise RuntimeError('pair file operations were not completed independently: '+str(pair))
    for name,value in (('a-doc',b'AAAA'),('b-doc',b'BBBB')):
     if g.call('file_get',{'name':name})!={'name':name,'hex':value.hex()}:raise RuntimeError('pair file value incorrect after cross-access attempts')
-   reject(g,'process_pair_start',{},'pair already started')
-   if g.call('process_pair_status',{})!=pair:raise RuntimeError('second pair admission changed finished state')
+   if pair.get('run_id')!=1:raise RuntimeError('unexpected first pair run id')
    if g.call('document_snapshot',{})!=final:raise RuntimeError('paired tasks changed workspace')
+   for name,value in (('a-doc','aaaa'),('b-doc','bbbb')):
+    if not g.call('file_put',{'name':name,'data':value}).get('readback_verified'):raise RuntimeError('second pair inputs not reset')
+   # A malformed second pair must not overwrite the finished first result.
+   if not g.call('file_put_hex',{'name':'pair-b.bin','hex':'ff'}).get('readback_verified'):raise RuntimeError('second invalid pair fixture not saved')
+   reject(g,'process_pair_start',{},'invalid pair ELF')
+   if g.call('process_pair_status',{})!=pair:raise RuntimeError('rejected second pair changed first run state')
+   if not g.call('file_put_hex',{'name':'pair-b.bin','hex':pair_hex[1]}).get('readback_verified'):raise RuntimeError('second pair fixture repair failed')
+   if g.call('process_pair_start',{})!={'started':True}:raise RuntimeError('second pair admission failed')
+   pair2=g.wait_pair()
+   incarnations=pair2.get('incarnations',[])
+   if pair2.get('run_id')!=2 or len(incarnations)!=2 or min(incarnations)<=max(pair['incarnations']):raise RuntimeError('second pair identities were reused: '+str(pair2))
+   if pair2.get('stale_completion_rejected')!=[True,True] or pair2.get('old_incarnation_same_id_rejected')!=[True,True] or pair2.get('io_submitted')!=[4,4] or pair2.get('io_completed')!=[4,4]:raise RuntimeError('second pair IPC or stale completions invalid: '+str(pair2))
+   for name,value in (('a-doc',b'AAAA'),('b-doc',b'BBBB')):
+    if g.call('file_get',{'name':name})!={'name':name,'hex':value.hex()}:raise RuntimeError('second pair file value invalid')
    for side in ('a','b'):
     code=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/('pair-cancel-'+side+'.hex')).read_text().strip())
     image=independent_elf(next_hex,code)
     if not g.call('file_put_hex',{'name':'pair-'+side+'.bin','hex':image}).get('readback_verified'):raise RuntimeError('pending-write exit fixture was not committed')
+   if g.call('process_pair_start',{})!={'started':True}:raise RuntimeError('pending-write exit pair admission failed')
+   exit_pair=g.wait_pair()
+   if exit_pair.get('run_id')!=3 or min(exit_pair['incarnations'])<=max(pair2['incarnations']):raise RuntimeError('third pair identities were reused')
+   cancelled=exit_pair.get('io_cancelled_before_apply')
+   if exit_pair.get('io_submitted')!=[1,1] or exit_pair.get('io_completed')!=[0,0] or not isinstance(cancelled,list) or len(cancelled)!=2 or any(n not in (0,1) for n in cancelled):raise RuntimeError('pending-write exit accounting invalid: '+str(exit_pair))
+   for i,(name,old,new) in enumerate((('a-doc',b'AAAA',b'CCCC'),('b-doc',b'BBBB',b'DDDD'))):
+    expected=old if cancelled[i] else new
+    if g.call('file_get',{'name':name})!={'name':name,'hex':expected.hex()}:raise RuntimeError('exit write did not match cancellation outcome')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
   g=Guest(a.qemu,guest,disk,tmp,25,out,a.transport)
   try:
    g.progress('pair writes after restart',timeout_image=True,expected_exit_code=0)
-   for name,value in (('a-doc',b'AAAA'),('b-doc',b'BBBB')):
-    if g.call('file_get',{'name':name})!={'name':name,'hex':value.hex()}:raise RuntimeError('paired file write did not survive restart')
-   if g.call('process_pair_start',{})!={'started':True}:raise RuntimeError('pending-write exit pair admission failed')
-   exit_pair=g.wait_pair()
-   cancelled=exit_pair.get('io_cancelled_before_apply')
-   if exit_pair.get('io_submitted')!=[1,1] or exit_pair.get('io_completed')!=[0,0] or not isinstance(cancelled,list) or len(cancelled)!=2 or any(n not in (0,1) for n in cancelled):raise RuntimeError('pending-write exit accounting invalid: '+str(exit_pair))
    # A timer can let the service apply before exit. Only the still-queued
    # requests must be cancelled; already committed writes remain committed.
    for i,(name,old,new) in enumerate((('a-doc',b'AAAA',b'CCCC'),('b-doc',b'BBBB',b'DDDD'))):

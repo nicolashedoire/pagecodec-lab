@@ -69,6 +69,12 @@ static mut SPAWN_FAILED:bool=false;
 static mut SPAWN_REUSED:bool=false;
 #[no_mangle] static mut PAIR_ACTIVE:bool=false;
 static mut PAIR_STARTED:bool=false;
+static mut PAIR_RUN_ID:u64=0;
+// Tokens alone are retained for a delayed-reply rejection check; never payloads.
+static mut PAIR_LAST_TOKENS:[Option<CompletionToken>;2]=[None;2];
+static mut PAIR_STALE_TOKENS:[Option<CompletionToken>;2]=[None;2];
+static mut PAIR_STALE_REJECTED:[bool;2]=[false;2];
+static mut PAIR_OLD_INCARNATION_REJECTED:[bool;2]=[false;2];
 static mut PAIR_DONE:bool=false;
 static mut PAIR_INCARNATIONS:[u64;2]=[0;2];
 static mut PAIR_CODE_FRAMES:[usize;2]=[0;2];
@@ -188,6 +194,28 @@ pub fn request_is_live(request:&Request)->bool {
  c.actor==request.actor && c.incarnation==request.incarnation && c.id==request.id && c.popped && !c.applied
 }
 fn apply_completion(s:&mut Ipc,token:CompletionToken,success:bool,data:&[u8])->bool {
+ // Replay only a token captured from an actual earlier incarnation, while
+ // the new incarnation's request is popped and awaiting a service response.
+ if token.actor<2 && token.id>=8 && unsafe{read_volatile(addr_of!(PAIR_ACTIVE))}
+  && token.incarnation==incarnation(token.actor) {
+  let p=unsafe{addr_of_mut!(PAIR_STALE_TOKENS).cast::<Option<CompletionToken>>().add(token.actor)};
+  let flag=unsafe{addr_of_mut!(PAIR_STALE_REJECTED).cast::<bool>().add(token.actor)};
+  let current=s.completions[7+token.actor];
+  if !unsafe{read_volatile(flag)} && current.actor==token.actor && current.incarnation==token.incarnation && current.id==token.id && current.popped && !current.applied {
+   if let Some(stale)=unsafe{read_volatile(p)} {
+    let before=s.completions[7+token.actor];
+    if stale.incarnation==token.incarnation || apply_completion_inner(s,stale,success,data) || s.completions[7+token.actor]!=before {halt()}
+    // Constructed counterfactual: keep the live actor and request ID but use
+    // the older incarnation, isolating the generation check from ID changes.
+    let old_generation=CompletionToken{actor:token.actor,incarnation:stale.incarnation,id:token.id};
+    if apply_completion_inner(s,old_generation,success,data) || s.completions[7+token.actor]!=before {halt()}
+    unsafe{write_volatile(flag,true);write_volatile(addr_of_mut!(PAIR_OLD_INCARNATION_REJECTED).cast::<bool>().add(token.actor),true);write_volatile(p,None)};
+   }
+  }
+ }
+ apply_completion_inner(s,token,success,data)
+}
+fn apply_completion_inner(s:&mut Ipc,token:CompletionToken,success:bool,data:&[u8])->bool {
  if token.actor>=2 || token.incarnation!=incarnation(token.actor) || data.len()>32 {return false}
  let Some(i)=completion_slot(token.actor,token.id) else{return false};let c=&mut s.completions[i];
  if c.actor!=token.actor || c.incarnation!=token.incarnation || c.id!=token.id || !c.popped || c.applied || (token.id<=7 && s.applied_len>=s.applied.len()) {return false}
@@ -325,6 +353,7 @@ fn generic_read(f:&mut Frame,s:&mut Ipc,actor:usize) {
  let Some(next)=id.checked_add(1) else{result(f,-75);return};
  let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:2,key:name,key_len:name_len,value:[0;32],value_len:0};
  if !submit(s,request) {result(f,-11);return}
+ if unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} {unsafe{write_volatile(addr_of_mut!(PAIR_LAST_TOKENS).cast::<Option<CompletionToken>>().add(actor),Some(request.token()))}}
  unsafe{write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:2,name,name_len,name_offset,dest_offset,capacity}));let p=addr_of_mut!(GENERIC_READ_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true)};
  result(f,-11);
 }
@@ -366,6 +395,7 @@ fn generic_write(f:&mut Frame,s:&mut Ipc,actor:usize) {
  let Some(next)=id.checked_add(1) else{result(f,-75);return};
  let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:1,key:name,key_len:name_len,value,value_len:len};
  if !submit(s,request) {result(f,-11);return}
+ if unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} {unsafe{write_volatile(addr_of_mut!(PAIR_LAST_TOKENS).cast::<Option<CompletionToken>>().add(actor),Some(request.token()))}}
  unsafe{write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:1,name,name_len,name_offset,dest_offset:src_offset,capacity:len}));let p=addr_of_mut!(GENERIC_WRITE_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true)};
  result(f,-11);
 }
@@ -682,8 +712,13 @@ fn reclaim_code_frame() {
 // use the shared synchronous file service, subject to its fixture namespace;
 // the barrier is fixture-only and is not a general IPC primitive.
 pub fn start_pair(a:&[u8],b:&[u8])->Result<(), &'static str> {
- if unsafe{read_volatile(addr_of!(PAIR_STARTED))} {return Err("pair already started")}
+ if unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} {return Err("pair already started")}
  if unsafe{read_volatile(addr_of!(TASK_STATE))}!=[3,3] || unsafe{read_volatile(addr_of!(IMAGE_COUNT))}<4 || unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} || unsafe{read_volatile(addr_of!(FRAME_BITMAP))}!=0 || unsafe{read_volatile(addr_of!(TASK_FRAMES))}!=[0,0] || super::mmu::active_root()!=super::mmu::root(0) {return Err("pair requires idle slots")}
+ let ipc=unsafe{&*addr_of!(IPC)};
+ if ipc.len!=0 || ipc.completions[7..9].iter().any(|c|c.id!=0)
+  || unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES))}!=[0;2]
+  || unsafe{read_volatile(addr_of!(GENERIC_IO))}.iter().any(Option::is_some) {return Err("pair requires idle slots")}
+ let run_id=unsafe{read_volatile(addr_of!(PAIR_RUN_ID))}.checked_add(1).ok_or("pair run exhausted")?;
  let a=super::loader::parse(a).ok_or("invalid pair ELF")?;
  let b=super::loader::parse(b).ok_or("invalid pair ELF")?;
  let first=unsafe{read_volatile(addr_of!(NEXT_INCARNATION))};
@@ -704,6 +739,16 @@ pub fn start_pair(a:&[u8],b:&[u8])->Result<(), &'static str> {
  unsafe {
   write_volatile(addr_of_mut!(A_FRAME),frame(0,super::mmu::ALIAS+PAGE,super::mmu::USER_CODE+images[0].entry_offset));
   write_volatile(addr_of_mut!(B_FRAME),frame(1,super::mmu::ALIAS+PAGE,super::mmu::USER_CODE+images[1].entry_offset));
+  write_volatile(addr_of_mut!(PAIR_STALE_TOKENS),read_volatile(addr_of!(PAIR_LAST_TOKENS)));
+  write_volatile(addr_of_mut!(PAIR_LAST_TOKENS),[None;2]);
+  write_volatile(addr_of_mut!(PAIR_STALE_REJECTED),[false;2]);write_volatile(addr_of_mut!(PAIR_OLD_INCARNATION_REJECTED),[false;2]);
+  write_volatile(addr_of_mut!(PAIR_IRQS),[0;2]);
+  write_volatile(addr_of_mut!(PAIR_BARRIER_SEEN),[false;2]);write_volatile(addr_of_mut!(PAIR_BARRIER_OPEN),false);
+  write_volatile(addr_of_mut!(PAIR_OUTCOMES),[0;2]);write_volatile(addr_of_mut!(PAIR_LIVE_MARKERS),[0;2]);
+  write_volatile(addr_of_mut!(PAIR_IO_SUBMITTED),[0;2]);write_volatile(addr_of_mut!(PAIR_IO_COMPLETED),[0;2]);write_volatile(addr_of_mut!(PAIR_IO_CANCELLED),[0;2]);
+  write_volatile(addr_of_mut!(PAIR_EXIT_CODES),[None;2]);write_volatile(addr_of_mut!(PAIR_MARKERS),[0;2]);
+  write_volatile(addr_of_mut!(PAIR_DATA_SCRUBBED),[false;2]);write_volatile(addr_of_mut!(PAIR_CODE_SCRUBBED),[false;2]);
+  write_volatile(addr_of_mut!(PAIR_DONE),false);write_volatile(addr_of_mut!(PAIR_RUN_ID),run_id);
   write_volatile(addr_of_mut!(PAIR_CODE_FRAMES),code);
   write_volatile(addr_of_mut!(PAIR_CODE_LEN),[images[0].code.len() as u64,images[1].code.len() as u64]);
   write_volatile(addr_of_mut!(PAIR_INCARNATIONS),[first,first+1]);
@@ -716,7 +761,7 @@ pub fn start_pair(a:&[u8],b:&[u8])->Result<(), &'static str> {
  Ok(())
 }
 pub fn pair_status()->Value {json!({
- "started":unsafe{read_volatile(addr_of!(PAIR_STARTED))},"done":unsafe{read_volatile(addr_of!(PAIR_DONE))},
+ "started":unsafe{read_volatile(addr_of!(PAIR_STARTED))},"done":unsafe{read_volatile(addr_of!(PAIR_DONE))},"run_id":unsafe{read_volatile(addr_of!(PAIR_RUN_ID))},"stale_completion_rejected":unsafe{read_volatile(addr_of!(PAIR_STALE_REJECTED))},"old_incarnation_same_id_rejected":unsafe{read_volatile(addr_of!(PAIR_OLD_INCARNATION_REJECTED))},
  "incarnations":unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS))},"mappings_verified":unsafe{read_volatile(addr_of!(PAIR_MAPPINGS_VERIFIED))},
  "io_submitted":unsafe{read_volatile(addr_of!(PAIR_IO_SUBMITTED))},"io_completed":unsafe{read_volatile(addr_of!(PAIR_IO_COMPLETED))},"io_cancelled_before_apply":unsafe{read_volatile(addr_of!(PAIR_IO_CANCELLED))},"irq_counts":unsafe{read_volatile(addr_of!(PAIR_IRQS))},"exit_codes":unsafe{read_volatile(addr_of!(PAIR_EXIT_CODES))},"outcomes":unsafe{read_volatile(addr_of!(PAIR_OUTCOMES))},"barrier_seen":unsafe{read_volatile(addr_of!(PAIR_BARRIER_SEEN))},"live_markers":unsafe{read_volatile(addr_of!(PAIR_LIVE_MARKERS))},
  "markers":unsafe{read_volatile(addr_of!(PAIR_MARKERS))},"data_scrubbed":unsafe{read_volatile(addr_of!(PAIR_DATA_SCRUBBED))},

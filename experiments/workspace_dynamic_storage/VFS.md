@@ -73,8 +73,13 @@ write different values at the same virtual address, wait until both have been
 preempted, and check their own value before exiting. The harness checks the
 kernel's mapping, execution and frame-reclamation status. The scenario stores
 the two ELFs through the VFS, restarts the virtual disk, rejects a malformed
-ELF without partial admission, launches the corrected pair and refuses a
-second launch after cleanup. This demonstrates
+ELF without partial admission, launches the corrected pair, then starts a new
+pair after cleanup on the same boot. It verifies fresh incarnations, rejects
+real completions from the previous pair, also rejects an explicitly constructed
+token using the current request ID with the previous incarnation, and preserves
+the finished result when a
+new ELF is malformed. The separate refusal while a pair is active is not
+exercised by this scenario. This demonstrates
 two time-sliced tasks on one virtual CPU; it does not provide a general-purpose
 process manager, syscall API or multicore execution. The MCP endpoint remains
 unauthenticated and is intended only for an isolated QEMU VM.
@@ -143,8 +148,10 @@ slot and permits writes again. The runner also checks an image with two
 nonblank invalid slots leaves all disk bytes unchanged. Both images are
 temporary QEMU disks; the injection is absent from normal builds. Recorded
 synthetic traces are available for [modern](evidence/storage-fault-modern.json)
-and [legacy](evidence/storage-fault-legacy.json) VirtIO. This tests a specific
-reported-error window, not power-loss durability or rollback.
+and [legacy](evidence/storage-fault-legacy.json) VirtIO. The legacy fault trace
+predates the repeatable-pair change; the current normal guest was exercised on
+both transports. This tests a specific reported-error window, not power-loss
+durability or rollback.
 
 The versioned payload has exactly `format`, `document`, and `files` keys. Its
 `format` is `workspace-files-v1`; file contents are lowercase hexadecimal.
