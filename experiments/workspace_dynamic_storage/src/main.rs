@@ -440,6 +440,9 @@ fn put_file<T:Transport>(disk:&mut VirtIOBlk<VmHal,T>,doc:&DocumentDemo,files:&m
     Ok(commit)
 }
 fn delete_file<T:Transport>(disk:&mut VirtIOBlk<VmHal,T>,doc:&DocumentDemo,files:&mut vfs::Files,name:&str)->Result<(usize,u64),&'static str> {
+    // Keep the boot image name reserved: deleting it and reseeding it on the
+    // next boot would violate the persistent-delete contract.
+    if name=="init.bin" {return Err("reserved file")}
     let mut next=files.clone();
     next.remove(name)?;
     let commit=save_snapshot(disk,doc,&next)?;
@@ -526,6 +529,11 @@ pub extern "C" fn graph_main() -> ! {
             Err(_)=>restore_status="invalid",
         }
     }
+    // Seed only an absent initial file after a valid or blank restore. The
+    // normal task save persists it; never replace a present altered program.
+    if matches!(restore_status,"blank"|"restored") && matches!(files.get("init.bin"),Err("file not found")) {
+        let _=files.put("init.bin",el0::approved_program());
+    }
     let mut storage_state=json!({"restore":restore_status,"restore_generation":restore_generation,"restore_slots":restore_slots,"before":restore_before,"after":document.snapshot(),"save":null});
     let mut hclick = false;
     let mut interaction=Interaction::default();
@@ -538,7 +546,9 @@ pub extern "C" fn graph_main() -> ! {
                   cursor(&router, &human), cursor(&router, &ai), cursor(&router, &remote), hclick, &interaction); }
     if gpu.flush().is_err() { halt() }
     el0::prepare_slices();
-    let mut line = [0u8;512];
+    // A complete 512-byte binary file requires 1,024 hexadecimal characters
+    // plus the bounded JSON-RPC envelope; oversized lines remain rejected.
+    let mut line = [0u8;1536];
     let mut used = 0usize;
     let mut overflow = false;
     let mut initialized = false;
@@ -551,7 +561,7 @@ pub extern "C" fn graph_main() -> ! {
     let mut service_polls=SERVICE_POLLS;
     loop {
         if service_polls>=SERVICE_POLLS {
-            el0::run_slice();
+            el0::run_slice(files.read_for_load("init.bin",512).ok());
             // No EL0 task runs while this sole service owns the document.
             // Two entries at most can have been queued before this slice ends.
             for _ in 0..2 {
@@ -683,6 +693,7 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"storage_status","description":"Read synthetic startup restore and last SVC save status.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"file_get","description":"Read one synthetic flat file as hexadecimal bytes; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}},
                                         {"name":"file_put","description":"Save one bounded synthetic UTF-8 file with the current workspace snapshot; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"data":{"type":"string"}},"required":["name","data"],"additionalProperties":false}},
+                                        {"name":"file_put_hex","description":"Save bounded binary bytes encoded as lowercase hexadecimal; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"hex":{"type":"string"}},"required":["name","hex"],"additionalProperties":false}},
                                         {"name":"file_list","description":"List synthetic file names and sizes; no authentication.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"file_delete","description":"Remove one synthetic file and save the workspace snapshot; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}},
                                         {"name":"ipc_status","description":"Read the bounded FIFO and task completion status.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
@@ -760,6 +771,21 @@ pub extern "C" fn graph_main() -> ! {
                                                         Err(error)=>tool_error(id,error),
                                                     }
                                                 } else {tool_error(id,"storage unavailable");}
+                                            }
+                                            Some("file_put_hex") => {
+                                                let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
+                                                let name=args.and_then(|o|o.get("name")).and_then(Value::as_str);
+                                                let hex=args.and_then(|o|o.get("hex")).and_then(Value::as_str);
+                                                if !args.is_some_and(|o|o.len()==2) || name.is_none() || hex.is_none() {tool_error(id,"invalid file_put_hex arguments");}
+                                                else {match vfs::decode_hex(hex.unwrap()) {
+                                                    Err(error)=>tool_error(id,error),
+                                                    Ok(bytes)=>if let Some(ref mut disk)=block {
+                                                        match put_file(disk,&document,&mut files,name.unwrap(),&bytes) {
+                                                            Ok((slot,generation))=>tool_json(id,json!({"slot":slot,"generation":generation,"readback_verified":true})),
+                                                            Err(error)=>tool_error(id,error),
+                                                        }
+                                                    } else {tool_error(id,"storage unavailable");},
+                                                }}
                                             }
                                             Some("ipc_status") => {
                                                 let args=params.and_then(|p|p.get("arguments"));

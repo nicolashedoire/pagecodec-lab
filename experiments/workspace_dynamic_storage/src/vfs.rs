@@ -20,6 +20,24 @@ fn valid_name(name: &str) -> bool {
         && name.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
 }
 
+// Match the persisted canonical lowercase format; reject malformed input
+// before constructing a candidate file or changing the catalog.
+pub fn decode_hex(hex: &str) -> Result<Vec<u8>, &'static str> {
+    let hex=hex.as_bytes();
+    if hex.len()>MAX_FILE*2 {return Err("file too large")}
+    if hex.len()%2!=0 {return Err("hex length must be even")}
+    fn nibble(b:u8)->Option<u8> {
+        match b {b'0'..=b'9'=>Some(b-b'0'),b'a'..=b'f'=>Some(b-b'a'+10),_=>None}
+    }
+    let mut bytes=Vec::with_capacity(hex.len()/2);
+    for pair in hex.chunks_exact(2) {
+        let hi=nibble(pair[0]).ok_or("invalid lowercase hexadecimal")?;
+        let lo=nibble(pair[1]).ok_or("invalid lowercase hexadecimal")?;
+        bytes.push(hi<<4|lo);
+    }
+    Ok(bytes)
+}
+
 impl Files {
     pub fn put(&mut self, name: &str, data: &[u8]) -> Result<(), &'static str> {
         if !valid_name(name) { return Err("invalid filename"); }
@@ -36,6 +54,15 @@ impl Files {
     pub fn get(&self, name: &str) -> Result<&[u8], &'static str> {
         if !valid_name(name) { return Err("invalid filename"); }
         self.entries.get(name).map(Vec::as_slice).ok_or("file not found")
+    }
+
+    // Loader receives a slice of the existing catalog, not an unbounded copy.
+    // The caller must validate the program format and execute permissions.
+    pub fn read_for_load(&self, name:&str, max:usize)->Result<&[u8], &'static str> {
+        if max==0 || max>MAX_FILE {return Err("invalid loader bound")}
+        let data=self.get(name)?;
+        if data.is_empty() || data.len()>max {return Err("program size outside bound")}
+        Ok(data)
     }
 
     pub fn remove(&mut self, name: &str) -> Result<(), &'static str> {
@@ -68,15 +95,7 @@ impl Files {
         if object.len() > MAX_FILES { return None; }
         let mut files = Self::default();
         for (name, value) in object {
-            let hex = value.as_str()?.as_bytes();
-            if hex.len() > MAX_FILE * 2 || hex.len() % 2 != 0 { return None; }
-            let mut bytes = Vec::with_capacity(hex.len() / 2);
-            for pair in hex.chunks_exact(2) {
-                fn nibble(b: u8) -> Option<u8> {
-                    match b { b'0'..=b'9' => Some(b - b'0'), b'a'..=b'f' => Some(b - b'a' + 10), _ => None }
-                }
-                bytes.push(nibble(pair[0])? << 4 | nibble(pair[1])?);
-            }
+            let bytes=decode_hex(value.as_str()?).ok()?;
             files.put(name, &bytes).ok()?;
         }
         Some(files)

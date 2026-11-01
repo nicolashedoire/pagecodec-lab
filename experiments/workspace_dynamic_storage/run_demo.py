@@ -28,19 +28,43 @@ def main():
  guest=Path(a.guest);h=sha(guest.read_bytes());qemu=subprocess.run([a.qemu,'--version'],check=True,capture_output=True,text=True,timeout=10).stdout.splitlines()[0]
  blank={'base':{'title':'base','common':'seed'},'human':{'title':'base','common':'seed'},'assistant':{'title':'base','common':'seed'}}
  final={'base':blank['base'],'human':{'title':'base','common':'seed','theme':'human-two'},'assistant':{'title':'base','common':'seed','layout':'assistant'}}
- traces=[];states=[];qmp_events=[];file_hex=b'persisted through recovery'.hex()
+ traces=[];states=[];qmp_events=[];file_hex=b'persisted through recovery'.hex();binary_hex='00ff80fe0041';program_hex=None
  with tempfile.TemporaryDirectory(prefix='workspace-storage-ipc-') as tmp:
   disk=Path(tmp)/'disk.raw';create(disk,bytes(SIZE));first_image=None
-  for index in (1,2,3,4):
+  for index in (1,2,3,4,5,6):
    if index==3:
     # Simulate a damaged newest snapshot while the guest is stopped. The
     # following boot must use the intact older slot, then repair redundancy.
-    damaged=bytearray(disk.read_bytes());damaged[12*512+512]^=1;disk.write_bytes(damaged)
-   if index==4:
+    damaged=bytearray(disk.read_bytes());damaged[4*512+512]^=1;disk.write_bytes(damaged)
+   if index==6:
     # An old-format committed image must restore through the same service.
     disk=Path(tmp)/'legacy.raw';old=bytearray(SIZE);old[4*512:12*512]=legacy_slot(1,final);create(disk,old)
    g=Guest(a.qemu,guest,disk,tmp,index,out,a.transport)
    try:
+    if index==5:
+     # A full catalog refuses the task's new file; it must exit cleanly.
+     for _ in range(8):
+      failed=g.call('el0_status',{});ipc=g.call('ipc_status',{})
+      if failed.get('spawn_exited') is True:break
+      time.sleep(.1)
+     else:raise RuntimeError('failed file operation did not terminate task')
+     if any(failed.get(k) is not True for k in ('spawn_admitted','spawn_failed','spawn_exited','alias_removed','frame_scrubbed','code_alias_removed','code_frame_scrubbed') if k not in ('alias_removed','frame_scrubbed')) or failed.get('alias_removed')!=[True,True] or failed.get('frame_scrubbed')!=[True,True] or failed.get('spawn_executed') is not False or failed.get('frame_pool_assigned')!=0:raise RuntimeError('failed task cleanup invalid: '+str(failed))
+     if not ipc.get('initial_finished') or ipc.get('file_finished') or ipc.get('accepted')!=[1,2,3,4,6] or ipc.get('applied')!=[1,2,3,4,6] or ipc.get('queue_len')!=0:raise RuntimeError('failed IPC outcome invalid: '+str(ipc))
+     if len(g.call('file_list',{}))!=8:raise RuntimeError('failure fixture catalog not full')
+     reject(g,'file_get',{'name':'note'},'file not found')
+     stable=g.call('el0_status',{})
+     if any(stable.get(k)!=failed.get(k) for k in ('spawn_exited','spawn_failed','frame_pool_assigned','code_alias_removed','code_frame_scrubbed','dispatches','slice_ticks')):raise RuntimeError('failed task was dispatched again')
+     traces.append(g.trace);states.append(g.call('storage_status',{}));continue
+    if index==4:
+     # An existing but altered program must not be silently replaced or run.
+     for _ in range(8):
+      denied=g.call('el0_status',{});initial=g.call('ipc_status',{})
+      if denied.get('loader_rejected') is True and denied.get('task_states')==['exited','exited'] and initial.get('initial_finished') is True:break
+      time.sleep(.1)
+     else:raise RuntimeError('altered loader image was not refused: '+str(denied))
+     if denied.get('image_loaded') is not False or denied.get('spawn_executed') is not False or denied.get('frame_pool_assigned')!=0:raise RuntimeError('rejected image was admitted: '+str(denied))
+     if g.call('file_get',{'name':'init.bin'})!={'name':'init.bin','hex':'ff'}:raise RuntimeError('altered image silently changed')
+     if g.call('file_put_hex',{'name':'init.bin','hex':program_hex})!={'slot':1,'generation':10,'readback_verified':True}:raise RuntimeError('approved image repair failed')
     for _ in range(8):
      ipc=g.call('ipc_status',{})
      if ipc.get('finished') is True and ipc.get('consumed')==[1,2,3,4,6,7]:break
@@ -49,21 +73,30 @@ def main():
     if not ipc.get('initial_finished') or not ipc.get('file_finished') or any(ipc.get(k)!=[1,2,3,4,6,7] for k in ('accepted','applied','consumed')) or not ipc.get('save_denied') or not ipc.get('denial_consumed') or ipc.get('queue_len')!=0 or not ipc.get('full_rejected') or not ipc.get('full_consumed') or any(ipc.get(k)!=[True,True] for k in ('range_rejected','overflow_rejected','duplicate_rejected','utf8_rejected','spoof_rejected')) or ipc.get('source')!='synthetic descriptors and bytes constructed by EL0':raise RuntimeError('IPC save and rejection invariants failed: '+str(ipc))
     g.progress('EL0 file put/get and process exit')
     storage=g.call('storage_status',{})
-    expected={'restore':'blank' if index==1 else 'restored','restore_generation':None if index==1 else 5 if index in (2,3) else 1,'restore_slots':(['blank','blank'] if index==1 else ['valid','valid'] if index==2 else ['valid','invalid'] if index==3 else ['valid','blank']),'before':blank,'after':blank if index==1 else final,'save':{'slot':0 if index==1 else 1,'generation':1 if index==1 else 6 if index in (2,3) else 2,'readback_verified':True,'snapshot':final}}
+    expected={'restore':'blank' if index==1 else 'restored','restore_generation':None if index==1 else 6 if index in (2,3) else 8 if index==4 else 1,'restore_slots':(['blank','blank'] if index==1 else ['valid','valid'] if index in (2,4) else ['invalid','valid'] if index==3 else ['valid','blank']),'before':blank,'after':blank if index==1 else final,'save':{'slot':0 if index in (1,2,3,4) else 1,'generation':1 if index==1 else 7 if index in (2,3) else 9 if index==4 else 2,'readback_verified':True,'snapshot':final}}
     if storage!=expected:raise RuntimeError('restore/save mismatch: '+str(storage))
+    init=g.call('file_get',{'name':'init.bin'})
+    if init.get('name')!='init.bin' or not isinstance(init.get('hex'),str) or not init['hex'] or len(init['hex'])>1024:raise RuntimeError('invalid init program file')
+    if program_hex is None:program_hex=init['hex']
+    elif init['hex']!=program_hex:raise RuntimeError('init program changed during restore')
     if g.call('file_get',{'name':'note'})!={'name':'note','hex':b'hello'.hex()}:raise RuntimeError('EL0 file missing')
     if index==1:
-     if g.call('file_list',{})!=[{'name':'note','size':5}]:raise RuntimeError('initial EL0 file list mismatch')
+     if g.call('file_list',{})!=[{'name':'init.bin','size':len(program_hex)//2},{'name':'note','size':5}]:raise RuntimeError('initial EL0 file list mismatch')
      if g.call('file_put',{'name':'notes.txt','data':'persisted through recovery'})!={'slot':0,'generation':3,'readback_verified':True}:raise RuntimeError('file save failed')
      if g.call('file_put',{'name':'temp.txt','data':'discard'})!={'slot':1,'generation':4,'readback_verified':True}:raise RuntimeError('temporary file save failed')
-     if g.call('file_list',{})!=[{'name':'note','size':5},{'name':'notes.txt','size':26},{'name':'temp.txt','size':7}]:raise RuntimeError('file list mismatch')
+     if g.call('file_list',{})!=[{'name':'init.bin','size':len(program_hex)//2},{'name':'note','size':5},{'name':'notes.txt','size':26},{'name':'temp.txt','size':7}]:raise RuntimeError('file list mismatch')
      if g.call('file_delete',{'name':'temp.txt'})!={'slot':0,'generation':5,'readback_verified':True}:raise RuntimeError('file delete failed')
      reject(g,'file_delete',{'name':'temp.txt'},'file not found')
      reject(g,'file_put',{'name':'../bad','data':'no'},'invalid filename')
      reject(g,'file_get',{'name':'x'*33},'invalid filename')
-    if index in (1,2,3) and g.call('file_get',{'name':'notes.txt'})!={'name':'notes.txt','hex':file_hex}:raise RuntimeError('named file lost during restore')
-    if index in (1,2,3) and g.call('file_list',{})!=[{'name':'note','size':5},{'name':'notes.txt','size':26}]:raise RuntimeError('deleted file returned or catalog changed')
-    if index in (2,3):reject(g,'file_get',{'name':'temp.txt'},'file not found')
+     reject(g,'file_delete',{'name':'init.bin'},'reserved file')
+     reject(g,'file_put_hex',{'name':'binary.bin','hex':'f'},'hex length must be even')
+     reject(g,'file_put_hex',{'name':'binary.bin','hex':'ffGG'},'invalid lowercase hexadecimal')
+     if g.call('file_put_hex',{'name':'binary.bin','hex':binary_hex})!={'slot':1,'generation':6,'readback_verified':True}:raise RuntimeError('binary file save failed')
+    if index in (1,2,3,4) and g.call('file_get',{'name':'notes.txt'})!={'name':'notes.txt','hex':file_hex}:raise RuntimeError('named file lost during restore')
+    if index in (1,2,3,4) and g.call('file_get',{'name':'binary.bin'})!={'name':'binary.bin','hex':binary_hex}:raise RuntimeError('binary bytes lost during restore')
+    if index in (1,2,3,4) and g.call('file_list',{})!=[{'name':'binary.bin','size':6},{'name':'init.bin','size':len(program_hex)//2},{'name':'note','size':5},{'name':'notes.txt','size':26}]:raise RuntimeError('deleted file returned or catalog changed')
+    if index in (2,3,4):reject(g,'file_get',{'name':'temp.txt'},'file not found')
     if g.call('document_snapshot',{})!=final:raise RuntimeError('bad document state')
     merge=g.call('document_merge',{});fields={x['key']:x for x in merge['fields']}
     if merge['conflicts'] or fields['theme']['origin']!='human' or fields['layout']['origin']!='assistant':raise RuntimeError('provenance mismatch')
@@ -86,22 +119,36 @@ def main():
      if g.call('click_ai',{})!={'focus':'select','clicks':1}:raise RuntimeError('AI click failed')
      if g.call('document_snapshot',{})!=final:raise RuntimeError('input changed saved document')
      qmp_events=g.qmp_trace
-    g.progress('save, restore and input');traces.append(g.trace);states.append(storage)
+    g.progress('save, restore and input')
+    if index==3 and g.call('file_put_hex',{'name':'init.bin','hex':'ff'})!={'slot':1,'generation':8,'readback_verified':True}:raise RuntimeError('altered image staging failed')
+    if index==4:
+     if g.call('file_delete',{'name':'note'})!={'slot':0,'generation':11,'readback_verified':True}:raise RuntimeError('failure fixture delete failed')
+     for n in range(5):
+      generation=12+n
+      if g.call('file_put',{'name':'fill'+str(n),'data':'x'})!={'slot':1 if generation%2==0 else 0,'generation':generation,'readback_verified':True}:raise RuntimeError('failure fixture fill failed')
+    traces.append(g.trace);states.append(storage)
    finally:g.close()
    data=disk.read_bytes()
    if index==1:
-    validate_slot(data[4*512:12*512],5,final,{'note':b'hello'.hex(),'notes.txt':file_hex})
-    validate_slot(data[12*512:20*512],4,final,{'note':b'hello'.hex(),'notes.txt':file_hex,'temp.txt':b'discard'.hex()})
+    validate_slot(data[4*512:12*512],5,final,{'init.bin':program_hex,'note':b'hello'.hex(),'notes.txt':file_hex})
+    validate_slot(data[12*512:20*512],6,final,{'binary.bin':binary_hex,'init.bin':program_hex,'note':b'hello'.hex(),'notes.txt':file_hex})
     if data[:4*512]!=bytes(4*512) or data[20*512:]!=bytes(SIZE-20*512):raise RuntimeError('out-of-slot writes')
     first_image=data
-   elif index in (2,3):
-    validate_slot(data[12*512:20*512],6,final,{'note':b'hello'.hex(),'notes.txt':file_hex})
-    if data[:12*512]!=first_image[:12*512] or data[20*512:]!=first_image[20*512:]:raise RuntimeError('recovery changed other sectors')
+   elif index==2:
+    validate_slot(data[4*512:12*512],7,final,{'binary.bin':binary_hex,'init.bin':program_hex,'note':b'hello'.hex(),'notes.txt':file_hex})
+    if data[:4*512]!=first_image[:4*512] or data[12*512:]!=first_image[12*512:]:raise RuntimeError('recovery changed other sectors')
+   elif index==3:
+    validate_slot(data[4*512:12*512],7,final,{'binary.bin':binary_hex,'init.bin':program_hex,'note':b'hello'.hex(),'notes.txt':file_hex})
+    validate_slot(data[12*512:20*512],8,final,{'binary.bin':binary_hex,'init.bin':'ff','note':b'hello'.hex(),'notes.txt':file_hex})
+    if data[:4*512]!=first_image[:4*512] or data[20*512:]!=first_image[20*512:]:raise RuntimeError('altered image staging changed unrelated sectors')
+   elif index==4:
+    filled={'binary.bin':binary_hex,'init.bin':program_hex,'notes.txt':file_hex,**{'fill'+str(n):b'x'.hex() for n in range(5)}}
+    validate_slot(data[12*512:20*512],16,final,filled)
    else:
-    validate_slot(data[4*512:12*512],3,final,{'note':b'hello'.hex()})
-    validate_slot(data[12*512:20*512],2,final,{})
+    validate_slot(data[4*512:12*512],3,final,{'init.bin':program_hex,'note':b'hello'.hex()})
+    validate_slot(data[12*512:20*512],2,final,{'init.bin':program_hex})
     if data[:4*512]!=bytes(4*512) or data[20*512:]!=bytes(SIZE-20*512):raise RuntimeError('migration changed unrelated sectors')
  if sha(guest.read_bytes())!=h:raise RuntimeError('image changed')
  (out/'workspace-dynamic-storage-evidence.json').write_text(json.dumps({'guest_sha256':h,'qemu_version':qemu,'transport':a.transport,'states':states,'qmp_input':qmp_events,'sessions':traces},indent=2)+'\n')
- print('PASS QEMU EL0 FIFO edits, file list/delete/refusals, restart, recovery and legacy migration')
+ print('PASS QEMU EL0 FIFO edits, binary file persistence, loader refusal/retry, recovery and legacy migration')
 if __name__=='__main__':main()

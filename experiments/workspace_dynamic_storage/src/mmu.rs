@@ -3,6 +3,7 @@ use core::{arch::asm, ptr::{addr_of,addr_of_mut,read_volatile,write_volatile}};
 const PAGE:usize=4096;const RAM_BASE:usize=0x4000_0000;const RAM_END:usize=RAM_BASE+128*1024*1024;
 const UART:usize=0x0900_0000;const VIRTIO:usize=0x0a00_0000;const GICD:usize=0x0800_0000;const GICC:usize=0x0801_0000;
 pub const ALIAS:usize=0x5000_0000;
+pub const USER_CODE:usize=ALIAS+PAGE;
 const AF:u64=1<<10;const SH:u64=3<<8;const RO:u64=1<<7;const USER:u64=1<<6;const NORMAL:u64=1<<2;
 const NG:u64=1<<11;const PXN:u64=1<<53;const UXN:u64=1<<54;const DESC:u64=3;const PA_MASK:u64=0x0000_ffff_ffff_f000;
 #[repr(C,align(4096))] struct Table([u64;512]);
@@ -41,6 +42,31 @@ pub fn map_task_alias(actor:usize,frame:usize) {
  switch_root(root(actor));
  let result=query(ALIAS,false,true);
  assert!(result&1==0 && result&PA_MASK==frame as u64 && query(ALIAS,true,true)&1==0);
+ switch_root(root(0));
+}
+/// Map a populated code frame RX at EL0; its identity alias remains EL1 NX.
+/// This single-CPU guest has caches disabled and invalidates all stage-1 TLBs.
+pub fn map_task_code(actor:usize,frame:usize) {
+ assert!(actor<2 && frame%PAGE==0 && active_root()==root(0));
+ let table=if actor==0 {addr_of_mut!(L3_ALIAS_A)}else{addr_of_mut!(L3_ALIAS_B)};
+ let entry=unsafe{table.cast::<u64>().add((USER_CODE>>12)&511)};
+ assert!(unsafe{read_volatile(entry)}==0);
+ unsafe{write_volatile(entry,frame as u64|AF|SH|NORMAL|RO|USER|PXN|NG|DESC);asm!("dsb ishst","tlbi vmalle1","dsb ish","isb");}
+ switch_root(root(actor));let result=query(USER_CODE,false,true);
+ assert!(result&1==0 && result&PA_MASK==frame as u64 && query(USER_CODE,true,true)&1!=0);
+ let descriptor=unsafe{read_volatile(entry)};
+ assert!(descriptor&(RO|USER|PXN|UXN|NG)==RO|USER|PXN|NG);
+ switch_root(root(1-actor));assert!(query(USER_CODE,false,true)&1!=0);
+ switch_root(root(0));
+}
+pub fn unmap_task_code(actor:usize,frame:usize) {
+ assert!(actor<2 && active_root()==root(0));
+ let table=if actor==0 {addr_of_mut!(L3_ALIAS_A)}else{addr_of_mut!(L3_ALIAS_B)};
+ let entry=unsafe{table.cast::<u64>().add((USER_CODE>>12)&511)};
+ let old=unsafe{read_volatile(entry)};
+ assert!(old&3==DESC && old&PA_MASK==(frame as u64&PA_MASK));
+ unsafe{write_volatile(entry,0);asm!("dsb ishst","tlbi vmalle1","dsb ish","isb");}
+ switch_root(root(actor));assert!(query(USER_CODE,false,true)&1!=0 && query(USER_CODE,true,true)&1!=0);
  switch_root(root(0));
 }
 /// Remove an exited task's private-page alias before its frame is recycled.

@@ -1,9 +1,10 @@
 # Running the integrated system guest
 
 `workspace_dynamic_storage` is the current integration guest: it boots one
-Rust image with two fixed EL0 tasks, virtual devices, a graphical demonstration,
-MCP and a synthetic workspace saved on a VirtIO disk. It is not a general OS,
-an application loader, or a native Apple Silicon boot image. See its
+Rust image with two fixed EL0 tasks, a third task loaded from one exact approved
+disk image, virtual devices, a graphical demonstration, MCP and a synthetic
+workspace saved on a VirtIO disk. It is not a general OS, a general application
+loader, or a native Apple Silicon boot image. See its
 [README](../experiments/workspace_dynamic_storage/README.md) for the precise
 capabilities and limitations.
 

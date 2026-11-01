@@ -1,5 +1,5 @@
 {
-  "guest_sha256": "d41fba5c493d4e55a43254cad294f40e1f992c898cb9bf60df0d2c26a6b283d4",
+  "guest_sha256": "1f4fccbeaa054eac5741a783321e5e63aeaba9af734a046d0283bf6c0e42b3f9",
   "qemu_version": "QEMU emulator version 11.1.3",
   "transport": "modern",
   "states": [
@@ -92,15 +92,15 @@
         }
       },
       "restore": "restored",
-      "restore_generation": 5,
+      "restore_generation": 6,
       "restore_slots": [
         "valid",
         "valid"
       ],
       "save": {
-        "generation": 6,
+        "generation": 7,
         "readback_verified": true,
-        "slot": 1,
+        "slot": 0,
         "snapshot": {
           "assistant": {
             "common": "seed",
@@ -151,15 +151,133 @@
         }
       },
       "restore": "restored",
-      "restore_generation": 5,
+      "restore_generation": 6,
       "restore_slots": [
-        "valid",
-        "invalid"
+        "invalid",
+        "valid"
       ],
       "save": {
-        "generation": 6,
+        "generation": 7,
         "readback_verified": true,
-        "slot": 1,
+        "slot": 0,
+        "snapshot": {
+          "assistant": {
+            "common": "seed",
+            "layout": "assistant",
+            "title": "base"
+          },
+          "base": {
+            "common": "seed",
+            "title": "base"
+          },
+          "human": {
+            "common": "seed",
+            "theme": "human-two",
+            "title": "base"
+          }
+        }
+      }
+    },
+    {
+      "after": {
+        "assistant": {
+          "common": "seed",
+          "layout": "assistant",
+          "title": "base"
+        },
+        "base": {
+          "common": "seed",
+          "title": "base"
+        },
+        "human": {
+          "common": "seed",
+          "theme": "human-two",
+          "title": "base"
+        }
+      },
+      "before": {
+        "assistant": {
+          "common": "seed",
+          "title": "base"
+        },
+        "base": {
+          "common": "seed",
+          "title": "base"
+        },
+        "human": {
+          "common": "seed",
+          "title": "base"
+        }
+      },
+      "restore": "restored",
+      "restore_generation": 8,
+      "restore_slots": [
+        "valid",
+        "valid"
+      ],
+      "save": {
+        "generation": 9,
+        "readback_verified": true,
+        "slot": 0,
+        "snapshot": {
+          "assistant": {
+            "common": "seed",
+            "layout": "assistant",
+            "title": "base"
+          },
+          "base": {
+            "common": "seed",
+            "title": "base"
+          },
+          "human": {
+            "common": "seed",
+            "theme": "human-two",
+            "title": "base"
+          }
+        }
+      }
+    },
+    {
+      "after": {
+        "assistant": {
+          "common": "seed",
+          "layout": "assistant",
+          "title": "base"
+        },
+        "base": {
+          "common": "seed",
+          "title": "base"
+        },
+        "human": {
+          "common": "seed",
+          "theme": "human-two",
+          "title": "base"
+        }
+      },
+      "before": {
+        "assistant": {
+          "common": "seed",
+          "title": "base"
+        },
+        "base": {
+          "common": "seed",
+          "title": "base"
+        },
+        "human": {
+          "common": "seed",
+          "title": "base"
+        }
+      },
+      "restore": "restored",
+      "restore_generation": 16,
+      "restore_slots": [
+        "valid",
+        "valid"
+      ],
+      "save": {
+        "generation": 17,
+        "readback_verified": true,
+        "slot": 0,
         "snapshot": {
           "assistant": {
             "common": "seed",
@@ -510,6 +628,26 @@
                 "name": "file_put"
               },
               {
+                "description": "Save bounded binary bytes encoded as lowercase hexadecimal; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "hex": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "hex"
+                  ],
+                  "type": "object"
+                },
+                "name": "file_put_hex"
+              },
+              {
                 "description": "List synthetic file names and sizes; no authentication.",
                 "inputSchema": {
                   "additionalProperties": false,
@@ -638,7 +776,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"alias_removed\":[true,false],\"cross_code_read_denied\":[true,true],\"dispatches\":10,\"el\":\"EL0\",\"events\":[{\"count\":1229,\"next\":1,\"task\":0},{\"count\":1360,\"next\":0,\"task\":1},{\"count\":2568,\"next\":1,\"task\":0},{\"count\":2524,\"next\":0,\"task\":1},{\"count\":4058,\"next\":1,\"task\":0},{\"count\":3932,\"next\":0,\"task\":1},{\"count\":5421,\"next\":1,\"task\":0},{\"count\":5327,\"next\":2,\"task\":1}],\"frame_pool_assigned\":1,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,false],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[7672,8060],\"slice_ticks\":9,\"spawn_admitted\":false,\"spawn_executed\":false,\"spawn_exited\":false,\"spawn_reused_frame\":false,\"task_states\":[\"exited\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,false],\"code_alias_removed\":false,\"code_frame_scrubbed\":false,\"cross_code_read_denied\":[true,true],\"dispatches\":10,\"el\":\"EL0\",\"events\":[{\"count\":1622,\"next\":1,\"task\":0},{\"count\":1715,\"next\":0,\"task\":1},{\"count\":3472,\"next\":1,\"task\":0},{\"count\":3432,\"next\":0,\"task\":1},{\"count\":5021,\"next\":1,\"task\":0},{\"count\":4680,\"next\":0,\"task\":1},{\"count\":6568,\"next\":1,\"task\":0},{\"count\":6423,\"next\":2,\"task\":1}],\"frame_pool_assigned\":1,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,false],\"image_loaded\":false,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[9002,9457],\"slice_ticks\":9,\"spawn_admitted\":false,\"spawn_executed\":false,\"spawn_exited\":false,\"spawn_failed\":false,\"spawn_reused_frame\":false,\"task_states\":[\"exited\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -710,7 +848,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1229,\"next\":1,\"task\":0},{\"count\":1360,\"next\":0,\"task\":1},{\"count\":2568,\"next\":1,\"task\":0},{\"count\":2524,\"next\":0,\"task\":1},{\"count\":4058,\"next\":1,\"task\":0},{\"count\":3932,\"next\":0,\"task\":1},{\"count\":5421,\"next\":1,\"task\":0},{\"count\":5327,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[14433,8060],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1622,\"next\":1,\"task\":0},{\"count\":1715,\"next\":0,\"task\":1},{\"count\":3472,\"next\":1,\"task\":0},{\"count\":3432,\"next\":0,\"task\":1},{\"count\":5021,\"next\":1,\"task\":0},{\"count\":4680,\"next\":0,\"task\":1},{\"count\":6568,\"next\":1,\"task\":0},{\"count\":6423,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[17121,9457],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -734,7 +872,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1229,\"next\":1,\"task\":0},{\"count\":1360,\"next\":0,\"task\":1},{\"count\":2568,\"next\":1,\"task\":0},{\"count\":2524,\"next\":0,\"task\":1},{\"count\":4058,\"next\":1,\"task\":0},{\"count\":3932,\"next\":0,\"task\":1},{\"count\":5421,\"next\":1,\"task\":0},{\"count\":5327,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[14433,8060],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1622,\"next\":1,\"task\":0},{\"count\":1715,\"next\":0,\"task\":1},{\"count\":3472,\"next\":1,\"task\":0},{\"count\":3432,\"next\":0,\"task\":1},{\"count\":5021,\"next\":1,\"task\":0},{\"count\":4680,\"next\":0,\"task\":1},{\"count\":6568,\"next\":1,\"task\":0},{\"count\":6423,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[17121,9457],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -774,12 +912,38 @@
           "params": {
             "name": "file_get",
             "arguments": {
-              "name": "note"
+              "name": "init.bin"
             }
           }
         },
         "response": {
           "id": 10,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"hex\":\"014000f9c2ed8dd282aeacf2028000f902ad8cd2828dadf2e20dc0f2029000f902000491020001f9820080d2020401f902800491020801f9a20080d2020c01f9c20080d2021c00f9021c40f9021001f9e20301aa030080d2012600d4212600d4612000d4022840f9820300b4031c40f9630002cae30300b5033840f9630040d2830300b5430840d2a30100b5039041f9a20080d2630002cac30200b5039441f902ad8cd2828dadf2e20dc0f2630002ca030200b5220080d202a801f9022840f9022c00f9033840f9033c00f9021c40f942040091021c00f9e20301aa030080d2a12000d4212400d473060091d7ffff17a1750fd4ffffff17\",\"name\":\"init.bin\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 11,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "note"
+            }
+          }
+        },
+        "response": {
+          "id": 11,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -795,7 +959,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 11,
+          "id": 12,
           "method": "tools/call",
           "params": {
             "name": "file_list",
@@ -803,12 +967,12 @@
           }
         },
         "response": {
-          "id": 11,
+          "id": 12,
           "jsonrpc": "2.0",
           "result": {
             "content": [
               {
-                "text": "[{\"name\":\"note\",\"size\":5}]",
+                "text": "[{\"name\":\"init.bin\",\"size\":248},{\"name\":\"note\",\"size\":5}]",
                 "type": "text"
               }
             ],
@@ -819,7 +983,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 12,
+          "id": 13,
           "method": "tools/call",
           "params": {
             "name": "file_put",
@@ -830,7 +994,7 @@
           }
         },
         "response": {
-          "id": 12,
+          "id": 13,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -846,7 +1010,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 13,
+          "id": 14,
           "method": "tools/call",
           "params": {
             "name": "file_put",
@@ -857,7 +1021,7 @@
           }
         },
         "response": {
-          "id": 13,
+          "id": 14,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -873,7 +1037,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 14,
+          "id": 15,
           "method": "tools/call",
           "params": {
             "name": "file_list",
@@ -881,12 +1045,12 @@
           }
         },
         "response": {
-          "id": 14,
+          "id": 15,
           "jsonrpc": "2.0",
           "result": {
             "content": [
               {
-                "text": "[{\"name\":\"note\",\"size\":5},{\"name\":\"notes.txt\",\"size\":26},{\"name\":\"temp.txt\",\"size\":7}]",
+                "text": "[{\"name\":\"init.bin\",\"size\":248},{\"name\":\"note\",\"size\":5},{\"name\":\"notes.txt\",\"size\":26},{\"name\":\"temp.txt\",\"size\":7}]",
                 "type": "text"
               }
             ],
@@ -897,7 +1061,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 15,
+          "id": 16,
           "method": "tools/call",
           "params": {
             "name": "file_delete",
@@ -907,7 +1071,7 @@
           }
         },
         "response": {
-          "id": 15,
+          "id": 16,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -923,7 +1087,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 16,
+          "id": 17,
           "method": "tools/call",
           "params": {
             "name": "file_delete",
@@ -933,7 +1097,7 @@
           }
         },
         "response": {
-          "id": 16,
+          "id": 17,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -949,7 +1113,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 17,
+          "id": 18,
           "method": "tools/call",
           "params": {
             "name": "file_put",
@@ -960,7 +1124,7 @@
           }
         },
         "response": {
-          "id": 17,
+          "id": 18,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -976,7 +1140,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 18,
+          "id": 19,
           "method": "tools/call",
           "params": {
             "name": "file_get",
@@ -986,7 +1150,7 @@
           }
         },
         "response": {
-          "id": 18,
+          "id": 19,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -1002,7 +1166,114 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 19,
+          "id": 20,
+          "method": "tools/call",
+          "params": {
+            "name": "file_delete",
+            "arguments": {
+              "name": "init.bin"
+            }
+          }
+        },
+        "response": {
+          "id": 20,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "reserved file",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 21,
+          "method": "tools/call",
+          "params": {
+            "name": "file_put_hex",
+            "arguments": {
+              "name": "binary.bin",
+              "hex": "f"
+            }
+          }
+        },
+        "response": {
+          "id": 21,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "hex length must be even",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 22,
+          "method": "tools/call",
+          "params": {
+            "name": "file_put_hex",
+            "arguments": {
+              "name": "binary.bin",
+              "hex": "ffGG"
+            }
+          }
+        },
+        "response": {
+          "id": 22,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "invalid lowercase hexadecimal",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 23,
+          "method": "tools/call",
+          "params": {
+            "name": "file_put_hex",
+            "arguments": {
+              "name": "binary.bin",
+              "hex": "00ff80fe0041"
+            }
+          }
+        },
+        "response": {
+          "id": 23,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"generation\":6,\"readback_verified\":true,\"slot\":1}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 24,
           "method": "tools/call",
           "params": {
             "name": "file_get",
@@ -1012,7 +1283,7 @@
           }
         },
         "response": {
-          "id": 19,
+          "id": 24,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -1028,20 +1299,22 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 20,
+          "id": 25,
           "method": "tools/call",
           "params": {
-            "name": "file_list",
-            "arguments": {}
+            "name": "file_get",
+            "arguments": {
+              "name": "binary.bin"
+            }
           }
         },
         "response": {
-          "id": 20,
+          "id": 25,
           "jsonrpc": "2.0",
           "result": {
             "content": [
               {
-                "text": "[{\"name\":\"note\",\"size\":5},{\"name\":\"notes.txt\",\"size\":26}]",
+                "text": "{\"hex\":\"00ff80fe0041\",\"name\":\"binary.bin\"}",
                 "type": "text"
               }
             ],
@@ -1052,7 +1325,31 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 21,
+          "id": 26,
+          "method": "tools/call",
+          "params": {
+            "name": "file_list",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 26,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "[{\"name\":\"binary.bin\",\"size\":6},{\"name\":\"init.bin\",\"size\":248},{\"name\":\"note\",\"size\":5},{\"name\":\"notes.txt\",\"size\":26}]",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 27,
           "method": "tools/call",
           "params": {
             "name": "document_snapshot",
@@ -1060,7 +1357,7 @@
           }
         },
         "response": {
-          "id": 21,
+          "id": 27,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -1076,7 +1373,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 22,
+          "id": 28,
           "method": "tools/call",
           "params": {
             "name": "document_merge",
@@ -1084,7 +1381,7 @@
           }
         },
         "response": {
-          "id": 22,
+          "id": 28,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -1100,7 +1397,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 23,
+          "id": 29,
           "method": "tools/call",
           "params": {
             "name": "document_edit",
@@ -1112,14 +1409,14 @@
             "code": -32602,
             "message": "unknown tool"
           },
-          "id": 23,
+          "id": 29,
           "jsonrpc": "2.0"
         }
       },
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 24,
+          "id": 30,
           "method": "tools/call",
           "params": {
             "name": "document_load",
@@ -1131,14 +1428,14 @@
             "code": -32602,
             "message": "unknown tool"
           },
-          "id": 24,
+          "id": 30,
           "jsonrpc": "2.0"
         }
       },
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 25,
+          "id": 31,
           "method": "tools/call",
           "params": {
             "name": "document_save",
@@ -1150,14 +1447,14 @@
             "code": -32602,
             "message": "unknown tool"
           },
-          "id": 25,
+          "id": 31,
           "jsonrpc": "2.0"
         }
       },
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 26,
+          "id": 32,
           "method": "tools/call",
           "params": {
             "name": "document_snapshot",
@@ -1165,7 +1462,7 @@
           }
         },
         "response": {
-          "id": 26,
+          "id": 32,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -1181,7 +1478,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 27,
+          "id": 33,
           "method": "tools/call",
           "params": {
             "name": "pointer_state",
@@ -1189,7 +1486,7 @@
           }
         },
         "response": {
-          "id": 27,
+          "id": 33,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -1205,7 +1502,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 28,
+          "id": 34,
           "method": "tools/call",
           "params": {
             "name": "interaction_state",
@@ -1213,7 +1510,7 @@
           }
         },
         "response": {
-          "id": 28,
+          "id": 34,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -1229,7 +1526,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 29,
+          "id": 35,
           "method": "tools/call",
           "params": {
             "name": "interaction_state",
@@ -1237,7 +1534,7 @@
           }
         },
         "response": {
-          "id": 29,
+          "id": 35,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -1253,7 +1550,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 30,
+          "id": 36,
           "method": "tools/call",
           "params": {
             "name": "move_ai",
@@ -1264,7 +1561,7 @@
           }
         },
         "response": {
-          "id": 30,
+          "id": 36,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -1280,7 +1577,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 31,
+          "id": 37,
           "method": "tools/call",
           "params": {
             "name": "click_ai",
@@ -1288,7 +1585,7 @@
           }
         },
         "response": {
-          "id": 31,
+          "id": 37,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -1304,7 +1601,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 32,
+          "id": 38,
           "method": "tools/call",
           "params": {
             "name": "document_snapshot",
@@ -1312,7 +1609,7 @@
           }
         },
         "response": {
-          "id": 32,
+          "id": 38,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -1328,7 +1625,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 33,
+          "id": 39,
           "method": "tools/call",
           "params": {
             "name": "el0_status",
@@ -1336,12 +1633,12 @@
           }
         },
         "response": {
-          "id": 33,
+          "id": 39,
           "jsonrpc": "2.0",
           "result": {
             "content": [
               {
-                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1229,\"next\":1,\"task\":0},{\"count\":1360,\"next\":0,\"task\":1},{\"count\":2568,\"next\":1,\"task\":0},{\"count\":2524,\"next\":0,\"task\":1},{\"count\":4058,\"next\":1,\"task\":0},{\"count\":3932,\"next\":0,\"task\":1},{\"count\":5421,\"next\":1,\"task\":0},{\"count\":5327,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[14433,8060],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1622,\"next\":1,\"task\":0},{\"count\":1715,\"next\":0,\"task\":1},{\"count\":3472,\"next\":1,\"task\":0},{\"count\":3432,\"next\":0,\"task\":1},{\"count\":5021,\"next\":1,\"task\":0},{\"count\":4680,\"next\":0,\"task\":1},{\"count\":6568,\"next\":1,\"task\":0},{\"count\":6423,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[17121,9457],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -1352,7 +1649,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 34,
+          "id": 40,
           "method": "tools/call",
           "params": {
             "name": "el0_status",
@@ -1360,12 +1657,12 @@
           }
         },
         "response": {
-          "id": 34,
+          "id": 40,
           "jsonrpc": "2.0",
           "result": {
             "content": [
               {
-                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1229,\"next\":1,\"task\":0},{\"count\":1360,\"next\":0,\"task\":1},{\"count\":2568,\"next\":1,\"task\":0},{\"count\":2524,\"next\":0,\"task\":1},{\"count\":4058,\"next\":1,\"task\":0},{\"count\":3932,\"next\":0,\"task\":1},{\"count\":5421,\"next\":1,\"task\":0},{\"count\":5327,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[14433,8060],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1622,\"next\":1,\"task\":0},{\"count\":1715,\"next\":0,\"task\":1},{\"count\":3472,\"next\":1,\"task\":0},{\"count\":3432,\"next\":0,\"task\":1},{\"count\":5021,\"next\":1,\"task\":0},{\"count\":4680,\"next\":0,\"task\":1},{\"count\":6568,\"next\":1,\"task\":0},{\"count\":6423,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[17121,9457],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -1579,6 +1876,26 @@
                 "name": "file_put"
               },
               {
+                "description": "Save bounded binary bytes encoded as lowercase hexadecimal; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "hex": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "hex"
+                  ],
+                  "type": "object"
+                },
+                "name": "file_put_hex"
+              },
+              {
                 "description": "List synthetic file names and sizes; no authentication.",
                 "inputSchema": {
                   "additionalProperties": false,
@@ -1707,7 +2024,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"alias_removed\":[true,false],\"cross_code_read_denied\":[true,true],\"dispatches\":10,\"el\":\"EL0\",\"events\":[{\"count\":1217,\"next\":1,\"task\":0},{\"count\":1328,\"next\":0,\"task\":1},{\"count\":2692,\"next\":1,\"task\":0},{\"count\":2693,\"next\":0,\"task\":1},{\"count\":4182,\"next\":1,\"task\":0},{\"count\":4022,\"next\":0,\"task\":1},{\"count\":5651,\"next\":1,\"task\":0},{\"count\":5380,\"next\":2,\"task\":1}],\"frame_pool_assigned\":1,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,false],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[7804,8081],\"slice_ticks\":9,\"spawn_admitted\":false,\"spawn_executed\":false,\"spawn_exited\":false,\"spawn_reused_frame\":false,\"task_states\":[\"exited\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,false],\"code_alias_removed\":false,\"code_frame_scrubbed\":false,\"cross_code_read_denied\":[true,true],\"dispatches\":10,\"el\":\"EL0\",\"events\":[{\"count\":1417,\"next\":1,\"task\":0},{\"count\":1659,\"next\":0,\"task\":1},{\"count\":3220,\"next\":1,\"task\":0},{\"count\":3331,\"next\":0,\"task\":1},{\"count\":4657,\"next\":1,\"task\":0},{\"count\":4601,\"next\":0,\"task\":1},{\"count\":6479,\"next\":1,\"task\":0},{\"count\":6143,\"next\":2,\"task\":1}],\"frame_pool_assigned\":1,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,false],\"image_loaded\":false,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[9187,9122],\"slice_ticks\":9,\"spawn_admitted\":false,\"spawn_executed\":false,\"spawn_exited\":false,\"spawn_failed\":false,\"spawn_reused_frame\":false,\"task_states\":[\"exited\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -1779,7 +2096,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1217,\"next\":1,\"task\":0},{\"count\":1328,\"next\":0,\"task\":1},{\"count\":2692,\"next\":1,\"task\":0},{\"count\":2693,\"next\":0,\"task\":1},{\"count\":4182,\"next\":1,\"task\":0},{\"count\":4022,\"next\":0,\"task\":1},{\"count\":5651,\"next\":1,\"task\":0},{\"count\":5380,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[14374,8081],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1417,\"next\":1,\"task\":0},{\"count\":1659,\"next\":0,\"task\":1},{\"count\":3220,\"next\":1,\"task\":0},{\"count\":3331,\"next\":0,\"task\":1},{\"count\":4657,\"next\":1,\"task\":0},{\"count\":4601,\"next\":0,\"task\":1},{\"count\":6479,\"next\":1,\"task\":0},{\"count\":6143,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[17011,9122],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -1803,7 +2120,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1217,\"next\":1,\"task\":0},{\"count\":1328,\"next\":0,\"task\":1},{\"count\":2692,\"next\":1,\"task\":0},{\"count\":2693,\"next\":0,\"task\":1},{\"count\":4182,\"next\":1,\"task\":0},{\"count\":4022,\"next\":0,\"task\":1},{\"count\":5651,\"next\":1,\"task\":0},{\"count\":5380,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[14374,8081],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1417,\"next\":1,\"task\":0},{\"count\":1659,\"next\":0,\"task\":1},{\"count\":3220,\"next\":1,\"task\":0},{\"count\":3331,\"next\":0,\"task\":1},{\"count\":4657,\"next\":1,\"task\":0},{\"count\":4601,\"next\":0,\"task\":1},{\"count\":6479,\"next\":1,\"task\":0},{\"count\":6143,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[17011,9122],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -1827,7 +2144,2783 @@
           "result": {
             "content": [
               {
-                "text": "{\"after\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}},\"before\":{\"assistant\":{\"common\":\"seed\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"title\":\"base\"}},\"restore\":\"restored\",\"restore_generation\":5,\"restore_slots\":[\"valid\",\"valid\"],\"save\":{\"generation\":6,\"readback_verified\":true,\"slot\":1,\"snapshot\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}}}",
+                "text": "{\"after\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}},\"before\":{\"assistant\":{\"common\":\"seed\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"title\":\"base\"}},\"restore\":\"restored\",\"restore_generation\":6,\"restore_slots\":[\"valid\",\"valid\"],\"save\":{\"generation\":7,\"readback_verified\":true,\"slot\":0,\"snapshot\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 10,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "init.bin"
+            }
+          }
+        },
+        "response": {
+          "id": 10,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"hex\":\"014000f9c2ed8dd282aeacf2028000f902ad8cd2828dadf2e20dc0f2029000f902000491020001f9820080d2020401f902800491020801f9a20080d2020c01f9c20080d2021c00f9021c40f9021001f9e20301aa030080d2012600d4212600d4612000d4022840f9820300b4031c40f9630002cae30300b5033840f9630040d2830300b5430840d2a30100b5039041f9a20080d2630002cac30200b5039441f902ad8cd2828dadf2e20dc0f2630002ca030200b5220080d202a801f9022840f9022c00f9033840f9033c00f9021c40f942040091021c00f9e20301aa030080d2a12000d4212400d473060091d7ffff17a1750fd4ffffff17\",\"name\":\"init.bin\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 11,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "note"
+            }
+          }
+        },
+        "response": {
+          "id": 11,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"hex\":\"68656c6c6f\",\"name\":\"note\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 12,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "notes.txt"
+            }
+          }
+        },
+        "response": {
+          "id": 12,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"hex\":\"706572736973746564207468726f756768207265636f76657279\",\"name\":\"notes.txt\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 13,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "binary.bin"
+            }
+          }
+        },
+        "response": {
+          "id": 13,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"hex\":\"00ff80fe0041\",\"name\":\"binary.bin\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 14,
+          "method": "tools/call",
+          "params": {
+            "name": "file_list",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 14,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "[{\"name\":\"binary.bin\",\"size\":6},{\"name\":\"init.bin\",\"size\":248},{\"name\":\"note\",\"size\":5},{\"name\":\"notes.txt\",\"size\":26}]",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 15,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "temp.txt"
+            }
+          }
+        },
+        "response": {
+          "id": 15,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "file not found",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 16,
+          "method": "tools/call",
+          "params": {
+            "name": "document_snapshot",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 16,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 17,
+          "method": "tools/call",
+          "params": {
+            "name": "document_merge",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 17,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"conflicts\":[],\"fields\":[{\"key\":\"common\",\"origin\":\"base\",\"value\":\"seed\"},{\"key\":\"layout\",\"origin\":\"assistant\",\"value\":\"assistant\"},{\"key\":\"theme\",\"origin\":\"human\",\"value\":\"human-two\"},{\"key\":\"title\",\"origin\":\"base\",\"value\":\"base\"}],\"materializable\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 18,
+          "method": "tools/call",
+          "params": {
+            "name": "document_edit",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "error": {
+            "code": -32602,
+            "message": "unknown tool"
+          },
+          "id": 18,
+          "jsonrpc": "2.0"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 19,
+          "method": "tools/call",
+          "params": {
+            "name": "document_load",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "error": {
+            "code": -32602,
+            "message": "unknown tool"
+          },
+          "id": 19,
+          "jsonrpc": "2.0"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 20,
+          "method": "tools/call",
+          "params": {
+            "name": "document_save",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "error": {
+            "code": -32602,
+            "message": "unknown tool"
+          },
+          "id": 20,
+          "jsonrpc": "2.0"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 21,
+          "method": "tools/call",
+          "params": {
+            "name": "document_snapshot",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 21,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 22,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 22,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1417,\"next\":1,\"task\":0},{\"count\":1659,\"next\":0,\"task\":1},{\"count\":3220,\"next\":1,\"task\":0},{\"count\":3331,\"next\":0,\"task\":1},{\"count\":4657,\"next\":1,\"task\":0},{\"count\":4601,\"next\":0,\"task\":1},{\"count\":6479,\"next\":1,\"task\":0},{\"count\":6143,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[17011,9122],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 23,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 23,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1417,\"next\":1,\"task\":0},{\"count\":1659,\"next\":0,\"task\":1},{\"count\":3220,\"next\":1,\"task\":0},{\"count\":3331,\"next\":0,\"task\":1},{\"count\":4657,\"next\":1,\"task\":0},{\"count\":4601,\"next\":0,\"task\":1},{\"count\":6479,\"next\":1,\"task\":0},{\"count\":6143,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[17011,9122],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      }
+    ],
+    [
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {
+              "name": "graph-snapshot-test",
+              "version": "0.1"
+            }
+          }
+        },
+        "response": {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "result": {
+            "capabilities": {
+              "tools": {}
+            },
+            "protocolVersion": "2025-11-25",
+            "serverInfo": {
+              "name": "dual-pointer-vm",
+              "version": "0.1.0"
+            }
+          }
+        }
+      },
+      {
+        "notification": {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/list",
+          "params": {}
+        },
+        "response": {
+          "id": 2,
+          "jsonrpc": "2.0",
+          "result": {
+            "tools": [
+              {
+                "description": "Move AI pointer within its right-hand QEMU workspace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 773,
+                      "minimum": 400,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 573,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_ai"
+              },
+              {
+                "description": "Read the two pointer coordinates in this guest only.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "pointer_state"
+              },
+              {
+                "description": "Activate the synthetic button under the AI pointer; no host click or authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "click_ai"
+              },
+              {
+                "description": "Read logical button focus and click counts in this guest.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "interaction_state"
+              },
+              {
+                "description": "Read the guest's verified identity-map status.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "mmu_status"
+              },
+              {
+                "description": "Read verified pre-graphical EL0 timer trace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "el0_status"
+              },
+              {
+                "description": "Move the visible pointer for a synthetic logical actor; no window or authenticated identity.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 799,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 599,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_remote"
+              },
+              {
+                "description": "Read the third synthetic actor's logical position.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "remote_state"
+              },
+              {
+                "description": "Run 1101 synthetic human moves in this VM; overwrites older bounded trace entries.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "exercise_human_moves"
+              },
+              {
+                "description": "Read synthetic startup restore and last SVC save status.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "storage_status"
+              },
+              {
+                "description": "Read one synthetic flat file as hexadecimal bytes; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "name": "file_get"
+              },
+              {
+                "description": "Save one bounded synthetic UTF-8 file with the current workspace snapshot; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "data"
+                  ],
+                  "type": "object"
+                },
+                "name": "file_put"
+              },
+              {
+                "description": "Save bounded binary bytes encoded as lowercase hexadecimal; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "hex": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "hex"
+                  ],
+                  "type": "object"
+                },
+                "name": "file_put_hex"
+              },
+              {
+                "description": "List synthetic file names and sizes; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "file_list"
+              },
+              {
+                "description": "Remove one synthetic file and save the workspace snapshot; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "name": "file_delete"
+              },
+              {
+                "description": "Read the bounded FIFO and task completion status.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "ipc_status"
+              },
+              {
+                "description": "Read a field from a synthetic document copy.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "actor": {
+                      "enum": [
+                        "human",
+                        "assistant"
+                      ],
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Non-empty; at most 32 UTF-8 bytes.",
+                      "type": "string"
+                    },
+                    "space": {
+                      "enum": [
+                        "human-space",
+                        "assistant-space"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "actor",
+                    "space",
+                    "key"
+                  ],
+                  "type": "object"
+                },
+                "name": "document_view"
+              },
+              {
+                "description": "Merge synthetic copies and return fields, origins and conflicts.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_merge"
+              },
+              {
+                "description": "Read the synthetic base and both full copies.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_snapshot"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "method": "tools/call",
+          "params": {
+            "name": "mmu_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 3,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"address_spaces\":2,\"asids\":[1,2],\"caches\":false,\"enabled\":true,\"gic\":\"device-xn\",\"image\":\"normal-nc\",\"kernel_el0\":\"samples-denied\",\"mapping\":\"identity\",\"range_checks\":\"full\",\"user_code\":\"ro\",\"user_stack\":\"private-alias-rw\",\"virtio\":\"device-xn\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 4,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,false],\"code_alias_removed\":false,\"code_frame_scrubbed\":false,\"cross_code_read_denied\":[true,true],\"dispatches\":10,\"el\":\"EL0\",\"events\":[{\"count\":1807,\"next\":1,\"task\":0},{\"count\":1685,\"next\":0,\"task\":1},{\"count\":3129,\"next\":1,\"task\":0},{\"count\":3428,\"next\":0,\"task\":1},{\"count\":4978,\"next\":1,\"task\":0},{\"count\":4998,\"next\":0,\"task\":1},{\"count\":6770,\"next\":1,\"task\":0},{\"count\":6725,\"next\":2,\"task\":1}],\"frame_pool_assigned\":1,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,false],\"image_loaded\":false,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[9528,9861],\"slice_ticks\":9,\"spawn_admitted\":false,\"spawn_executed\":false,\"spawn_exited\":false,\"spawn_failed\":false,\"spawn_reused_frame\":false,\"task_states\":[\"exited\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "method": "tools/call",
+          "params": {
+            "name": "ipc_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 5,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"accepted\":[1,2,3,4],\"applied\":[1,2,3,4],\"capacity\":2,\"consumed\":[1,2,3,4],\"denial_consumed\":true,\"duplicate_rejected\":[true,true],\"file_finished\":false,\"finished\":false,\"full_consumed\":true,\"full_rejected\":true,\"initial_finished\":true,\"overflow_rejected\":[true,true],\"queue_len\":0,\"range_rejected\":[true,true],\"save_denied\":true,\"source\":\"synthetic descriptors and bytes constructed by EL0\",\"spoof_rejected\":[true,true],\"utf8_rejected\":[true,true]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 6,
+          "method": "tools/call",
+          "params": {
+            "name": "ipc_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 6,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"accepted\":[1,2,3,4,6,7],\"applied\":[1,2,3,4,6,7],\"capacity\":2,\"consumed\":[1,2,3,4,6,7],\"denial_consumed\":true,\"duplicate_rejected\":[true,true],\"file_finished\":true,\"finished\":true,\"full_consumed\":true,\"full_rejected\":true,\"initial_finished\":true,\"overflow_rejected\":[true,true],\"queue_len\":0,\"range_rejected\":[true,true],\"save_denied\":true,\"source\":\"synthetic descriptors and bytes constructed by EL0\",\"spoof_rejected\":[true,true],\"utf8_rejected\":[true,true]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 7,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 7,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1807,\"next\":1,\"task\":0},{\"count\":1685,\"next\":0,\"task\":1},{\"count\":3129,\"next\":1,\"task\":0},{\"count\":3428,\"next\":0,\"task\":1},{\"count\":4978,\"next\":1,\"task\":0},{\"count\":4998,\"next\":0,\"task\":1},{\"count\":6770,\"next\":1,\"task\":0},{\"count\":6725,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[18080,9861],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 8,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 8,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1807,\"next\":1,\"task\":0},{\"count\":1685,\"next\":0,\"task\":1},{\"count\":3129,\"next\":1,\"task\":0},{\"count\":3428,\"next\":0,\"task\":1},{\"count\":4978,\"next\":1,\"task\":0},{\"count\":4998,\"next\":0,\"task\":1},{\"count\":6770,\"next\":1,\"task\":0},{\"count\":6725,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[18080,9861],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 9,
+          "method": "tools/call",
+          "params": {
+            "name": "storage_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 9,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"after\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}},\"before\":{\"assistant\":{\"common\":\"seed\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"title\":\"base\"}},\"restore\":\"restored\",\"restore_generation\":6,\"restore_slots\":[\"invalid\",\"valid\"],\"save\":{\"generation\":7,\"readback_verified\":true,\"slot\":0,\"snapshot\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 10,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "init.bin"
+            }
+          }
+        },
+        "response": {
+          "id": 10,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"hex\":\"014000f9c2ed8dd282aeacf2028000f902ad8cd2828dadf2e20dc0f2029000f902000491020001f9820080d2020401f902800491020801f9a20080d2020c01f9c20080d2021c00f9021c40f9021001f9e20301aa030080d2012600d4212600d4612000d4022840f9820300b4031c40f9630002cae30300b5033840f9630040d2830300b5430840d2a30100b5039041f9a20080d2630002cac30200b5039441f902ad8cd2828dadf2e20dc0f2630002ca030200b5220080d202a801f9022840f9022c00f9033840f9033c00f9021c40f942040091021c00f9e20301aa030080d2a12000d4212400d473060091d7ffff17a1750fd4ffffff17\",\"name\":\"init.bin\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 11,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "note"
+            }
+          }
+        },
+        "response": {
+          "id": 11,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"hex\":\"68656c6c6f\",\"name\":\"note\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 12,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "notes.txt"
+            }
+          }
+        },
+        "response": {
+          "id": 12,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"hex\":\"706572736973746564207468726f756768207265636f76657279\",\"name\":\"notes.txt\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 13,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "binary.bin"
+            }
+          }
+        },
+        "response": {
+          "id": 13,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"hex\":\"00ff80fe0041\",\"name\":\"binary.bin\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 14,
+          "method": "tools/call",
+          "params": {
+            "name": "file_list",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 14,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "[{\"name\":\"binary.bin\",\"size\":6},{\"name\":\"init.bin\",\"size\":248},{\"name\":\"note\",\"size\":5},{\"name\":\"notes.txt\",\"size\":26}]",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 15,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "temp.txt"
+            }
+          }
+        },
+        "response": {
+          "id": 15,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "file not found",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 16,
+          "method": "tools/call",
+          "params": {
+            "name": "document_snapshot",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 16,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 17,
+          "method": "tools/call",
+          "params": {
+            "name": "document_merge",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 17,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"conflicts\":[],\"fields\":[{\"key\":\"common\",\"origin\":\"base\",\"value\":\"seed\"},{\"key\":\"layout\",\"origin\":\"assistant\",\"value\":\"assistant\"},{\"key\":\"theme\",\"origin\":\"human\",\"value\":\"human-two\"},{\"key\":\"title\",\"origin\":\"base\",\"value\":\"base\"}],\"materializable\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 18,
+          "method": "tools/call",
+          "params": {
+            "name": "document_edit",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "error": {
+            "code": -32602,
+            "message": "unknown tool"
+          },
+          "id": 18,
+          "jsonrpc": "2.0"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 19,
+          "method": "tools/call",
+          "params": {
+            "name": "document_load",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "error": {
+            "code": -32602,
+            "message": "unknown tool"
+          },
+          "id": 19,
+          "jsonrpc": "2.0"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 20,
+          "method": "tools/call",
+          "params": {
+            "name": "document_save",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "error": {
+            "code": -32602,
+            "message": "unknown tool"
+          },
+          "id": 20,
+          "jsonrpc": "2.0"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 21,
+          "method": "tools/call",
+          "params": {
+            "name": "document_snapshot",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 21,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 22,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 22,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1807,\"next\":1,\"task\":0},{\"count\":1685,\"next\":0,\"task\":1},{\"count\":3129,\"next\":1,\"task\":0},{\"count\":3428,\"next\":0,\"task\":1},{\"count\":4978,\"next\":1,\"task\":0},{\"count\":4998,\"next\":0,\"task\":1},{\"count\":6770,\"next\":1,\"task\":0},{\"count\":6725,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[18080,9861],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 23,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 23,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1807,\"next\":1,\"task\":0},{\"count\":1685,\"next\":0,\"task\":1},{\"count\":3129,\"next\":1,\"task\":0},{\"count\":3428,\"next\":0,\"task\":1},{\"count\":4978,\"next\":1,\"task\":0},{\"count\":4998,\"next\":0,\"task\":1},{\"count\":6770,\"next\":1,\"task\":0},{\"count\":6725,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[18080,9861],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 24,
+          "method": "tools/call",
+          "params": {
+            "name": "file_put_hex",
+            "arguments": {
+              "name": "init.bin",
+              "hex": "ff"
+            }
+          }
+        },
+        "response": {
+          "id": 24,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"generation\":8,\"readback_verified\":true,\"slot\":1}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      }
+    ],
+    [
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {
+              "name": "graph-snapshot-test",
+              "version": "0.1"
+            }
+          }
+        },
+        "response": {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "result": {
+            "capabilities": {
+              "tools": {}
+            },
+            "protocolVersion": "2025-11-25",
+            "serverInfo": {
+              "name": "dual-pointer-vm",
+              "version": "0.1.0"
+            }
+          }
+        }
+      },
+      {
+        "notification": {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/list",
+          "params": {}
+        },
+        "response": {
+          "id": 2,
+          "jsonrpc": "2.0",
+          "result": {
+            "tools": [
+              {
+                "description": "Move AI pointer within its right-hand QEMU workspace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 773,
+                      "minimum": 400,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 573,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_ai"
+              },
+              {
+                "description": "Read the two pointer coordinates in this guest only.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "pointer_state"
+              },
+              {
+                "description": "Activate the synthetic button under the AI pointer; no host click or authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "click_ai"
+              },
+              {
+                "description": "Read logical button focus and click counts in this guest.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "interaction_state"
+              },
+              {
+                "description": "Read the guest's verified identity-map status.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "mmu_status"
+              },
+              {
+                "description": "Read verified pre-graphical EL0 timer trace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "el0_status"
+              },
+              {
+                "description": "Move the visible pointer for a synthetic logical actor; no window or authenticated identity.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 799,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 599,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_remote"
+              },
+              {
+                "description": "Read the third synthetic actor's logical position.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "remote_state"
+              },
+              {
+                "description": "Run 1101 synthetic human moves in this VM; overwrites older bounded trace entries.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "exercise_human_moves"
+              },
+              {
+                "description": "Read synthetic startup restore and last SVC save status.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "storage_status"
+              },
+              {
+                "description": "Read one synthetic flat file as hexadecimal bytes; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "name": "file_get"
+              },
+              {
+                "description": "Save one bounded synthetic UTF-8 file with the current workspace snapshot; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "data"
+                  ],
+                  "type": "object"
+                },
+                "name": "file_put"
+              },
+              {
+                "description": "Save bounded binary bytes encoded as lowercase hexadecimal; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "hex": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "hex"
+                  ],
+                  "type": "object"
+                },
+                "name": "file_put_hex"
+              },
+              {
+                "description": "List synthetic file names and sizes; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "file_list"
+              },
+              {
+                "description": "Remove one synthetic file and save the workspace snapshot; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "name": "file_delete"
+              },
+              {
+                "description": "Read the bounded FIFO and task completion status.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "ipc_status"
+              },
+              {
+                "description": "Read a field from a synthetic document copy.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "actor": {
+                      "enum": [
+                        "human",
+                        "assistant"
+                      ],
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Non-empty; at most 32 UTF-8 bytes.",
+                      "type": "string"
+                    },
+                    "space": {
+                      "enum": [
+                        "human-space",
+                        "assistant-space"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "actor",
+                    "space",
+                    "key"
+                  ],
+                  "type": "object"
+                },
+                "name": "document_view"
+              },
+              {
+                "description": "Merge synthetic copies and return fields, origins and conflicts.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_merge"
+              },
+              {
+                "description": "Read the synthetic base and both full copies.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_snapshot"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "method": "tools/call",
+          "params": {
+            "name": "mmu_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 3,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"address_spaces\":2,\"asids\":[1,2],\"caches\":false,\"enabled\":true,\"gic\":\"device-xn\",\"image\":\"normal-nc\",\"kernel_el0\":\"samples-denied\",\"mapping\":\"identity\",\"range_checks\":\"full\",\"user_code\":\"ro\",\"user_stack\":\"private-alias-rw\",\"virtio\":\"device-xn\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 4,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,false],\"code_alias_removed\":false,\"code_frame_scrubbed\":false,\"cross_code_read_denied\":[true,true],\"dispatches\":10,\"el\":\"EL0\",\"events\":[{\"count\":1412,\"next\":1,\"task\":0},{\"count\":1619,\"next\":0,\"task\":1},{\"count\":3178,\"next\":1,\"task\":0},{\"count\":3280,\"next\":0,\"task\":1},{\"count\":4615,\"next\":1,\"task\":0},{\"count\":4946,\"next\":0,\"task\":1},{\"count\":5956,\"next\":1,\"task\":0},{\"count\":6529,\"next\":2,\"task\":1}],\"frame_pool_assigned\":1,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,false],\"image_loaded\":false,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[8380,9644],\"slice_ticks\":9,\"spawn_admitted\":false,\"spawn_executed\":false,\"spawn_exited\":false,\"spawn_failed\":false,\"spawn_reused_frame\":false,\"task_states\":[\"exited\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 5,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":false,\"code_frame_scrubbed\":false,\"cross_code_read_denied\":[true,true],\"dispatches\":11,\"el\":\"EL0\",\"events\":[{\"count\":1412,\"next\":1,\"task\":0},{\"count\":1619,\"next\":0,\"task\":1},{\"count\":3178,\"next\":1,\"task\":0},{\"count\":3280,\"next\":0,\"task\":1},{\"count\":4615,\"next\":1,\"task\":0},{\"count\":4946,\"next\":0,\"task\":1},{\"count\":5956,\"next\":1,\"task\":0},{\"count\":6529,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":false,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[8380,9644],\"slice_ticks\":9,\"spawn_admitted\":false,\"spawn_executed\":false,\"spawn_exited\":false,\"spawn_failed\":false,\"spawn_reused_frame\":false,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 6,
+          "method": "tools/call",
+          "params": {
+            "name": "ipc_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 6,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"accepted\":[1,2,3,4],\"applied\":[1,2,3,4],\"capacity\":2,\"consumed\":[1,2,3,4],\"denial_consumed\":true,\"duplicate_rejected\":[true,true],\"file_finished\":false,\"finished\":false,\"full_consumed\":true,\"full_rejected\":true,\"initial_finished\":true,\"overflow_rejected\":[true,true],\"queue_len\":0,\"range_rejected\":[true,true],\"save_denied\":true,\"source\":\"synthetic descriptors and bytes constructed by EL0\",\"spoof_rejected\":[true,true],\"utf8_rejected\":[true,true]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 7,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 7,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":false,\"code_frame_scrubbed\":false,\"cross_code_read_denied\":[true,true],\"dispatches\":11,\"el\":\"EL0\",\"events\":[{\"count\":1412,\"next\":1,\"task\":0},{\"count\":1619,\"next\":0,\"task\":1},{\"count\":3178,\"next\":1,\"task\":0},{\"count\":3280,\"next\":0,\"task\":1},{\"count\":4615,\"next\":1,\"task\":0},{\"count\":4946,\"next\":0,\"task\":1},{\"count\":5956,\"next\":1,\"task\":0},{\"count\":6529,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":false,\"interrupts\":\"masked\",\"loader_rejected\":true,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[8380,9644],\"slice_ticks\":9,\"spawn_admitted\":false,\"spawn_executed\":false,\"spawn_exited\":false,\"spawn_failed\":false,\"spawn_reused_frame\":false,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 8,
+          "method": "tools/call",
+          "params": {
+            "name": "ipc_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 8,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"accepted\":[1,2,3,4],\"applied\":[1,2,3,4],\"capacity\":2,\"consumed\":[1,2,3,4],\"denial_consumed\":true,\"duplicate_rejected\":[true,true],\"file_finished\":false,\"finished\":false,\"full_consumed\":true,\"full_rejected\":true,\"initial_finished\":true,\"overflow_rejected\":[true,true],\"queue_len\":0,\"range_rejected\":[true,true],\"save_denied\":true,\"source\":\"synthetic descriptors and bytes constructed by EL0\",\"spoof_rejected\":[true,true],\"utf8_rejected\":[true,true]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 9,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "init.bin"
+            }
+          }
+        },
+        "response": {
+          "id": 9,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"hex\":\"ff\",\"name\":\"init.bin\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 10,
+          "method": "tools/call",
+          "params": {
+            "name": "file_put_hex",
+            "arguments": {
+              "name": "init.bin",
+              "hex": "014000f9c2ed8dd282aeacf2028000f902ad8cd2828dadf2e20dc0f2029000f902000491020001f9820080d2020401f902800491020801f9a20080d2020c01f9c20080d2021c00f9021c40f9021001f9e20301aa030080d2012600d4212600d4612000d4022840f9820300b4031c40f9630002cae30300b5033840f9630040d2830300b5430840d2a30100b5039041f9a20080d2630002cac30200b5039441f902ad8cd2828dadf2e20dc0f2630002ca030200b5220080d202a801f9022840f9022c00f9033840f9033c00f9021c40f942040091021c00f9e20301aa030080d2a12000d4212400d473060091d7ffff17a1750fd4ffffff17"
+            }
+          }
+        },
+        "response": {
+          "id": 10,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"generation\":10,\"readback_verified\":true,\"slot\":1}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 11,
+          "method": "tools/call",
+          "params": {
+            "name": "ipc_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 11,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"accepted\":[1,2,3,4,6],\"applied\":[1,2,3,4,6],\"capacity\":2,\"consumed\":[1,2,3,4],\"denial_consumed\":true,\"duplicate_rejected\":[true,true],\"file_finished\":false,\"finished\":false,\"full_consumed\":true,\"full_rejected\":true,\"initial_finished\":true,\"overflow_rejected\":[true,true],\"queue_len\":0,\"range_rejected\":[true,true],\"save_denied\":true,\"source\":\"synthetic descriptors and bytes constructed by EL0\",\"spoof_rejected\":[true,true],\"utf8_rejected\":[true,true]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 12,
+          "method": "tools/call",
+          "params": {
+            "name": "ipc_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 12,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"accepted\":[1,2,3,4,6,7],\"applied\":[1,2,3,4,6,7],\"capacity\":2,\"consumed\":[1,2,3,4,6,7],\"denial_consumed\":true,\"duplicate_rejected\":[true,true],\"file_finished\":true,\"finished\":true,\"full_consumed\":true,\"full_rejected\":true,\"initial_finished\":true,\"overflow_rejected\":[true,true],\"queue_len\":0,\"range_rejected\":[true,true],\"save_denied\":true,\"source\":\"synthetic descriptors and bytes constructed by EL0\",\"spoof_rejected\":[true,true],\"utf8_rejected\":[true,true]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 13,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 13,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1412,\"next\":1,\"task\":0},{\"count\":1619,\"next\":0,\"task\":1},{\"count\":3178,\"next\":1,\"task\":0},{\"count\":3280,\"next\":0,\"task\":1},{\"count\":4615,\"next\":1,\"task\":0},{\"count\":4946,\"next\":0,\"task\":1},{\"count\":5956,\"next\":1,\"task\":0},{\"count\":6529,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[16685,9644],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 14,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 14,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1412,\"next\":1,\"task\":0},{\"count\":1619,\"next\":0,\"task\":1},{\"count\":3178,\"next\":1,\"task\":0},{\"count\":3280,\"next\":0,\"task\":1},{\"count\":4615,\"next\":1,\"task\":0},{\"count\":4946,\"next\":0,\"task\":1},{\"count\":5956,\"next\":1,\"task\":0},{\"count\":6529,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[16685,9644],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 15,
+          "method": "tools/call",
+          "params": {
+            "name": "storage_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 15,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"after\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}},\"before\":{\"assistant\":{\"common\":\"seed\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"title\":\"base\"}},\"restore\":\"restored\",\"restore_generation\":8,\"restore_slots\":[\"valid\",\"valid\"],\"save\":{\"generation\":9,\"readback_verified\":true,\"slot\":0,\"snapshot\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 16,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "init.bin"
+            }
+          }
+        },
+        "response": {
+          "id": 16,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"hex\":\"014000f9c2ed8dd282aeacf2028000f902ad8cd2828dadf2e20dc0f2029000f902000491020001f9820080d2020401f902800491020801f9a20080d2020c01f9c20080d2021c00f9021c40f9021001f9e20301aa030080d2012600d4212600d4612000d4022840f9820300b4031c40f9630002cae30300b5033840f9630040d2830300b5430840d2a30100b5039041f9a20080d2630002cac30200b5039441f902ad8cd2828dadf2e20dc0f2630002ca030200b5220080d202a801f9022840f9022c00f9033840f9033c00f9021c40f942040091021c00f9e20301aa030080d2a12000d4212400d473060091d7ffff17a1750fd4ffffff17\",\"name\":\"init.bin\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 17,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "note"
+            }
+          }
+        },
+        "response": {
+          "id": 17,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"hex\":\"68656c6c6f\",\"name\":\"note\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 18,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "notes.txt"
+            }
+          }
+        },
+        "response": {
+          "id": 18,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"hex\":\"706572736973746564207468726f756768207265636f76657279\",\"name\":\"notes.txt\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 19,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "binary.bin"
+            }
+          }
+        },
+        "response": {
+          "id": 19,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"hex\":\"00ff80fe0041\",\"name\":\"binary.bin\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 20,
+          "method": "tools/call",
+          "params": {
+            "name": "file_list",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 20,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "[{\"name\":\"binary.bin\",\"size\":6},{\"name\":\"init.bin\",\"size\":248},{\"name\":\"note\",\"size\":5},{\"name\":\"notes.txt\",\"size\":26}]",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 21,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "temp.txt"
+            }
+          }
+        },
+        "response": {
+          "id": 21,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "file not found",
+                "type": "text"
+              }
+            ],
+            "isError": true
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 22,
+          "method": "tools/call",
+          "params": {
+            "name": "document_snapshot",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 22,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 23,
+          "method": "tools/call",
+          "params": {
+            "name": "document_merge",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 23,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"conflicts\":[],\"fields\":[{\"key\":\"common\",\"origin\":\"base\",\"value\":\"seed\"},{\"key\":\"layout\",\"origin\":\"assistant\",\"value\":\"assistant\"},{\"key\":\"theme\",\"origin\":\"human\",\"value\":\"human-two\"},{\"key\":\"title\",\"origin\":\"base\",\"value\":\"base\"}],\"materializable\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 24,
+          "method": "tools/call",
+          "params": {
+            "name": "document_edit",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "error": {
+            "code": -32602,
+            "message": "unknown tool"
+          },
+          "id": 24,
+          "jsonrpc": "2.0"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 25,
+          "method": "tools/call",
+          "params": {
+            "name": "document_load",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "error": {
+            "code": -32602,
+            "message": "unknown tool"
+          },
+          "id": 25,
+          "jsonrpc": "2.0"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 26,
+          "method": "tools/call",
+          "params": {
+            "name": "document_save",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "error": {
+            "code": -32602,
+            "message": "unknown tool"
+          },
+          "id": 26,
+          "jsonrpc": "2.0"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 27,
+          "method": "tools/call",
+          "params": {
+            "name": "document_snapshot",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 27,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 28,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 28,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1412,\"next\":1,\"task\":0},{\"count\":1619,\"next\":0,\"task\":1},{\"count\":3178,\"next\":1,\"task\":0},{\"count\":3280,\"next\":0,\"task\":1},{\"count\":4615,\"next\":1,\"task\":0},{\"count\":4946,\"next\":0,\"task\":1},{\"count\":5956,\"next\":1,\"task\":0},{\"count\":6529,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[16685,9644],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 29,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 29,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1412,\"next\":1,\"task\":0},{\"count\":1619,\"next\":0,\"task\":1},{\"count\":3178,\"next\":1,\"task\":0},{\"count\":3280,\"next\":0,\"task\":1},{\"count\":4615,\"next\":1,\"task\":0},{\"count\":4946,\"next\":0,\"task\":1},{\"count\":5956,\"next\":1,\"task\":0},{\"count\":6529,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[16685,9644],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 30,
+          "method": "tools/call",
+          "params": {
+            "name": "file_delete",
+            "arguments": {
+              "name": "note"
+            }
+          }
+        },
+        "response": {
+          "id": 30,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"generation\":11,\"readback_verified\":true,\"slot\":0}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 31,
+          "method": "tools/call",
+          "params": {
+            "name": "file_put",
+            "arguments": {
+              "name": "fill0",
+              "data": "x"
+            }
+          }
+        },
+        "response": {
+          "id": 31,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"generation\":12,\"readback_verified\":true,\"slot\":1}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 32,
+          "method": "tools/call",
+          "params": {
+            "name": "file_put",
+            "arguments": {
+              "name": "fill1",
+              "data": "x"
+            }
+          }
+        },
+        "response": {
+          "id": 32,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"generation\":13,\"readback_verified\":true,\"slot\":0}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 33,
+          "method": "tools/call",
+          "params": {
+            "name": "file_put",
+            "arguments": {
+              "name": "fill2",
+              "data": "x"
+            }
+          }
+        },
+        "response": {
+          "id": 33,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"generation\":14,\"readback_verified\":true,\"slot\":1}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 34,
+          "method": "tools/call",
+          "params": {
+            "name": "file_put",
+            "arguments": {
+              "name": "fill3",
+              "data": "x"
+            }
+          }
+        },
+        "response": {
+          "id": 34,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"generation\":15,\"readback_verified\":true,\"slot\":0}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 35,
+          "method": "tools/call",
+          "params": {
+            "name": "file_put",
+            "arguments": {
+              "name": "fill4",
+              "data": "x"
+            }
+          }
+        },
+        "response": {
+          "id": 35,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"generation\":16,\"readback_verified\":true,\"slot\":1}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      }
+    ],
+    [
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {
+              "name": "graph-snapshot-test",
+              "version": "0.1"
+            }
+          }
+        },
+        "response": {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "result": {
+            "capabilities": {
+              "tools": {}
+            },
+            "protocolVersion": "2025-11-25",
+            "serverInfo": {
+              "name": "dual-pointer-vm",
+              "version": "0.1.0"
+            }
+          }
+        }
+      },
+      {
+        "notification": {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/list",
+          "params": {}
+        },
+        "response": {
+          "id": 2,
+          "jsonrpc": "2.0",
+          "result": {
+            "tools": [
+              {
+                "description": "Move AI pointer within its right-hand QEMU workspace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 773,
+                      "minimum": 400,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 573,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_ai"
+              },
+              {
+                "description": "Read the two pointer coordinates in this guest only.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "pointer_state"
+              },
+              {
+                "description": "Activate the synthetic button under the AI pointer; no host click or authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "click_ai"
+              },
+              {
+                "description": "Read logical button focus and click counts in this guest.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "interaction_state"
+              },
+              {
+                "description": "Read the guest's verified identity-map status.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "mmu_status"
+              },
+              {
+                "description": "Read verified pre-graphical EL0 timer trace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "el0_status"
+              },
+              {
+                "description": "Move the visible pointer for a synthetic logical actor; no window or authenticated identity.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 799,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 599,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_remote"
+              },
+              {
+                "description": "Read the third synthetic actor's logical position.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "remote_state"
+              },
+              {
+                "description": "Run 1101 synthetic human moves in this VM; overwrites older bounded trace entries.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "exercise_human_moves"
+              },
+              {
+                "description": "Read synthetic startup restore and last SVC save status.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "storage_status"
+              },
+              {
+                "description": "Read one synthetic flat file as hexadecimal bytes; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "name": "file_get"
+              },
+              {
+                "description": "Save one bounded synthetic UTF-8 file with the current workspace snapshot; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "data"
+                  ],
+                  "type": "object"
+                },
+                "name": "file_put"
+              },
+              {
+                "description": "Save bounded binary bytes encoded as lowercase hexadecimal; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "hex": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "hex"
+                  ],
+                  "type": "object"
+                },
+                "name": "file_put_hex"
+              },
+              {
+                "description": "List synthetic file names and sizes; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "file_list"
+              },
+              {
+                "description": "Remove one synthetic file and save the workspace snapshot; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "name": "file_delete"
+              },
+              {
+                "description": "Read the bounded FIFO and task completion status.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "ipc_status"
+              },
+              {
+                "description": "Read a field from a synthetic document copy.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "actor": {
+                      "enum": [
+                        "human",
+                        "assistant"
+                      ],
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Non-empty; at most 32 UTF-8 bytes.",
+                      "type": "string"
+                    },
+                    "space": {
+                      "enum": [
+                        "human-space",
+                        "assistant-space"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "actor",
+                    "space",
+                    "key"
+                  ],
+                  "type": "object"
+                },
+                "name": "document_view"
+              },
+              {
+                "description": "Merge synthetic copies and return fields, origins and conflicts.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_merge"
+              },
+              {
+                "description": "Read the synthetic base and both full copies.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_snapshot"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "method": "tools/call",
+          "params": {
+            "name": "mmu_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 3,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"address_spaces\":2,\"asids\":[1,2],\"caches\":false,\"enabled\":true,\"gic\":\"device-xn\",\"image\":\"normal-nc\",\"kernel_el0\":\"samples-denied\",\"mapping\":\"identity\",\"range_checks\":\"full\",\"user_code\":\"ro\",\"user_stack\":\"private-alias-rw\",\"virtio\":\"device-xn\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 4,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,false],\"code_alias_removed\":false,\"code_frame_scrubbed\":false,\"cross_code_read_denied\":[true,true],\"dispatches\":10,\"el\":\"EL0\",\"events\":[{\"count\":1541,\"next\":1,\"task\":0},{\"count\":1594,\"next\":0,\"task\":1},{\"count\":3348,\"next\":1,\"task\":0},{\"count\":2851,\"next\":0,\"task\":1},{\"count\":5025,\"next\":1,\"task\":0},{\"count\":4146,\"next\":0,\"task\":1},{\"count\":6843,\"next\":1,\"task\":0},{\"count\":5587,\"next\":2,\"task\":1}],\"frame_pool_assigned\":1,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,false],\"image_loaded\":false,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[9455,8649],\"slice_ticks\":9,\"spawn_admitted\":false,\"spawn_executed\":false,\"spawn_exited\":false,\"spawn_failed\":false,\"spawn_reused_frame\":false,\"task_states\":[\"exited\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 5,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":false,\"code_frame_scrubbed\":false,\"cross_code_read_denied\":[true,true],\"dispatches\":11,\"el\":\"EL0\",\"events\":[{\"count\":1541,\"next\":1,\"task\":0},{\"count\":1594,\"next\":0,\"task\":1},{\"count\":3348,\"next\":1,\"task\":0},{\"count\":2851,\"next\":0,\"task\":1},{\"count\":5025,\"next\":1,\"task\":0},{\"count\":4146,\"next\":0,\"task\":1},{\"count\":6843,\"next\":1,\"task\":0},{\"count\":5587,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":false,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[9455,8649],\"slice_ticks\":9,\"spawn_admitted\":false,\"spawn_executed\":false,\"spawn_exited\":false,\"spawn_failed\":false,\"spawn_reused_frame\":false,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 6,
+          "method": "tools/call",
+          "params": {
+            "name": "ipc_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 6,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"accepted\":[1,2,3,4,6],\"applied\":[1,2,3,4,6],\"capacity\":2,\"consumed\":[1,2,3,4],\"denial_consumed\":true,\"duplicate_rejected\":[true,true],\"file_finished\":false,\"finished\":false,\"full_consumed\":true,\"full_rejected\":true,\"initial_finished\":true,\"overflow_rejected\":[true,true],\"queue_len\":0,\"range_rejected\":[true,true],\"save_denied\":true,\"source\":\"synthetic descriptors and bytes constructed by EL0\",\"spoof_rejected\":[true,true],\"utf8_rejected\":[true,true]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 7,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 7,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":14,\"el\":\"EL0\",\"events\":[{\"count\":1541,\"next\":1,\"task\":0},{\"count\":1594,\"next\":0,\"task\":1},{\"count\":3348,\"next\":1,\"task\":0},{\"count\":2851,\"next\":0,\"task\":1},{\"count\":5025,\"next\":1,\"task\":0},{\"count\":4146,\"next\":0,\"task\":1},{\"count\":6843,\"next\":1,\"task\":0},{\"count\":5587,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[12948,8649],\"slice_ticks\":11,\"spawn_admitted\":true,\"spawn_executed\":false,\"spawn_exited\":true,\"spawn_failed\":true,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 8,
+          "method": "tools/call",
+          "params": {
+            "name": "ipc_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 8,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"accepted\":[1,2,3,4,6],\"applied\":[1,2,3,4,6],\"capacity\":2,\"consumed\":[1,2,3,4],\"denial_consumed\":true,\"duplicate_rejected\":[true,true],\"file_finished\":false,\"finished\":false,\"full_consumed\":true,\"full_rejected\":true,\"initial_finished\":true,\"overflow_rejected\":[true,true],\"queue_len\":0,\"range_rejected\":[true,true],\"save_denied\":true,\"source\":\"synthetic descriptors and bytes constructed by EL0\",\"spoof_rejected\":[true,true],\"utf8_rejected\":[true,true]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 9,
+          "method": "tools/call",
+          "params": {
+            "name": "file_list",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 9,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "[{\"name\":\"binary.bin\",\"size\":6},{\"name\":\"fill0\",\"size\":1},{\"name\":\"fill1\",\"size\":1},{\"name\":\"fill2\",\"size\":1},{\"name\":\"fill3\",\"size\":1},{\"name\":\"fill4\",\"size\":1},{\"name\":\"init.bin\",\"size\":248},{\"name\":\"notes.txt\",\"size\":26}]",
                 "type": "text"
               }
             ],
@@ -1853,82 +4946,6 @@
           "result": {
             "content": [
               {
-                "text": "{\"hex\":\"68656c6c6f\",\"name\":\"note\"}",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 11,
-          "method": "tools/call",
-          "params": {
-            "name": "file_get",
-            "arguments": {
-              "name": "notes.txt"
-            }
-          }
-        },
-        "response": {
-          "id": 11,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "{\"hex\":\"706572736973746564207468726f756768207265636f76657279\",\"name\":\"notes.txt\"}",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 12,
-          "method": "tools/call",
-          "params": {
-            "name": "file_list",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "id": 12,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "[{\"name\":\"note\",\"size\":5},{\"name\":\"notes.txt\",\"size\":26}]",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 13,
-          "method": "tools/call",
-          "params": {
-            "name": "file_get",
-            "arguments": {
-              "name": "temp.txt"
-            }
-          }
-        },
-        "response": {
-          "id": 13,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
                 "text": "file not found",
                 "type": "text"
               }
@@ -1940,136 +4957,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 14,
-          "method": "tools/call",
-          "params": {
-            "name": "document_snapshot",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "id": 14,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 15,
-          "method": "tools/call",
-          "params": {
-            "name": "document_merge",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "id": 15,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "{\"conflicts\":[],\"fields\":[{\"key\":\"common\",\"origin\":\"base\",\"value\":\"seed\"},{\"key\":\"layout\",\"origin\":\"assistant\",\"value\":\"assistant\"},{\"key\":\"theme\",\"origin\":\"human\",\"value\":\"human-two\"},{\"key\":\"title\",\"origin\":\"base\",\"value\":\"base\"}],\"materializable\":true}",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 16,
-          "method": "tools/call",
-          "params": {
-            "name": "document_edit",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "error": {
-            "code": -32602,
-            "message": "unknown tool"
-          },
-          "id": 16,
-          "jsonrpc": "2.0"
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 17,
-          "method": "tools/call",
-          "params": {
-            "name": "document_load",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "error": {
-            "code": -32602,
-            "message": "unknown tool"
-          },
-          "id": 17,
-          "jsonrpc": "2.0"
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 18,
-          "method": "tools/call",
-          "params": {
-            "name": "document_save",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "error": {
-            "code": -32602,
-            "message": "unknown tool"
-          },
-          "id": 18,
-          "jsonrpc": "2.0"
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 19,
-          "method": "tools/call",
-          "params": {
-            "name": "document_snapshot",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "id": 19,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 20,
+          "id": 11,
           "method": "tools/call",
           "params": {
             "name": "el0_status",
@@ -2077,12 +4965,12 @@
           }
         },
         "response": {
-          "id": 20,
+          "id": 11,
           "jsonrpc": "2.0",
           "result": {
             "content": [
               {
-                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1217,\"next\":1,\"task\":0},{\"count\":1328,\"next\":0,\"task\":1},{\"count\":2692,\"next\":1,\"task\":0},{\"count\":2693,\"next\":0,\"task\":1},{\"count\":4182,\"next\":1,\"task\":0},{\"count\":4022,\"next\":0,\"task\":1},{\"count\":5651,\"next\":1,\"task\":0},{\"count\":5380,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[14374,8081],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":14,\"el\":\"EL0\",\"events\":[{\"count\":1541,\"next\":1,\"task\":0},{\"count\":1594,\"next\":0,\"task\":1},{\"count\":3348,\"next\":1,\"task\":0},{\"count\":2851,\"next\":0,\"task\":1},{\"count\":5025,\"next\":1,\"task\":0},{\"count\":4146,\"next\":0,\"task\":1},{\"count\":6843,\"next\":1,\"task\":0},{\"count\":5587,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[12948,8649],\"slice_ticks\":11,\"spawn_admitted\":true,\"spawn_executed\":false,\"spawn_exited\":true,\"spawn_failed\":true,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -2093,469 +4981,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 21,
-          "method": "tools/call",
-          "params": {
-            "name": "el0_status",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "id": 21,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1217,\"next\":1,\"task\":0},{\"count\":1328,\"next\":0,\"task\":1},{\"count\":2692,\"next\":1,\"task\":0},{\"count\":2693,\"next\":0,\"task\":1},{\"count\":4182,\"next\":1,\"task\":0},{\"count\":4022,\"next\":0,\"task\":1},{\"count\":5651,\"next\":1,\"task\":0},{\"count\":5380,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[14374,8081],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      }
-    ],
-    [
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 1,
-          "method": "initialize",
-          "params": {
-            "protocolVersion": "2025-11-25",
-            "capabilities": {},
-            "clientInfo": {
-              "name": "graph-snapshot-test",
-              "version": "0.1"
-            }
-          }
-        },
-        "response": {
-          "id": 1,
-          "jsonrpc": "2.0",
-          "result": {
-            "capabilities": {
-              "tools": {}
-            },
-            "protocolVersion": "2025-11-25",
-            "serverInfo": {
-              "name": "dual-pointer-vm",
-              "version": "0.1.0"
-            }
-          }
-        }
-      },
-      {
-        "notification": {
-          "jsonrpc": "2.0",
-          "method": "notifications/initialized"
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 2,
-          "method": "tools/list",
-          "params": {}
-        },
-        "response": {
-          "id": 2,
-          "jsonrpc": "2.0",
-          "result": {
-            "tools": [
-              {
-                "description": "Move AI pointer within its right-hand QEMU workspace.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "x": {
-                      "maximum": 773,
-                      "minimum": 400,
-                      "type": "integer"
-                    },
-                    "y": {
-                      "maximum": 573,
-                      "minimum": 0,
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "x",
-                    "y"
-                  ],
-                  "type": "object"
-                },
-                "name": "move_ai"
-              },
-              {
-                "description": "Read the two pointer coordinates in this guest only.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {},
-                  "type": "object"
-                },
-                "name": "pointer_state"
-              },
-              {
-                "description": "Activate the synthetic button under the AI pointer; no host click or authentication.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {},
-                  "type": "object"
-                },
-                "name": "click_ai"
-              },
-              {
-                "description": "Read logical button focus and click counts in this guest.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {},
-                  "type": "object"
-                },
-                "name": "interaction_state"
-              },
-              {
-                "description": "Read the guest's verified identity-map status.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {},
-                  "type": "object"
-                },
-                "name": "mmu_status"
-              },
-              {
-                "description": "Read verified pre-graphical EL0 timer trace.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {},
-                  "type": "object"
-                },
-                "name": "el0_status"
-              },
-              {
-                "description": "Move the visible pointer for a synthetic logical actor; no window or authenticated identity.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "x": {
-                      "maximum": 799,
-                      "minimum": 0,
-                      "type": "integer"
-                    },
-                    "y": {
-                      "maximum": 599,
-                      "minimum": 0,
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "x",
-                    "y"
-                  ],
-                  "type": "object"
-                },
-                "name": "move_remote"
-              },
-              {
-                "description": "Read the third synthetic actor's logical position.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {},
-                  "type": "object"
-                },
-                "name": "remote_state"
-              },
-              {
-                "description": "Run 1101 synthetic human moves in this VM; overwrites older bounded trace entries.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {},
-                  "type": "object"
-                },
-                "name": "exercise_human_moves"
-              },
-              {
-                "description": "Read synthetic startup restore and last SVC save status.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {},
-                  "type": "object"
-                },
-                "name": "storage_status"
-              },
-              {
-                "description": "Read one synthetic flat file as hexadecimal bytes; no authentication.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "name": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "name"
-                  ],
-                  "type": "object"
-                },
-                "name": "file_get"
-              },
-              {
-                "description": "Save one bounded synthetic UTF-8 file with the current workspace snapshot; no authentication.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "data": {
-                      "type": "string"
-                    },
-                    "name": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "name",
-                    "data"
-                  ],
-                  "type": "object"
-                },
-                "name": "file_put"
-              },
-              {
-                "description": "List synthetic file names and sizes; no authentication.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {},
-                  "type": "object"
-                },
-                "name": "file_list"
-              },
-              {
-                "description": "Remove one synthetic file and save the workspace snapshot; no authentication.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "name": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "name"
-                  ],
-                  "type": "object"
-                },
-                "name": "file_delete"
-              },
-              {
-                "description": "Read the bounded FIFO and task completion status.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {},
-                  "type": "object"
-                },
-                "name": "ipc_status"
-              },
-              {
-                "description": "Read a field from a synthetic document copy.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "actor": {
-                      "enum": [
-                        "human",
-                        "assistant"
-                      ],
-                      "type": "string"
-                    },
-                    "key": {
-                      "description": "Non-empty; at most 32 UTF-8 bytes.",
-                      "type": "string"
-                    },
-                    "space": {
-                      "enum": [
-                        "human-space",
-                        "assistant-space"
-                      ],
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "actor",
-                    "space",
-                    "key"
-                  ],
-                  "type": "object"
-                },
-                "name": "document_view"
-              },
-              {
-                "description": "Merge synthetic copies and return fields, origins and conflicts.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {},
-                  "type": "object"
-                },
-                "name": "document_merge"
-              },
-              {
-                "description": "Read the synthetic base and both full copies.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {},
-                  "type": "object"
-                },
-                "name": "document_snapshot"
-              }
-            ]
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 3,
-          "method": "tools/call",
-          "params": {
-            "name": "mmu_status",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "id": 3,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "{\"address_spaces\":2,\"asids\":[1,2],\"caches\":false,\"enabled\":true,\"gic\":\"device-xn\",\"image\":\"normal-nc\",\"kernel_el0\":\"samples-denied\",\"mapping\":\"identity\",\"range_checks\":\"full\",\"user_code\":\"ro\",\"user_stack\":\"private-alias-rw\",\"virtio\":\"device-xn\"}",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 4,
-          "method": "tools/call",
-          "params": {
-            "name": "el0_status",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "id": 4,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "{\"alias_removed\":[true,false],\"cross_code_read_denied\":[true,true],\"dispatches\":10,\"el\":\"EL0\",\"events\":[{\"count\":1431,\"next\":1,\"task\":0},{\"count\":1341,\"next\":0,\"task\":1},{\"count\":2934,\"next\":1,\"task\":0},{\"count\":2560,\"next\":0,\"task\":1},{\"count\":4209,\"next\":1,\"task\":0},{\"count\":3908,\"next\":0,\"task\":1},{\"count\":5733,\"next\":1,\"task\":0},{\"count\":5278,\"next\":2,\"task\":1}],\"frame_pool_assigned\":1,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,false],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[7779,7683],\"slice_ticks\":9,\"spawn_admitted\":false,\"spawn_executed\":false,\"spawn_exited\":false,\"spawn_reused_frame\":false,\"task_states\":[\"exited\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 5,
-          "method": "tools/call",
-          "params": {
-            "name": "ipc_status",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "id": 5,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "{\"accepted\":[1,2,3,4],\"applied\":[1,2,3,4],\"capacity\":2,\"consumed\":[1,2,3,4],\"denial_consumed\":true,\"duplicate_rejected\":[true,true],\"file_finished\":false,\"finished\":false,\"full_consumed\":true,\"full_rejected\":true,\"initial_finished\":true,\"overflow_rejected\":[true,true],\"queue_len\":0,\"range_rejected\":[true,true],\"save_denied\":true,\"source\":\"synthetic descriptors and bytes constructed by EL0\",\"spoof_rejected\":[true,true],\"utf8_rejected\":[true,true]}",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 6,
-          "method": "tools/call",
-          "params": {
-            "name": "ipc_status",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "id": 6,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "{\"accepted\":[1,2,3,4,6,7],\"applied\":[1,2,3,4,6,7],\"capacity\":2,\"consumed\":[1,2,3,4,6,7],\"denial_consumed\":true,\"duplicate_rejected\":[true,true],\"file_finished\":true,\"finished\":true,\"full_consumed\":true,\"full_rejected\":true,\"initial_finished\":true,\"overflow_rejected\":[true,true],\"queue_len\":0,\"range_rejected\":[true,true],\"save_denied\":true,\"source\":\"synthetic descriptors and bytes constructed by EL0\",\"spoof_rejected\":[true,true],\"utf8_rejected\":[true,true]}",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 7,
-          "method": "tools/call",
-          "params": {
-            "name": "el0_status",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "id": 7,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1431,\"next\":1,\"task\":0},{\"count\":1341,\"next\":0,\"task\":1},{\"count\":2934,\"next\":1,\"task\":0},{\"count\":2560,\"next\":0,\"task\":1},{\"count\":4209,\"next\":1,\"task\":0},{\"count\":3908,\"next\":0,\"task\":1},{\"count\":5733,\"next\":1,\"task\":0},{\"count\":5278,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[14901,7683],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 8,
-          "method": "tools/call",
-          "params": {
-            "name": "el0_status",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "id": 8,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1431,\"next\":1,\"task\":0},{\"count\":1341,\"next\":0,\"task\":1},{\"count\":2934,\"next\":1,\"task\":0},{\"count\":2560,\"next\":0,\"task\":1},{\"count\":4209,\"next\":1,\"task\":0},{\"count\":3908,\"next\":0,\"task\":1},{\"count\":5733,\"next\":1,\"task\":0},{\"count\":5278,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[14901,7683],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 9,
+          "id": 12,
           "method": "tools/call",
           "params": {
             "name": "storage_status",
@@ -2563,291 +4989,12 @@
           }
         },
         "response": {
-          "id": 9,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "{\"after\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}},\"before\":{\"assistant\":{\"common\":\"seed\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"title\":\"base\"}},\"restore\":\"restored\",\"restore_generation\":5,\"restore_slots\":[\"valid\",\"invalid\"],\"save\":{\"generation\":6,\"readback_verified\":true,\"slot\":1,\"snapshot\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}}}",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 10,
-          "method": "tools/call",
-          "params": {
-            "name": "file_get",
-            "arguments": {
-              "name": "note"
-            }
-          }
-        },
-        "response": {
-          "id": 10,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "{\"hex\":\"68656c6c6f\",\"name\":\"note\"}",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 11,
-          "method": "tools/call",
-          "params": {
-            "name": "file_get",
-            "arguments": {
-              "name": "notes.txt"
-            }
-          }
-        },
-        "response": {
-          "id": 11,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "{\"hex\":\"706572736973746564207468726f756768207265636f76657279\",\"name\":\"notes.txt\"}",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 12,
-          "method": "tools/call",
-          "params": {
-            "name": "file_list",
-            "arguments": {}
-          }
-        },
-        "response": {
           "id": 12,
           "jsonrpc": "2.0",
           "result": {
             "content": [
               {
-                "text": "[{\"name\":\"note\",\"size\":5},{\"name\":\"notes.txt\",\"size\":26}]",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 13,
-          "method": "tools/call",
-          "params": {
-            "name": "file_get",
-            "arguments": {
-              "name": "temp.txt"
-            }
-          }
-        },
-        "response": {
-          "id": 13,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "file not found",
-                "type": "text"
-              }
-            ],
-            "isError": true
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 14,
-          "method": "tools/call",
-          "params": {
-            "name": "document_snapshot",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "id": 14,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 15,
-          "method": "tools/call",
-          "params": {
-            "name": "document_merge",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "id": 15,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "{\"conflicts\":[],\"fields\":[{\"key\":\"common\",\"origin\":\"base\",\"value\":\"seed\"},{\"key\":\"layout\",\"origin\":\"assistant\",\"value\":\"assistant\"},{\"key\":\"theme\",\"origin\":\"human\",\"value\":\"human-two\"},{\"key\":\"title\",\"origin\":\"base\",\"value\":\"base\"}],\"materializable\":true}",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 16,
-          "method": "tools/call",
-          "params": {
-            "name": "document_edit",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "error": {
-            "code": -32602,
-            "message": "unknown tool"
-          },
-          "id": 16,
-          "jsonrpc": "2.0"
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 17,
-          "method": "tools/call",
-          "params": {
-            "name": "document_load",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "error": {
-            "code": -32602,
-            "message": "unknown tool"
-          },
-          "id": 17,
-          "jsonrpc": "2.0"
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 18,
-          "method": "tools/call",
-          "params": {
-            "name": "document_save",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "error": {
-            "code": -32602,
-            "message": "unknown tool"
-          },
-          "id": 18,
-          "jsonrpc": "2.0"
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 19,
-          "method": "tools/call",
-          "params": {
-            "name": "document_snapshot",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "id": 19,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 20,
-          "method": "tools/call",
-          "params": {
-            "name": "el0_status",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "id": 20,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1431,\"next\":1,\"task\":0},{\"count\":1341,\"next\":0,\"task\":1},{\"count\":2934,\"next\":1,\"task\":0},{\"count\":2560,\"next\":0,\"task\":1},{\"count\":4209,\"next\":1,\"task\":0},{\"count\":3908,\"next\":0,\"task\":1},{\"count\":5733,\"next\":1,\"task\":0},{\"count\":5278,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[14901,7683],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
-                "type": "text"
-              }
-            ],
-            "isError": false
-          }
-        }
-      },
-      {
-        "request": {
-          "jsonrpc": "2.0",
-          "id": 21,
-          "method": "tools/call",
-          "params": {
-            "name": "el0_status",
-            "arguments": {}
-          }
-        },
-        "response": {
-          "id": 21,
-          "jsonrpc": "2.0",
-          "result": {
-            "content": [
-              {
-                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1431,\"next\":1,\"task\":0},{\"count\":1341,\"next\":0,\"task\":1},{\"count\":2934,\"next\":1,\"task\":0},{\"count\":2560,\"next\":0,\"task\":1},{\"count\":4209,\"next\":1,\"task\":0},{\"count\":3908,\"next\":0,\"task\":1},{\"count\":5733,\"next\":1,\"task\":0},{\"count\":5278,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[14901,7683],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"after\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}},\"before\":{\"assistant\":{\"common\":\"seed\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"title\":\"base\"}},\"restore\":\"restored\",\"restore_generation\":16,\"restore_slots\":[\"valid\",\"valid\"],\"save\":{\"generation\":17,\"readback_verified\":true,\"slot\":0,\"snapshot\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}}}",
                 "type": "text"
               }
             ],
@@ -3061,6 +5208,26 @@
                 "name": "file_put"
               },
               {
+                "description": "Save bounded binary bytes encoded as lowercase hexadecimal; no authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "hex": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "hex"
+                  ],
+                  "type": "object"
+                },
+                "name": "file_put_hex"
+              },
+              {
                 "description": "List synthetic file names and sizes; no authentication.",
                 "inputSchema": {
                   "additionalProperties": false,
@@ -3189,7 +5356,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"alias_removed\":[true,false],\"cross_code_read_denied\":[true,true],\"dispatches\":10,\"el\":\"EL0\",\"events\":[{\"count\":1453,\"next\":1,\"task\":0},{\"count\":1391,\"next\":0,\"task\":1},{\"count\":2974,\"next\":1,\"task\":0},{\"count\":2809,\"next\":0,\"task\":1},{\"count\":4426,\"next\":1,\"task\":0},{\"count\":4116,\"next\":0,\"task\":1},{\"count\":5928,\"next\":1,\"task\":0},{\"count\":5525,\"next\":2,\"task\":1}],\"frame_pool_assigned\":1,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,false],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[8188,8231],\"slice_ticks\":9,\"spawn_admitted\":false,\"spawn_executed\":false,\"spawn_exited\":false,\"spawn_reused_frame\":false,\"task_states\":[\"exited\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,false],\"code_alias_removed\":false,\"code_frame_scrubbed\":false,\"cross_code_read_denied\":[true,true],\"dispatches\":10,\"el\":\"EL0\",\"events\":[{\"count\":1206,\"next\":1,\"task\":0},{\"count\":1590,\"next\":0,\"task\":1},{\"count\":2960,\"next\":1,\"task\":0},{\"count\":2822,\"next\":0,\"task\":1},{\"count\":4806,\"next\":1,\"task\":0},{\"count\":3899,\"next\":0,\"task\":1},{\"count\":6583,\"next\":1,\"task\":0},{\"count\":5274,\"next\":2,\"task\":1}],\"frame_pool_assigned\":1,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,false],\"image_loaded\":false,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[9097,8367],\"slice_ticks\":9,\"spawn_admitted\":false,\"spawn_executed\":false,\"spawn_exited\":false,\"spawn_failed\":false,\"spawn_reused_frame\":false,\"task_states\":[\"exited\",\"ready\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -3261,7 +5428,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1453,\"next\":1,\"task\":0},{\"count\":1391,\"next\":0,\"task\":1},{\"count\":2974,\"next\":1,\"task\":0},{\"count\":2809,\"next\":0,\"task\":1},{\"count\":4426,\"next\":1,\"task\":0},{\"count\":4116,\"next\":0,\"task\":1},{\"count\":5928,\"next\":1,\"task\":0},{\"count\":5525,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[15001,8231],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1206,\"next\":1,\"task\":0},{\"count\":1590,\"next\":0,\"task\":1},{\"count\":2960,\"next\":1,\"task\":0},{\"count\":2822,\"next\":0,\"task\":1},{\"count\":4806,\"next\":1,\"task\":0},{\"count\":3899,\"next\":0,\"task\":1},{\"count\":6583,\"next\":1,\"task\":0},{\"count\":5274,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[17360,8367],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -3285,7 +5452,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1453,\"next\":1,\"task\":0},{\"count\":1391,\"next\":0,\"task\":1},{\"count\":2974,\"next\":1,\"task\":0},{\"count\":2809,\"next\":0,\"task\":1},{\"count\":4426,\"next\":1,\"task\":0},{\"count\":4116,\"next\":0,\"task\":1},{\"count\":5928,\"next\":1,\"task\":0},{\"count\":5525,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[15001,8231],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1206,\"next\":1,\"task\":0},{\"count\":1590,\"next\":0,\"task\":1},{\"count\":2960,\"next\":1,\"task\":0},{\"count\":2822,\"next\":0,\"task\":1},{\"count\":4806,\"next\":1,\"task\":0},{\"count\":3899,\"next\":0,\"task\":1},{\"count\":6583,\"next\":1,\"task\":0},{\"count\":5274,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[17360,8367],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -3325,12 +5492,38 @@
           "params": {
             "name": "file_get",
             "arguments": {
-              "name": "note"
+              "name": "init.bin"
             }
           }
         },
         "response": {
           "id": 10,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"hex\":\"014000f9c2ed8dd282aeacf2028000f902ad8cd2828dadf2e20dc0f2029000f902000491020001f9820080d2020401f902800491020801f9a20080d2020c01f9c20080d2021c00f9021c40f9021001f9e20301aa030080d2012600d4212600d4612000d4022840f9820300b4031c40f9630002cae30300b5033840f9630040d2830300b5430840d2a30100b5039041f9a20080d2630002cac30200b5039441f902ad8cd2828dadf2e20dc0f2630002ca030200b5220080d202a801f9022840f9022c00f9033840f9033c00f9021c40f942040091021c00f9e20301aa030080d2a12000d4212400d473060091d7ffff17a1750fd4ffffff17\",\"name\":\"init.bin\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 11,
+          "method": "tools/call",
+          "params": {
+            "name": "file_get",
+            "arguments": {
+              "name": "note"
+            }
+          }
+        },
+        "response": {
+          "id": 11,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -3346,7 +5539,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 11,
+          "id": 12,
           "method": "tools/call",
           "params": {
             "name": "document_snapshot",
@@ -3354,7 +5547,7 @@
           }
         },
         "response": {
-          "id": 11,
+          "id": 12,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -3370,7 +5563,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 12,
+          "id": 13,
           "method": "tools/call",
           "params": {
             "name": "document_merge",
@@ -3378,7 +5571,7 @@
           }
         },
         "response": {
-          "id": 12,
+          "id": 13,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -3394,7 +5587,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 13,
+          "id": 14,
           "method": "tools/call",
           "params": {
             "name": "document_edit",
@@ -3406,14 +5599,14 @@
             "code": -32602,
             "message": "unknown tool"
           },
-          "id": 13,
+          "id": 14,
           "jsonrpc": "2.0"
         }
       },
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 14,
+          "id": 15,
           "method": "tools/call",
           "params": {
             "name": "document_load",
@@ -3425,14 +5618,14 @@
             "code": -32602,
             "message": "unknown tool"
           },
-          "id": 14,
+          "id": 15,
           "jsonrpc": "2.0"
         }
       },
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 15,
+          "id": 16,
           "method": "tools/call",
           "params": {
             "name": "document_save",
@@ -3444,14 +5637,14 @@
             "code": -32602,
             "message": "unknown tool"
           },
-          "id": 15,
+          "id": 16,
           "jsonrpc": "2.0"
         }
       },
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 16,
+          "id": 17,
           "method": "tools/call",
           "params": {
             "name": "document_snapshot",
@@ -3459,7 +5652,7 @@
           }
         },
         "response": {
-          "id": 16,
+          "id": 17,
           "jsonrpc": "2.0",
           "result": {
             "content": [
@@ -3475,7 +5668,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 17,
+          "id": 18,
           "method": "tools/call",
           "params": {
             "name": "el0_status",
@@ -3483,12 +5676,12 @@
           }
         },
         "response": {
-          "id": 17,
+          "id": 18,
           "jsonrpc": "2.0",
           "result": {
             "content": [
               {
-                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1453,\"next\":1,\"task\":0},{\"count\":1391,\"next\":0,\"task\":1},{\"count\":2974,\"next\":1,\"task\":0},{\"count\":2809,\"next\":0,\"task\":1},{\"count\":4426,\"next\":1,\"task\":0},{\"count\":4116,\"next\":0,\"task\":1},{\"count\":5928,\"next\":1,\"task\":0},{\"count\":5525,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[15001,8231],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1206,\"next\":1,\"task\":0},{\"count\":1590,\"next\":0,\"task\":1},{\"count\":2960,\"next\":1,\"task\":0},{\"count\":2822,\"next\":0,\"task\":1},{\"count\":4806,\"next\":1,\"task\":0},{\"count\":3899,\"next\":0,\"task\":1},{\"count\":6583,\"next\":1,\"task\":0},{\"count\":5274,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[17360,8367],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -3499,7 +5692,7 @@
       {
         "request": {
           "jsonrpc": "2.0",
-          "id": 18,
+          "id": 19,
           "method": "tools/call",
           "params": {
             "name": "el0_status",
@@ -3507,12 +5700,12 @@
           }
         },
         "response": {
-          "id": 18,
+          "id": 19,
           "jsonrpc": "2.0",
           "result": {
             "content": [
               {
-                "text": "{\"alias_removed\":[true,true],\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1453,\"next\":1,\"task\":0},{\"count\":1391,\"next\":0,\"task\":1},{\"count\":2974,\"next\":1,\"task\":0},{\"count\":2809,\"next\":0,\"task\":1},{\"count\":4426,\"next\":1,\"task\":0},{\"count\":4116,\"next\":0,\"task\":1},{\"count\":5928,\"next\":1,\"task\":0},{\"count\":5525,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[15001,8231],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"alias_removed\":[true,true],\"code_alias_removed\":true,\"code_frame_scrubbed\":true,\"cross_code_read_denied\":[true,true],\"dispatches\":16,\"el\":\"EL0\",\"events\":[{\"count\":1206,\"next\":1,\"task\":0},{\"count\":1590,\"next\":0,\"task\":1},{\"count\":2960,\"next\":1,\"task\":0},{\"count\":2822,\"next\":0,\"task\":1},{\"count\":4806,\"next\":1,\"task\":0},{\"count\":3899,\"next\":0,\"task\":1},{\"count\":6583,\"next\":1,\"task\":0},{\"count\":5274,\"next\":2,\"task\":1}],\"frame_pool_assigned\":0,\"frame_pool_capacity\":4,\"frame_scrubbed\":[true,true],\"image_loaded\":true,\"interrupts\":\"masked\",\"loader_rejected\":false,\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[17360,8367],\"slice_ticks\":13,\"spawn_admitted\":true,\"spawn_executed\":true,\"spawn_exited\":true,\"spawn_failed\":false,\"spawn_reused_frame\":true,\"task_states\":[\"exited\",\"exited\"],\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
