@@ -44,6 +44,8 @@ The later [`workspace_dynamic_storage`](../experiments/workspace_dynamic_storage
 
 ## Remaining engineering work
 
+The integrated storage guest now assigns two private data frames from a four-frame reserved pool and maps separate code pages for its two fixed tasks. Each task attempts to read the other task's code; the kernel handles only the two specifically expected EL0 permission faults. This exercises the protection in the same guest as the FIFO and snapshot workflow, but it is not a general process loader, a general physical-memory allocator, or complete isolation.
+
 - Define process and address-space ownership, protected mappings, lifecycle and zeroing rules, including reuse of physical pages and user stacks.
 - Implement a bounded syscall ABI with argument validation and a deliberate policy for invalid calls and faults; test both success and failure paths.
 - Extend exception and context handling to cover scheduler integration, interrupt delivery, register and flags preservation, and FP/SIMD state when enabled.

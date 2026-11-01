@@ -52,6 +52,7 @@ class Guest:
             preempt=self.call('el0_status',{})
             if not preempt.get('validated') or preempt.get('ticks')!=8 or preempt.get('el')!='EL0' or preempt.get('timer')!='disabled' or preempt.get('interrupts')!='masked':raise RuntimeError('EL0 probe status invalid')
             if preempt.get('private_values')!=[0xa1a1,0xb2b2] or preempt.get('service_asid')!=1:raise RuntimeError('private markers or service ASID invalid')
+            if preempt.get('cross_code_read_denied')!=[True,True] or preempt.get('frame_pool_capacity')!=4 or preempt.get('frame_pool_assigned')!=2:raise RuntimeError('isolated task code or frame assignment invalid')
             events=preempt.get('events',[]);previous=[0,0]
             if len(events)!=8:raise RuntimeError('EL0 event count')
             for event_index,event in enumerate(events):

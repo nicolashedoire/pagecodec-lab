@@ -11,7 +11,10 @@ SECTIONS
   }
   .usertext : ALIGN(4096) {
     __usertext_start = .;
-    KEEP(*(.usertext))
+    KEEP(*(.usertext.a))
+    . = ALIGN(4096);
+    __usertext_split = .;
+    KEEP(*(.usertext.b))
     . = ALIGN(4096);
     __usertext_end = .;
   }

@@ -8,8 +8,12 @@ const GICD:usize=0x0800_0000;const GICC:usize=0x0801_0000;
 #[repr(C,align(16))] #[derive(Clone,Copy)] struct Frame {regs:[u64;31],sp:u64,elr:u64,spsr:u64}
 #[repr(C)] #[derive(Clone,Copy)] struct Event {actor:u64,count:u64,pc:u64,spsr:u64,sp:u64,next:u64,kernel_sp:u64}
 const EMPTY:Frame=Frame{regs:[0;31],sp:0,elr:0,spsr:0};
-#[link_section=".userstack"] static mut A_STACK:UserStack=UserStack([0;PAGE]);
-#[link_section=".userstack"] static mut B_STACK:UserStack=UserStack([0;PAGE]);
+// Fixed boot-reserved frame pool, not a general physical-memory allocator.
+// Frames are exclusively assigned to task addresses and zeroed before mapping.
+#[link_section=".userstack"] static mut USER_FRAMES:[UserStack;4]=[const {UserStack([0;PAGE])};4];
+static mut FRAME_BITMAP:u8=0;
+static mut TASK_FRAMES:[usize;2]=[0;2];
+static mut CROSS_READ_DENIED:[bool;2]=[false;2];
 static mut KERNEL_DATA:u64=0x0123_4567_89ab_cdef;
 static mut A_FRAME:Frame=EMPTY;static mut B_FRAME:Frame=EMPTY;
 #[no_mangle] static mut SAVED:[u64;2]=[0;2];
@@ -81,8 +85,19 @@ pub fn ipc_status()->Value {
 }
 #[no_mangle]
 extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64) {
- let f=unsafe{&*frame};let actor=unsafe{read_volatile(addr_of!(CURRENT))} as usize;
- if actor>=2 || super::mmu::active_root()!=super::mmu::root(actor) || esr>>26!=0x15 || esr&(1<<25)==0 || f.spsr&0xf!=0 {halt()}
+ let f=unsafe{&mut *frame};let actor=unsafe{read_volatile(addr_of!(CURRENT))} as usize;
+ if actor>=2 || super::mmu::active_root()!=super::mmu::root(actor) || f.spsr&0xf!=0 {halt()}
+ if esr>>26==0x24 {
+  // Only recover the two intentionally placed read probes. All other faults
+  // stop this fixture; this is not general process fault recovery.
+  let (pc,target)=if actor==0 {(addr_of!(task_a_cross_fault) as u64,addr_of!(task_b_loop) as u64)} else {(addr_of!(task_b_cross_fault) as u64,addr_of!(task_a_loop) as u64)};
+  let far:u64;unsafe{asm!("mrs {}, FAR_EL1",out(reg) far)};
+  if esr&(1<<25)==0 || esr&0x3f!=0x0f || esr&(1<<6)!=0 || esr&(1<<10)!=0 || f.elr!=pc || far!=target || f.regs[2]!=target {halt()}
+  let flag=unsafe{addr_of_mut!(CROSS_READ_DENIED).cast::<bool>().add(actor)};
+  if unsafe{read_volatile(flag)} {halt()}
+  unsafe{write_volatile(flag,true)};f.elr+=4;f.regs[2]=0;return
+ }
+ if esr>>26!=0x15 || esr&(1<<25)==0 {halt()}
  let (lo,hi)=if actor==0 {(addr_of!(task_a_loop) as u64,addr_of!(task_a_end) as u64)} else {(addr_of!(task_b_loop) as u64,addr_of!(task_b_end) as u64)};
  if f.elr<lo || f.elr>=hi {halt()}
  if unsafe{read_volatile(addr_of!(SLICE_MODE))}==0 {return}
@@ -180,16 +195,33 @@ extern "C" fn unexpected_vector()->! {
 #[no_mangle] static mut KERNEL_CONTEXT:[u64;14]=[0;14];
 extern "C" {
  static __image_start:u8;static __image_end:u8;static __text_end:u8;
- static __usertext_start:u8;static __usertext_end:u8;static __userstack_start:u8;static __userstack_end:u8;
+ static __usertext_start:u8;static __usertext_split:u8;static __usertext_end:u8;static __userstack_start:u8;static __userstack_end:u8;
  static __bss_end:u8;static __stack_top:u8;static vector_table:u8;
  static task_a_loop:u8;static task_a_end:u8;static task_b_loop:u8;static task_b_end:u8;
+ static task_a_cross_fault:u8;static task_b_cross_fault:u8;
  static task_a_init:u8;static task_a_init_end:u8;static task_b_init:u8;static task_b_init_end:u8;
  fn start_first(frame:*const Frame)->!;fn resume_graphics()->!;fn slice_probe(frame:*const Frame)->u64;
 }
 fn halt()->! {loop{unsafe{asm!("wfe",options(nomem,nostack))}}}
 fn check(ok:bool,msg:&str){if !ok{super::write("FAIL EL0 ");super::write(msg);super::write("\r\n");halt()}}
 fn physical(value:usize)->usize {let out:usize;unsafe{asm!("mov {out}, {value}",out=out(reg) out,value=in(reg) value,options(nomem,nostack,preserves_flags));}out}
-pub fn private_stacks()->(usize,usize) {(addr_of_mut!(A_STACK) as usize,addr_of_mut!(B_STACK) as usize)}
+pub fn private_stacks()->(usize,usize) {
+ let bitmap=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
+ check(bitmap==0,"frame pool already initialized");
+ for actor in 0..2 {
+  let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
+  let slot=(0..4).find(|i|used&(1<<i)==0).unwrap_or_else(||halt());
+  let frame=unsafe{addr_of_mut!(USER_FRAMES).cast::<UserStack>().add(slot)} as *mut u8;
+  for i in 0..PAGE {unsafe{write_volatile(frame.add(i),0)}}
+  unsafe{write_volatile(addr_of_mut!(FRAME_BITMAP),used|(1<<slot));write_volatile(addr_of_mut!(TASK_FRAMES).cast::<usize>().add(actor),frame as usize)};
+ }
+ (task_frame(0),task_frame(1))
+}
+fn task_frame(actor:usize)->usize {
+ check(actor<2,"frame actor");
+ let frame=unsafe{read_volatile(addr_of!(TASK_FRAMES).cast::<usize>().add(actor))};
+ check(frame!=0,"frame uninitialized");frame
+}
 fn frame(actor:u64,sp:usize,pc:usize)->Frame {
  let mut f=EMPTY;for i in 0..31 {f.regs[i]=1000+actor*100+i as u64;}
  f.regs[0]=super::mmu::ALIAS as u64;f.regs[1]=if actor==0 {0xa1a1}else{0xb2b2};f.regs[2]=0;f.regs[3]=0;f.regs[4]=0;
@@ -199,9 +231,9 @@ fn frame(actor:u64,sp:usize,pc:usize)->Frame {
 
 pub fn start()->! {
  let start=physical(addr_of!(__image_start) as usize);let end=physical(addr_of!(__image_end) as usize);
- let text_end=physical(addr_of!(__text_end) as usize);let ut0=physical(addr_of!(__usertext_start) as usize);let ut1=physical(addr_of!(__usertext_end) as usize);
+ let text_end=physical(addr_of!(__text_end) as usize);let ut0=physical(addr_of!(__usertext_start) as usize);let split=physical(addr_of!(__usertext_split) as usize);let ut1=physical(addr_of!(__usertext_end) as usize);
  let us0=physical(addr_of!(__userstack_start) as usize);let us1=physical(addr_of!(__userstack_end) as usize);
- let a=physical(addr_of_mut!(A_STACK) as usize);let b=physical(addr_of_mut!(B_STACK) as usize);
+ let a=physical(task_frame(0));let b=physical(task_frame(1));
  let kb=physical(addr_of!(__bss_end) as usize);let kt=physical(addr_of!(__stack_top) as usize);
  let vector=physical(addr_of!(vector_table) as usize);
  let apc=physical(addr_of!(task_a_loop) as usize);let aend=physical(addr_of!(task_a_end) as usize);
@@ -209,11 +241,11 @@ pub fn start()->! {
  let mut sp:usize;let mut sctlr:u64;unsafe{asm!("mov {},sp",out(reg) sp);asm!("mrs {},SCTLR_EL1",out(reg) sctlr);}
  check(sctlr&1!=0 && sctlr&((1<<2)|(1<<12))==0 && sp>kb && sp<=kt && sp%16==0,"MMU or kernel stack");
  check(start<text_end && text_end<=ut0 && ut0<ut1 && us0<us1 && us1==end && kt<=us0,"section bounds");
- check(ut0%PAGE==0 && ut0.checked_add(PAGE)==Some(ut1) && us0.checked_add(2*PAGE)==Some(us1) && a%PAGE==0 && b%PAGE==0 && a>=us0 && b>=us0 && a+PAGE<=us1 && b+PAGE<=us1 && (a+PAGE<=b || b+PAGE<=a),"EL0 stack bounds");
- check(apc>=ut0 && apc<aend && aend<=ut1 && bpc>=ut0 && bpc<bend && bend<=ut1,"EL0 code bounds");
+ check(ut0%PAGE==0 && ut0.checked_add(PAGE)==Some(split) && split.checked_add(PAGE)==Some(ut1) && us0.checked_add(4*PAGE)==Some(us1) && a%PAGE==0 && b%PAGE==0 && a>=us0 && b>=us0 && a+PAGE<=us1 && b+PAGE<=us1 && (a+PAGE<=b || b+PAGE<=a),"EL0 stack bounds");
+ check(apc>=ut0 && apc<aend && aend<=split && bpc>=split && bpc<bend && bend<=ut1,"EL0 code bounds");
  check(vector%2048==0 && vector>=start && vector+2048<=text_end,"VBAR bounds");
  check(core::mem::size_of::<Frame>()==272 && core::mem::size_of::<Event>()==56,"frame layout");
- for p in [addr_of_mut!(A_STACK).cast::<u8>(),addr_of_mut!(B_STACK).cast::<u8>()] {for i in 0..PAGE {unsafe{write_volatile(p.add(i),0)}}}
+ for p in [a as *const u8,b as *const u8] {for i in 0..PAGE {check(unsafe{read_volatile(p.add(i))}==0,"frame not zeroed")}}
  unsafe{asm!("msr VBAR_EL1, {}","isb",in(reg) vector);}
  let mut vbar:u64;let mut freq:u64;unsafe{asm!("mrs {},VBAR_EL1",out(reg) vbar);asm!("mrs {},CNTFRQ_EL0",out(reg) freq);}
  check(vbar==vector as u64,"VBAR readback");let delta=freq/100;check(delta>0 && delta<=i32::MAX as u64,"timer frequency");
@@ -273,15 +305,15 @@ pub fn run_slice() {
  check(unsafe{read_volatile(p)}==0x1122_3344_5566_7788 && unsafe{read_volatile(p.add(1))}==0x0102_0304_0506_0708,"service stack sentinel");
  let mut timer:u64;unsafe{asm!("mrs {},CNTV_CTL_EL0",out(reg) timer);asm!("mrs {},DAIF",out(reg) daif);}
  check(timer&1==0 && daif&(1<<7)!=0 && super::mmu::active_root()==super::mmu::root(0),"slice timer, IRQ mask or service root");
- check(unsafe{read_volatile(addr_of!(A_STACK).cast::<u64>())}==0xa1a1 && unsafe{read_volatile(addr_of!(B_STACK).cast::<u64>())}==0xb2b2,"private task data");
+ check(unsafe{read_volatile(task_frame(0) as *const u64)}==0xa1a1 && unsafe{read_volatile(task_frame(1) as *const u64)}==0xb2b2,"private task data");
 }
 pub fn status()->Value {
  let done=unsafe{read_volatile(addr_of!(PROBE_DONE))}==1;
  let events:Vec<Value>=(0..8).map(|i|{let e=unsafe{read_volatile(addr_of!(EVENTS).cast::<Event>().add(i))};json!({"task":e.actor,"count":e.count,"next":e.next})}).collect();
  let counts:Vec<u64>=(0..2).map(|i|unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>().add(i))}).collect();
  let slice_ticks=unsafe{read_volatile(addr_of!(SLICE_TOTAL))};
- let values=[unsafe{read_volatile(addr_of!(A_STACK).cast::<u64>())},unsafe{read_volatile(addr_of!(B_STACK).cast::<u64>())}];
- json!({"validated":done,"ticks":8,"el":"EL0","events":events,"timer":"disabled","interrupts":"masked","slice_ticks":slice_ticks,"slice_counts":counts,"mode":"service-boundary","private_values":values,"service_asid":super::mmu::active_root()>>48})
+ let values=[unsafe{read_volatile(task_frame(0) as *const u64)},unsafe{read_volatile(task_frame(1) as *const u64)}];
+ json!({"validated":done,"ticks":8,"el":"EL0","events":events,"timer":"disabled","interrupts":"masked","slice_ticks":slice_ticks,"slice_counts":counts,"mode":"service-boundary","private_values":values,"service_asid":super::mmu::active_root()>>48,"cross_code_read_denied":unsafe{read_volatile(addr_of!(CROSS_READ_DENIED))},"frame_pool_capacity":4,"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()})
 }
 
 global_asm!(r#"
@@ -998,7 +1030,7 @@ svc_restore_frame:
     ldr x30, [x30, #240]
     eret
 
-    .section .usertext, "ax"
+    .section .usertext.a, "ax"
     .global task_a_loop
     .global task_a_end
 task_a_loop:
@@ -1007,6 +1039,11 @@ task_a_loop:
 task_a_init:
     ldr x2, [x0, #48]
     cbnz x2, task_a_init_restore
+    adrp x2, task_b_loop
+    add x2, x2, :lo12:task_b_loop
+    .global task_a_cross_fault
+task_a_cross_fault:
+    ldr x2, [x2]   // privileged page in A's translation root
     movz x2, #1
     str x2, [x0, #56]
     movz x2, #26740
@@ -1131,7 +1168,7 @@ task_a_init_end:
     ldr x2, [x0, #72]
     cbz x2, 9f
     eor x3, x2, #3
-    cbnz x3, el0_failure
+    cbnz x3, el0_failure_a
     str x2, [x0, #64]
 9:  ldr x2, [x0]
     mov x3, #0
@@ -1146,10 +1183,10 @@ task_a_init_end:
     cbz x2, 10f
     ldr x3, [x0, #56]
     eor x3, x3, x2
-    cbnz x3, el0_failure
+    cbnz x3, el0_failure_a
     ldr x3, [x0, #112]
     eor x3, x3, #1
-    cbnz x3, el0_failure
+    cbnz x3, el0_failure_a
     str x2, [x0, #88]
     ldr x2, [x0, #112]
     str x2, [x0, #120]
@@ -1165,7 +1202,11 @@ task_a_init_end:
     svc #0x1ff
     add x19, x19, #1
     b task_a_loop
+el0_failure_a:
+    svc #0x7bad
+    b el0_failure_a
 task_a_end:
+    .section .usertext.b, "ax"
     .global task_b_loop
     .global task_b_end
 task_b_loop:
@@ -1174,6 +1215,11 @@ task_b_loop:
 task_b_init:
     ldr x2, [x0, #48]
     cbnz x2, task_b_init_restore
+    adrp x2, task_a_loop
+    add x2, x2, :lo12:task_a_loop
+    .global task_b_cross_fault
+task_b_cross_fault:
+    ldr x2, [x2]   // privileged page in B's translation root
     movz x2, #3
     str x2, [x0, #56]
     movz x2, #24940
@@ -1298,7 +1344,7 @@ task_b_init_end:
     ldr x2, [x0, #72]
     cbz x2, 9f
     eor x3, x2, #3
-    cbnz x3, el0_failure
+    cbnz x3, el0_failure_b
     str x2, [x0, #64]
 9:  ldr x2, [x0]
     mov x3, #0
@@ -1310,11 +1356,11 @@ task_b_init_end:
     ldr x2, [x0, #16]
     cbz x2, 13f
     sub x3, x2, #5
-    cbnz x3, el0_failure
+    cbnz x3, el0_failure_b
     str x2, [x0, #32]
     ldr x2, [x0, #24]
     eor x3, x2, #4
-    cbnz x3, el0_failure
+    cbnz x3, el0_failure_b
     str x2, [x0, #40]
 13: ldr x2, [x0]
     mov x3, #0
@@ -1326,10 +1372,10 @@ task_b_init_end:
     cbz x2, 10f
     ldr x3, [x0, #56]
     eor x3, x3, x2
-    cbnz x3, el0_failure
+    cbnz x3, el0_failure_b
     ldr x3, [x0, #112]
     eor x3, x3, #1
-    cbnz x3, el0_failure
+    cbnz x3, el0_failure_b
     str x2, [x0, #88]
     ldr x2, [x0, #112]
     str x2, [x0, #120]
@@ -1343,14 +1389,15 @@ task_b_init_end:
     add x19, x19, #1
     b task_b_loop
 task_b_end:
-el0_failure:
+el0_failure_b:
     svc #0x7bad
-    b el0_failure
+    b el0_failure_b
 "#);
 
 #[no_mangle]
 pub extern "C" fn el0_finish()->! {
     check(unsafe{read_volatile(addr_of!(TICKS))}==8,"tick count");
+    check(unsafe{read_volatile(addr_of!(CROSS_READ_DENIED))}==[true,true],"EL0 code isolation fault");
     let kb=physical(addr_of!(__bss_end) as usize);let kt=physical(addr_of!(__stack_top) as usize);
     let mut previous=[0u64;2];
     for i in 0..8 {
@@ -1385,7 +1432,7 @@ pub extern "C" fn el0_finish()->! {
           && unsafe{read_volatile(addr_of!(TASK_STATE).cast::<u64>())}==1
           && unsafe{read_volatile(addr_of!(TASK_STATE).cast::<u64>().add(1))}==2,"terminal states");
     check(unsafe{read_volatile(addr_of!(KERNEL_DATA))}==0x0123_4567_89ab_cdef,"kernel data changed");
-    check(unsafe{read_volatile(addr_of!(A_STACK).cast::<u64>())}==0xa1a1 && unsafe{read_volatile(addr_of!(B_STACK).cast::<u64>())}==0xb2b2,"private data markers");
+    check(unsafe{read_volatile(task_frame(0) as *const u64)}==0xa1a1 && unsafe{read_volatile(task_frame(1) as *const u64)}==0xb2b2,"private data markers");
     let mut ctl:u64;unsafe{asm!("mrs {}, CNTV_CTL_EL0",out(reg) ctl);}
     let active=unsafe{read_volatile((GICD+0x300) as *const u32)};
     check(ctl&1==0 && active&(1<<27)==0,"timer or GIC active");

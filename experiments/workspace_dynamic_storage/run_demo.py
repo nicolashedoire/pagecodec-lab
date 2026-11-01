@@ -20,7 +20,11 @@ def main():
  traces=[];states=[];qmp_events=[]
  with tempfile.TemporaryDirectory(prefix='workspace-storage-ipc-') as tmp:
   disk=Path(tmp)/'disk.raw';create(disk,bytes(SIZE));first_image=None
-  for index in (1,2):
+  for index in (1,2,3):
+   if index==3:
+    # Simulate a damaged newest snapshot while the guest is stopped. The
+    # following boot must use the intact older slot, then repair redundancy.
+    damaged=bytearray(disk.read_bytes());damaged[12*512+512]^=1;disk.write_bytes(damaged)
    g=Guest(a.qemu,guest,disk,tmp,index,out,a.transport)
    try:
     for _ in range(8):
@@ -30,7 +34,7 @@ def main():
     else:raise RuntimeError('FIFO did not finish: '+str(ipc))
     if any(ipc.get(k)!=[1,2,3,4] for k in ('accepted','applied','consumed')) or not ipc.get('save_denied') or not ipc.get('denial_consumed') or ipc.get('queue_len')!=0 or not ipc.get('full_rejected') or not ipc.get('full_consumed') or any(ipc.get(k)!=[True,True] for k in ('range_rejected','overflow_rejected','duplicate_rejected','utf8_rejected','spoof_rejected')) or ipc.get('source')!='synthetic descriptors and bytes constructed by EL0':raise RuntimeError('IPC save and rejection invariants failed: '+str(ipc))
     storage=g.call('storage_status',{})
-    expected={'restore':'blank' if index==1 else 'restored','restore_generation':None if index==1 else 1,'before':blank,'after':blank if index==1 else final,'save':{'slot':index-1,'generation':index,'snapshot':final}}
+    expected={'restore':'blank' if index==1 else 'restored','restore_generation':None if index==1 else 1,'restore_slots':(['blank','blank'] if index==1 else ['valid','blank'] if index==2 else ['valid','invalid']),'before':blank,'after':blank if index==1 else final,'save':{'slot':0 if index==1 else 1,'generation':1 if index==1 else 2,'readback_verified':True,'snapshot':final}}
     if storage!=expected:raise RuntimeError('restore/save mismatch: '+str(storage))
     if g.call('document_snapshot',{})!=final:raise RuntimeError('bad document state')
     merge=g.call('document_merge',{});fields={x['key']:x for x in merge['fields']}
@@ -65,5 +69,5 @@ def main():
     if data[:12*512]!=first_image[:12*512] or data[20*512:]!=bytes(SIZE-20*512):raise RuntimeError('second write changed other sectors')
  if sha(guest.read_bytes())!=h:raise RuntimeError('image changed')
  (out/'workspace-dynamic-storage-evidence.json').write_text(json.dumps({'guest_sha256':h,'qemu_version':qemu,'transport':a.transport,'states':states,'qmp_input':qmp_events,'sessions':traces},indent=2)+'\n')
- print('PASS QEMU EL0-constructed FIFO edits, SVC save and startup restore')
+ print('PASS QEMU EL0 FIFO edits, readback-verified save, restart and corrupted-slot recovery')
 if __name__=='__main__':main()

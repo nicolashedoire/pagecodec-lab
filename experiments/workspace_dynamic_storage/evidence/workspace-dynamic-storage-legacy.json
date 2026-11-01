@@ -1,5 +1,5 @@
 {
-  "guest_sha256": "b762b3a499d4d973f3b001c8f2fa2f653f4139aceecf08a3d05067a0605d4793",
+  "guest_sha256": "8dce8348ff650a8ea73458e824696c9f57c5a73ee3466b397fc04363d4b26438",
   "qemu_version": "QEMU emulator version 11.1.3",
   "transport": "legacy",
   "states": [
@@ -34,8 +34,13 @@
       },
       "restore": "blank",
       "restore_generation": null,
+      "restore_slots": [
+        "blank",
+        "blank"
+      ],
       "save": {
         "generation": 1,
+        "readback_verified": true,
         "slot": 0,
         "snapshot": {
           "assistant": {
@@ -88,8 +93,72 @@
       },
       "restore": "restored",
       "restore_generation": 1,
+      "restore_slots": [
+        "valid",
+        "blank"
+      ],
       "save": {
         "generation": 2,
+        "readback_verified": true,
+        "slot": 1,
+        "snapshot": {
+          "assistant": {
+            "common": "seed",
+            "layout": "assistant",
+            "title": "base"
+          },
+          "base": {
+            "common": "seed",
+            "title": "base"
+          },
+          "human": {
+            "common": "seed",
+            "theme": "human-two",
+            "title": "base"
+          }
+        }
+      }
+    },
+    {
+      "after": {
+        "assistant": {
+          "common": "seed",
+          "layout": "assistant",
+          "title": "base"
+        },
+        "base": {
+          "common": "seed",
+          "title": "base"
+        },
+        "human": {
+          "common": "seed",
+          "theme": "human-two",
+          "title": "base"
+        }
+      },
+      "before": {
+        "assistant": {
+          "common": "seed",
+          "title": "base"
+        },
+        "base": {
+          "common": "seed",
+          "title": "base"
+        },
+        "human": {
+          "common": "seed",
+          "title": "base"
+        }
+      },
+      "restore": "restored",
+      "restore_generation": 1,
+      "restore_slots": [
+        "valid",
+        "invalid"
+      ],
+      "save": {
+        "generation": 2,
+        "readback_verified": true,
         "slot": 1,
         "snapshot": {
           "assistant": {
@@ -449,7 +518,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":1643,\"next\":1,\"task\":0},{\"count\":1404,\"next\":0,\"task\":1},{\"count\":3302,\"next\":1,\"task\":0},{\"count\":2969,\"next\":0,\"task\":1},{\"count\":4975,\"next\":1,\"task\":0},{\"count\":4441,\"next\":0,\"task\":1},{\"count\":6687,\"next\":1,\"task\":0},{\"count\":6076,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[10250,9366],\"slice_ticks\":10,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"cross_code_read_denied\":[true,true],\"el\":\"EL0\",\"events\":[{\"count\":1566,\"next\":1,\"task\":0},{\"count\":1503,\"next\":0,\"task\":1},{\"count\":2885,\"next\":1,\"task\":0},{\"count\":2809,\"next\":0,\"task\":1},{\"count\":4384,\"next\":1,\"task\":0},{\"count\":4016,\"next\":0,\"task\":1},{\"count\":5328,\"next\":1,\"task\":0},{\"count\":4867,\"next\":2,\"task\":1}],\"frame_pool_assigned\":2,\"frame_pool_capacity\":4,\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[7485,6865],\"slice_ticks\":10,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -497,7 +566,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"after\":{\"assistant\":{\"common\":\"seed\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"title\":\"base\"}},\"before\":{\"assistant\":{\"common\":\"seed\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"title\":\"base\"}},\"restore\":\"blank\",\"restore_generation\":null,\"save\":{\"generation\":1,\"slot\":0,\"snapshot\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}}}",
+                "text": "{\"after\":{\"assistant\":{\"common\":\"seed\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"title\":\"base\"}},\"before\":{\"assistant\":{\"common\":\"seed\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"title\":\"base\"}},\"restore\":\"blank\",\"restore_generation\":null,\"restore_slots\":[\"blank\",\"blank\"],\"save\":{\"generation\":1,\"readback_verified\":true,\"slot\":0,\"snapshot\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}}}",
                 "type": "text"
               }
             ],
@@ -797,7 +866,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":1643,\"next\":1,\"task\":0},{\"count\":1404,\"next\":0,\"task\":1},{\"count\":3302,\"next\":1,\"task\":0},{\"count\":2969,\"next\":0,\"task\":1},{\"count\":4975,\"next\":1,\"task\":0},{\"count\":4441,\"next\":0,\"task\":1},{\"count\":6687,\"next\":1,\"task\":0},{\"count\":6076,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[22211,19772],\"slice_ticks\":46,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"cross_code_read_denied\":[true,true],\"el\":\"EL0\",\"events\":[{\"count\":1566,\"next\":1,\"task\":0},{\"count\":1503,\"next\":0,\"task\":1},{\"count\":2885,\"next\":1,\"task\":0},{\"count\":2809,\"next\":0,\"task\":1},{\"count\":4384,\"next\":1,\"task\":0},{\"count\":4016,\"next\":0,\"task\":1},{\"count\":5328,\"next\":1,\"task\":0},{\"count\":4867,\"next\":2,\"task\":1}],\"frame_pool_assigned\":2,\"frame_pool_capacity\":4,\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[19954,18508],\"slice_ticks\":46,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -1078,7 +1147,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":1634,\"next\":1,\"task\":0},{\"count\":1460,\"next\":0,\"task\":1},{\"count\":3344,\"next\":1,\"task\":0},{\"count\":3012,\"next\":0,\"task\":1},{\"count\":4965,\"next\":1,\"task\":0},{\"count\":4436,\"next\":0,\"task\":1},{\"count\":6641,\"next\":1,\"task\":0},{\"count\":6020,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[10334,9489],\"slice_ticks\":10,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"cross_code_read_denied\":[true,true],\"el\":\"EL0\",\"events\":[{\"count\":1303,\"next\":1,\"task\":0},{\"count\":1552,\"next\":0,\"task\":1},{\"count\":2969,\"next\":1,\"task\":0},{\"count\":2824,\"next\":0,\"task\":1},{\"count\":4658,\"next\":1,\"task\":0},{\"count\":4368,\"next\":0,\"task\":1},{\"count\":6182,\"next\":1,\"task\":0},{\"count\":5711,\"next\":2,\"task\":1}],\"frame_pool_assigned\":2,\"frame_pool_capacity\":4,\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[9483,8821],\"slice_ticks\":10,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -1126,7 +1195,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"after\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}},\"before\":{\"assistant\":{\"common\":\"seed\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"title\":\"base\"}},\"restore\":\"restored\",\"restore_generation\":1,\"save\":{\"generation\":2,\"slot\":1,\"snapshot\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}}}",
+                "text": "{\"after\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}},\"before\":{\"assistant\":{\"common\":\"seed\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"title\":\"base\"}},\"restore\":\"restored\",\"restore_generation\":1,\"restore_slots\":[\"valid\",\"blank\"],\"save\":{\"generation\":2,\"readback_verified\":true,\"slot\":1,\"snapshot\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}}}",
                 "type": "text"
               }
             ],
@@ -1279,7 +1348,489 @@
           "result": {
             "content": [
               {
-                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":1634,\"next\":1,\"task\":0},{\"count\":1460,\"next\":0,\"task\":1},{\"count\":3344,\"next\":1,\"task\":0},{\"count\":3012,\"next\":0,\"task\":1},{\"count\":4965,\"next\":1,\"task\":0},{\"count\":4436,\"next\":0,\"task\":1},{\"count\":6641,\"next\":1,\"task\":0},{\"count\":6020,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[17064,15464],\"slice_ticks\":28,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"cross_code_read_denied\":[true,true],\"el\":\"EL0\",\"events\":[{\"count\":1303,\"next\":1,\"task\":0},{\"count\":1552,\"next\":0,\"task\":1},{\"count\":2969,\"next\":1,\"task\":0},{\"count\":2824,\"next\":0,\"task\":1},{\"count\":4658,\"next\":1,\"task\":0},{\"count\":4368,\"next\":0,\"task\":1},{\"count\":6182,\"next\":1,\"task\":0},{\"count\":5711,\"next\":2,\"task\":1}],\"frame_pool_assigned\":2,\"frame_pool_capacity\":4,\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[15635,14439],\"slice_ticks\":28,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      }
+    ],
+    [
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {
+              "name": "graph-snapshot-test",
+              "version": "0.1"
+            }
+          }
+        },
+        "response": {
+          "id": 1,
+          "jsonrpc": "2.0",
+          "result": {
+            "capabilities": {
+              "tools": {}
+            },
+            "protocolVersion": "2025-11-25",
+            "serverInfo": {
+              "name": "dual-pointer-vm",
+              "version": "0.1.0"
+            }
+          }
+        }
+      },
+      {
+        "notification": {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/list",
+          "params": {}
+        },
+        "response": {
+          "id": 2,
+          "jsonrpc": "2.0",
+          "result": {
+            "tools": [
+              {
+                "description": "Move AI pointer within its right-hand QEMU workspace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 773,
+                      "minimum": 400,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 573,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_ai"
+              },
+              {
+                "description": "Read the two pointer coordinates in this guest only.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "pointer_state"
+              },
+              {
+                "description": "Activate the synthetic button under the AI pointer; no host click or authentication.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "click_ai"
+              },
+              {
+                "description": "Read logical button focus and click counts in this guest.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "interaction_state"
+              },
+              {
+                "description": "Read the guest's verified identity-map status.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "mmu_status"
+              },
+              {
+                "description": "Read verified pre-graphical EL0 timer trace.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "el0_status"
+              },
+              {
+                "description": "Move the visible pointer for a synthetic logical actor; no window or authenticated identity.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "x": {
+                      "maximum": 799,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "maximum": 599,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "type": "object"
+                },
+                "name": "move_remote"
+              },
+              {
+                "description": "Read the third synthetic actor's logical position.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "remote_state"
+              },
+              {
+                "description": "Run 1101 synthetic human moves in this VM; overwrites older bounded trace entries.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "exercise_human_moves"
+              },
+              {
+                "description": "Read synthetic startup restore and last SVC save status.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "storage_status"
+              },
+              {
+                "description": "Read the bounded FIFO and task completion status.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "ipc_status"
+              },
+              {
+                "description": "Read a field from a synthetic document copy.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "actor": {
+                      "enum": [
+                        "human",
+                        "assistant"
+                      ],
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Non-empty; at most 32 UTF-8 bytes.",
+                      "type": "string"
+                    },
+                    "space": {
+                      "enum": [
+                        "human-space",
+                        "assistant-space"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "actor",
+                    "space",
+                    "key"
+                  ],
+                  "type": "object"
+                },
+                "name": "document_view"
+              },
+              {
+                "description": "Merge synthetic copies and return fields, origins and conflicts.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_merge"
+              },
+              {
+                "description": "Read the synthetic base and both full copies.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object"
+                },
+                "name": "document_snapshot"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "method": "tools/call",
+          "params": {
+            "name": "mmu_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 3,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"address_spaces\":2,\"asids\":[1,2],\"caches\":false,\"enabled\":true,\"gic\":\"device-xn\",\"image\":\"normal-nc\",\"kernel_el0\":\"samples-denied\",\"mapping\":\"identity\",\"range_checks\":\"full\",\"user_code\":\"ro\",\"user_stack\":\"private-alias-rw\",\"virtio\":\"device-xn\"}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 4,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"cross_code_read_denied\":[true,true],\"el\":\"EL0\",\"events\":[{\"count\":1566,\"next\":1,\"task\":0},{\"count\":1320,\"next\":0,\"task\":1},{\"count\":3176,\"next\":1,\"task\":0},{\"count\":2748,\"next\":0,\"task\":1},{\"count\":4871,\"next\":1,\"task\":0},{\"count\":4050,\"next\":0,\"task\":1},{\"count\":6421,\"next\":1,\"task\":0},{\"count\":5383,\"next\":2,\"task\":1}],\"frame_pool_assigned\":2,\"frame_pool_capacity\":4,\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[9382,8354],\"slice_ticks\":10,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "method": "tools/call",
+          "params": {
+            "name": "ipc_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 5,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"accepted\":[1,2,3,4],\"applied\":[1,2,3,4],\"capacity\":2,\"consumed\":[1,2,3,4],\"denial_consumed\":true,\"duplicate_rejected\":[true,true],\"finished\":true,\"full_consumed\":true,\"full_rejected\":true,\"overflow_rejected\":[true,true],\"queue_len\":0,\"range_rejected\":[true,true],\"save_denied\":true,\"source\":\"synthetic descriptors and bytes constructed by EL0\",\"spoof_rejected\":[true,true],\"utf8_rejected\":[true,true]}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 6,
+          "method": "tools/call",
+          "params": {
+            "name": "storage_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 6,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"after\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}},\"before\":{\"assistant\":{\"common\":\"seed\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"title\":\"base\"}},\"restore\":\"restored\",\"restore_generation\":1,\"restore_slots\":[\"valid\",\"invalid\"],\"save\":{\"generation\":2,\"readback_verified\":true,\"slot\":1,\"snapshot\":{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 7,
+          "method": "tools/call",
+          "params": {
+            "name": "document_snapshot",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 7,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 8,
+          "method": "tools/call",
+          "params": {
+            "name": "document_merge",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 8,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"conflicts\":[],\"fields\":[{\"key\":\"common\",\"origin\":\"base\",\"value\":\"seed\"},{\"key\":\"layout\",\"origin\":\"assistant\",\"value\":\"assistant\"},{\"key\":\"theme\",\"origin\":\"human\",\"value\":\"human-two\"},{\"key\":\"title\",\"origin\":\"base\",\"value\":\"base\"}],\"materializable\":true}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 9,
+          "method": "tools/call",
+          "params": {
+            "name": "document_edit",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "error": {
+            "code": -32602,
+            "message": "unknown tool"
+          },
+          "id": 9,
+          "jsonrpc": "2.0"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 10,
+          "method": "tools/call",
+          "params": {
+            "name": "document_load",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "error": {
+            "code": -32602,
+            "message": "unknown tool"
+          },
+          "id": 10,
+          "jsonrpc": "2.0"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 11,
+          "method": "tools/call",
+          "params": {
+            "name": "document_save",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "error": {
+            "code": -32602,
+            "message": "unknown tool"
+          },
+          "id": 11,
+          "jsonrpc": "2.0"
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 12,
+          "method": "tools/call",
+          "params": {
+            "name": "document_snapshot",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 12,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"assistant\":{\"common\":\"seed\",\"layout\":\"assistant\",\"title\":\"base\"},\"base\":{\"common\":\"seed\",\"title\":\"base\"},\"human\":{\"common\":\"seed\",\"theme\":\"human-two\",\"title\":\"base\"}}",
+                "type": "text"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      {
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 13,
+          "method": "tools/call",
+          "params": {
+            "name": "el0_status",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "id": 13,
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "text": "{\"cross_code_read_denied\":[true,true],\"el\":\"EL0\",\"events\":[{\"count\":1566,\"next\":1,\"task\":0},{\"count\":1320,\"next\":0,\"task\":1},{\"count\":3176,\"next\":1,\"task\":0},{\"count\":2748,\"next\":0,\"task\":1},{\"count\":4871,\"next\":1,\"task\":0},{\"count\":4050,\"next\":0,\"task\":1},{\"count\":6421,\"next\":1,\"task\":0},{\"count\":5383,\"next\":2,\"task\":1}],\"frame_pool_assigned\":2,\"frame_pool_capacity\":4,\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[14886,13474],\"slice_ticks\":28,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],

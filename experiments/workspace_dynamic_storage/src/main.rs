@@ -366,6 +366,13 @@ fn decode_slot(data:&[u8;RECORD_BYTES])->Option<(u64,DocumentDemo)> {
     let parsed:Value=serde_json::from_slice(&data[512..512+len]).ok()?;
     Some((generation,DocumentDemo::from_snapshot(&parsed)?))
 }
+// Surface degraded redundancy; a blank slot is distinct from a corrupt one.
+// The checksum detects accidental corruption and is not authentication.
+fn slot_state(data:&[u8;RECORD_BYTES])->&'static str {
+    if data.iter().all(|&v|v==0) {"blank"}
+    else if decode_slot(data).is_some() {"valid"}
+    else {"invalid"}
+}
 // `Ok(None)` is allowed only for a completely blank pair. An invalid or
 // interrupted first write is never silently mistaken for a fresh disk.
 fn select_slots(a:&[u8;RECORD_BYTES],b:&[u8;RECORD_BYTES])->Result<Option<(usize,u64,DocumentDemo)>, &'static str> {
@@ -398,6 +405,13 @@ fn save_snapshot<T:Transport>(disk:&mut VirtIOBlk<VmHal,T>,doc:&DocumentDemo)->R
     data[24]=0xa5;
     disk.write_blocks(SLOT_SECTORS[slot],&data[..512]).map_err(|_|"commit write failed")?;
     disk.flush().map_err(|_|"commit flush failed")?;
+    // Do not report success before checking what the device returns. Readback
+    // does not prove that a volatile cache persisted through power loss.
+    let mut verified=[0u8;RECORD_BYTES];
+    disk.read_blocks(SLOT_SECTORS[slot],&mut verified).map_err(|_|"readback failed")?;
+    if verified!=data || !matches!(decode_slot(&verified),Some((g,_)) if g==generation) {
+        return Err("readback mismatch");
+    }
     Ok((slot,generation))
 }
 
@@ -468,14 +482,18 @@ pub extern "C" fn graph_main() -> ! {
     let restore_before=document.snapshot();
     let mut restore_status="unavailable";
     let mut restore_generation:Option<u64>=None;
+    let mut restore_slots:Option<[&str;2]>=None;
     if let Some(ref mut disk)=block {
-        match read_pair(disk).and_then(|(a,b)|select_slots(&a,&b)) {
+        match read_pair(disk).and_then(|(a,b)| {
+            restore_slots=Some([slot_state(&a),slot_state(&b)]);
+            select_slots(&a,&b)
+        }) {
             Ok(Some((_,generation,restored)))=>{document=restored;restore_generation=Some(generation);restore_status="restored";}
             Ok(None)=>restore_status="blank",
             Err(_)=>restore_status="invalid",
         }
     }
-    let mut storage_state=json!({"restore":restore_status,"restore_generation":restore_generation,"before":restore_before,"after":document.snapshot(),"save":null});
+    let mut storage_state=json!({"restore":restore_status,"restore_generation":restore_generation,"restore_slots":restore_slots,"before":restore_before,"after":document.snapshot(),"save":null});
     let mut hclick = false;
     let mut interaction=Interaction::default();
     let mut pending_move: Option<(Value,u32,u32)> = None;
@@ -509,7 +527,7 @@ pub extern "C" fn graph_main() -> ! {
                     // Recheck authority at the owner boundary. IRQ/SVC never touch the disk.
                     if request.actor!=0 {false} else if let Some(ref mut disk)=block {
                         match save_snapshot(disk,&document) {
-                            Ok((slot,generation))=>{storage_state["save"]=json!({"slot":slot,"generation":generation,"snapshot":document.snapshot()});true},
+                            Ok((slot,generation))=>{storage_state["save"]=json!({"slot":slot,"generation":generation,"readback_verified":true,"snapshot":document.snapshot()});true},
                             Err(_)=>{storage_state["save"]=json!({"error":"save failed"});false},
                         }
                     } else {false}
