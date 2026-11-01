@@ -201,23 +201,23 @@ fn user_address(location:UserLocation)->Option<u64> {
 #[derive(Clone,Copy)]
 struct DirectMessage {sender:u64,sender_inc:u64,dest_inc:u64,channel_id:u64,len:usize,bytes:[u8;32]}
 const DIRECT_EMPTY:DirectMessage=DirectMessage{sender:0,sender_inc:0,dest_inc:0,channel_id:0,len:0,bytes:[0;32]};
-struct DirectChannel {bound:bool,channel_id:u64,next_id:u64,incarnations:[u64;2],queues:[[DirectMessage;2];2],head:[usize;2],len:[usize;2],sent:[u64;2],received:[u64;2],dropped:[u64;2],full_rejections:[u64;2],peer_unbound:[u64;2],scrubbed:bool}
-static mut DIRECT:DirectChannel=DirectChannel{bound:false,channel_id:0,next_id:1,incarnations:[0;2],queues:[[DIRECT_EMPTY;2];2],head:[0;2],len:[0;2],sent:[0;2],received:[0;2],dropped:[0;2],full_rejections:[0;2],peer_unbound:[0;2],scrubbed:true};
+struct DirectChannel {bound:bool,channel_id:u64,next_id:u64,slots:[usize;2],incarnations:[u64;2],queues:[[DirectMessage;2];2],head:[usize;2],len:[usize;2],sent:[u64;2],received:[u64;2],dropped:[u64;2],full_rejections:[u64;2],peer_unbound:[u64;3],scrubbed:bool}
+static mut DIRECT:DirectChannel=DirectChannel{bound:false,channel_id:0,next_id:1,slots:[0;2],incarnations:[0;2],queues:[[DIRECT_EMPTY;2];2],head:[0;2],len:[0;2],sent:[0;2],received:[0;2],dropped:[0;2],full_rejections:[0;2],peer_unbound:[0;3],scrubbed:true};
 // Waiting records identities only: never retain an EL0 pointer across a sleep.
-static mut DIRECT_WAIT_CHANNEL:[u64;2]=[0;2];
-static mut DIRECT_WAIT_INC:[u64;2]=[0;2];
-static mut DIRECT_WAIT_COUNT:[u64;2]=[0;2];
-static mut DIRECT_WAKE_MESSAGE:[u64;2]=[0;2];
-static mut DIRECT_WAKE_CLOSE:[u64;2]=[0;2];
-static mut DIRECT_WAKE_TIMEOUT:[u64;2]=[0;2];
+static mut DIRECT_WAIT_CHANNEL:[u64;3]=[0;3];
+static mut DIRECT_WAIT_INC:[u64;3]=[0;3];
+static mut DIRECT_WAIT_COUNT:[u64;3]=[0;3];
+static mut DIRECT_WAKE_MESSAGE:[u64;3]=[0;3];
+static mut DIRECT_WAKE_CLOSE:[u64;3]=[0;3];
+static mut DIRECT_WAKE_TIMEOUT:[u64;3]=[0;3];
 // The virtual counter is used modulo 2^56, with relative waits strictly below
 // half that range. A saved VM snapshot/very long unobserved pause is outside
 // the clock contract. These are scheduling deadlines, not real-time timers.
 const CLOCK_MASK:u64=(1u64<<56)-1;
 const CLOCK_HALF:u64=1u64<<55;
-static mut DIRECT_WAIT_START:[u64;2]=[0;2];
+static mut DIRECT_WAIT_START:[u64;3]=[0;3];
 // Zero means an indefinite wait, never a timed wait of zero duration.
-static mut DIRECT_WAIT_TICKS:[u64;2]=[0;2];
+static mut DIRECT_WAIT_TICKS:[u64;3]=[0;3];
 #[cfg(feature="storage-fault-test")]
 static mut TEST_CLOCK:Option<u64>=None;
 fn clock_now()->u64 {
@@ -229,7 +229,7 @@ fn clock_now()->u64 {
 // Switching sources while a timed waiter exists would invalidate its start.
 #[cfg(feature="storage-fault-test")]
 pub fn test_timeout_clock_freeze()->Result<(), &'static str> {
- if unsafe{read_volatile(addr_of!(DIRECT_WAIT_TICKS))}!=[0,0] {return Err("timed wait active")}
+ if unsafe{read_volatile(addr_of!(DIRECT_WAIT_TICKS))}!=[0,0,0] {return Err("timed wait active")}
  if unsafe{read_volatile(addr_of!(TEST_CLOCK))}.is_some() {return Err("clock already frozen")}
  let now=clock_now();unsafe{write_volatile(addr_of_mut!(TEST_CLOCK),Some(now))};Ok(())
 }
@@ -242,7 +242,7 @@ pub fn test_timeout_clock_advance(ns:u64)->Result<(), &'static str> {
 }
 #[cfg(feature="storage-fault-test")]
 pub fn test_timeout_clock_unfreeze()->Result<(), &'static str> {
- if unsafe{read_volatile(addr_of!(DIRECT_WAIT_TICKS))}!=[0,0] {return Err("timed wait active")}
+ if unsafe{read_volatile(addr_of!(DIRECT_WAIT_TICKS))}!=[0,0,0] {return Err("timed wait active")}
  if unsafe{read_volatile(addr_of!(TEST_CLOCK))}.is_none() {return Err("clock not frozen")}
  unsafe{write_volatile(addr_of_mut!(TEST_CLOCK),None)};Ok(())
 }
@@ -274,9 +274,9 @@ fn wake_direct(actor:usize,channel:u64,inc:u64,code:i64) {
 /// the main loop also calls this outside the storage-write-blocked condition.
 pub fn poll_direct_timeouts() {
  let ticks=unsafe{read_volatile(addr_of!(DIRECT_WAIT_TICKS))};
- if ticks==[0,0] {return}
+ if ticks==[0,0,0] {return}
  let now=clock_now();
- for actor in 0..2 {
+ for actor in 0..PROCESS_CAPACITY {
   if ticks[actor]==0 {continue}
   let start=unsafe{read_volatile(addr_of!(DIRECT_WAIT_START).cast::<u64>().add(actor))};
   if now.wrapping_sub(start)&CLOCK_MASK >= ticks[actor] {
@@ -293,7 +293,7 @@ fn direct_result(f:&mut Frame,code:i64) {f.regs[0]=code as u64}
 pub fn bind_direct(a:usize,ai:u64,b:usize,bi:u64,boot:[u8;16])->Result<u64, &'static str> {
  let current_boot=super::boot_identity::identifier().ok_or("boot identity unavailable")?;
  if boot!=current_boot {return Err("stale boot identity")}
- if a>=2 || b>=2 || a==b {return Err("invalid channel slots")}
+ if a>=PROCESS_CAPACITY || b>=PROCESS_CAPACITY || a==b {return Err("invalid channel slots")}
  let mut daif:u64;let mut timer:u64;unsafe{asm!("mrs {},DAIF",out(reg) daif);asm!("mrs {},CNTV_CTL_EL0",out(reg) timer)}
  if daif&(1<<7)==0 || timer&1!=0 || super::mmu::active_root()!=super::mmu::root(0) {return Err("channel bind requires service boundary")}
  if !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} || unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {return Err("independent processes not active")}
@@ -306,56 +306,62 @@ pub fn bind_direct(a:usize,ai:u64,b:usize,bi:u64,boot:[u8;16])->Result<u64, &'st
  if c.bound {return Err("direct channel already bound")}
  if c.len!=[0;2] || !c.scrubbed {return Err("direct channel not clean")}
  let channel_id=c.next_id;let next=channel_id.checked_add(1).ok_or("direct channel ids exhausted")?;
- let mut ids=[0u64;2];ids[a]=ai;ids[b]=bi;
- c.incarnations=ids;c.channel_id=channel_id;c.next_id=next;c.head=[0;2];c.sent=[0;2];c.received=[0;2];c.dropped=[0;2];c.full_rejections=[0;2];c.bound=true;
+ let (slots,ids)=if a<b {([a,b],[ai,bi])}else{([b,a],[bi,ai])};
+ c.slots=slots;c.incarnations=ids;c.channel_id=channel_id;c.next_id=next;c.head=[0;2];c.sent=[0;2];c.received=[0;2];c.dropped=[0;2];c.full_rejections=[0;2];c.bound=true;
  Ok(channel_id)
 }
 /// Exposes metadata only; message bytes and virtual addresses remain private.
 pub fn direct_status()->Value {
  let c=unsafe{&*addr_of!(DIRECT)};
- json!({"bound":c.bound,"channel_id":c.channel_id,"incarnations":c.incarnations,"queued":c.len,"sent":c.sent,"received":c.received,"dropped":c.dropped,"full_rejections":c.full_rejections,"peer_unbound":c.peer_unbound,"scrubbed":c.scrubbed,"waiting":first_two(unsafe{read_volatile(addr_of!(TASK_STATE))}).map(|s|s==4),"wait_count":unsafe{read_volatile(addr_of!(DIRECT_WAIT_COUNT))},"wake_message":unsafe{read_volatile(addr_of!(DIRECT_WAKE_MESSAGE))},"wake_close":unsafe{read_volatile(addr_of!(DIRECT_WAKE_CLOSE))},"wake_timeout":unsafe{read_volatile(addr_of!(DIRECT_WAKE_TIMEOUT))}})
+ let waiting=unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|s|s==4);
+ let wc=unsafe{read_volatile(addr_of!(DIRECT_WAIT_COUNT))};let wm=unsafe{read_volatile(addr_of!(DIRECT_WAKE_MESSAGE))};
+ let wx=unsafe{read_volatile(addr_of!(DIRECT_WAKE_CLOSE))};let wt=unsafe{read_volatile(addr_of!(DIRECT_WAKE_TIMEOUT))};
+ json!({"bound":c.bound,"channel_id":c.channel_id,"slots":if c.bound {Some(c.slots)}else{None},"incarnations":c.incarnations,"queued":c.len,"sent":c.sent,"received":c.received,"dropped":c.dropped,"full_rejections":c.full_rejections,"peer_unbound":first_two(c.peer_unbound),"all_peer_unbound":c.peer_unbound,"scrubbed":c.scrubbed,"waiting":first_two(waiting),"wait_count":first_two(wc),"wake_message":first_two(wm),"wake_close":first_two(wx),"wake_timeout":first_two(wt),"all_waiting":waiting,"all_wait_count":wc,"all_wake_message":wm,"all_wake_close":wx,"all_wake_timeout":wt})
+}
+fn direct_endpoint(c:&DirectChannel,actor:usize)->Option<usize> {
+ if !c.bound || actor>=PROCESS_CAPACITY {return None}
+ c.slots.iter().position(|slot|*slot==actor)
 }
 fn direct_live(c:&DirectChannel,actor:usize)->bool {
- if actor>=2 || !c.bound || c.channel_id==0 || !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} || unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {return false}
- let peer=1-actor;let states=unsafe{read_volatile(addr_of!(TASK_STATE))};
- matches!(states[actor],1|2|4) && matches!(states[peer],1|2|4)
-  && c.incarnations[actor]!=0 && c.incarnations[peer]!=0
-  && incarnation(actor)==c.incarnations[actor] && incarnation(peer)==c.incarnations[peer]
+ let Some(endpoint)=direct_endpoint(c,actor) else{return false};
+ if c.channel_id==0 || !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} || unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {return false}
+ let peer=1-endpoint;let peer_slot=c.slots[peer];let states=unsafe{read_volatile(addr_of!(TASK_STATE))};
+ peer_slot<PROCESS_CAPACITY && matches!(states[actor],1|2|4) && matches!(states[peer_slot],1|2|4)
+  && c.incarnations[endpoint]!=0 && c.incarnations[peer]!=0
+  && incarnation(actor)==c.incarnations[endpoint] && incarnation(peer_slot)==c.incarnations[peer]
 }
 fn direct_peer(f:&mut Frame,actor:usize) {
- if actor>=2 {direct_result(f,-38);return}
  if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {direct_result(f,-38);return}
  let c=unsafe{&mut *addr_of_mut!(DIRECT)};
  if !direct_live(c,actor) {c.peer_unbound[actor]=c.peer_unbound[actor].saturating_add(1);direct_result(f,-107);return}
- let peer=1-actor;f.regs[0]=peer as u64;f.regs[1]=c.incarnations[peer];f.regs[2]=c.channel_id;
+ let endpoint=direct_endpoint(c,actor).unwrap_or_else(||halt());let peer=1-endpoint;
+ f.regs[0]=c.slots[peer] as u64;f.regs[1]=c.incarnations[peer];f.regs[2]=c.channel_id;
 }
 fn direct_send(f:&mut Frame,actor:usize) {
- if actor>=2 {direct_result(f,-38);return}
  // Serialize already-expired waits before accepting a new message.
  poll_direct_timeouts();
  if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {direct_result(f,-38);return}
  let c=unsafe{&mut *addr_of_mut!(DIRECT)};
  if !direct_live(c,actor) {direct_result(f,-107);return}
- let peer=1-actor;
- if f.regs[0]!=peer as u64 || f.regs[1]!=c.incarnations[peer] || f.regs[4]!=c.channel_id {direct_result(f,-116);return}
+ let endpoint=direct_endpoint(c,actor).unwrap_or_else(||halt());let peer=1-endpoint;let peer_slot=c.slots[peer];
+ if f.regs[0]!=peer_slot as u64 || f.regs[1]!=c.incarnations[peer] || f.regs[4]!=c.channel_id {direct_result(f,-116);return}
  let len=f.regs[3];if len==0 || len>32 {direct_result(f,-22);return}
  let len=len as usize;let address=f.regs[2];
  if user_location(actor,address,len,false,false).is_none() {direct_result(f,-14);return}
- if c.len[peer]==2 {c.full_rejections[actor]=c.full_rejections[actor].saturating_add(1);direct_result(f,-11);return}
- let mut message=DirectMessage{sender:actor as u64,sender_inc:c.incarnations[actor],dest_inc:c.incarnations[peer],channel_id:c.channel_id,len,bytes:[0;32]};
+ if c.len[peer]==2 {c.full_rejections[endpoint]=c.full_rejections[endpoint].saturating_add(1);direct_result(f,-11);return}
+ let mut message=DirectMessage{sender:actor as u64,sender_inc:c.incarnations[endpoint],dest_inc:c.incarnations[peer],channel_id:c.channel_id,len,bytes:[0;32]};
  for i in 0..len {message.bytes[i]=unsafe{readbyte(address+i as u64)}}
  let index=(c.head[peer]+c.len[peer])%2;c.queues[peer][index]=message;c.len[peer]+=1;
- c.sent[actor]=c.sent[actor].saturating_add(1);c.scrubbed=false;wake_direct(peer,c.channel_id,c.incarnations[peer],0);direct_result(f,0)
+ c.sent[endpoint]=c.sent[endpoint].saturating_add(1);c.scrubbed=false;wake_direct(peer_slot,c.channel_id,c.incarnations[peer],0);direct_result(f,0)
 }
-// Return 2 to the exception stub only after atomically checking an empty
-// queue and recording a channel+incarnation. IRQs remain masked throughout.
+// Return 2 only after recording identities and checking the queue atomically.
 fn direct_wait(f:&mut Frame,actor:usize,timed:bool)->u64 {
- if actor>=2 {direct_result(f,-38);return 0}
  if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {direct_result(f,-38);return 0}
  let c=unsafe{&mut *addr_of_mut!(DIRECT)};
  if !direct_live(c,actor) {direct_result(f,-107);return 0}
+ let endpoint=direct_endpoint(c,actor).unwrap_or_else(||halt());
  if f.regs[0]!=c.channel_id {direct_result(f,-116);return 0}
- if c.len[actor]!=0 {direct_result(f,0);return 0}
+ if c.len[endpoint]!=0 {direct_result(f,0);return 0}
  let duration=if timed {
   if f.regs[1]==0 {direct_result(f,-110);return 0}
   let Some(ticks)=timeout_ticks(f.regs[1]) else {direct_result(f,-22);return 0};
@@ -367,7 +373,7 @@ fn direct_wait(f:&mut Frame,actor:usize,timed:bool)->u64 {
   write_volatile(addr_of_mut!(DIRECT_WAIT_START).cast::<u64>().add(actor),start);
   write_volatile(addr_of_mut!(DIRECT_WAIT_TICKS).cast::<u64>().add(actor),duration);
   write_volatile(addr_of_mut!(DIRECT_WAIT_CHANNEL).cast::<u64>().add(actor),c.channel_id);
-  write_volatile(addr_of_mut!(DIRECT_WAIT_INC).cast::<u64>().add(actor),c.incarnations[actor]);
+  write_volatile(addr_of_mut!(DIRECT_WAIT_INC).cast::<u64>().add(actor),c.incarnations[endpoint]);
   let count=addr_of_mut!(DIRECT_WAIT_COUNT).cast::<u64>().add(actor);
   write_volatile(count,read_volatile(count).saturating_add(1));
  }
@@ -378,21 +384,21 @@ fn clear_direct_message(m:&mut DirectMessage) {
  m.sender=0;m.sender_inc=0;m.dest_inc=0;m.channel_id=0;m.len=0;
 }
 fn direct_recv(f:&mut Frame,actor:usize) {
- if actor>=2 {direct_result(f,-38);return}
  if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {direct_result(f,-38);return}
  let c=unsafe{&mut *addr_of_mut!(DIRECT)};
  if !direct_live(c,actor) {direct_result(f,-107);return}
+ let endpoint=direct_endpoint(c,actor).unwrap_or_else(||halt());let peer=1-endpoint;
  if f.regs[2]!=c.channel_id {direct_result(f,-116);return}
  let cap=f.regs[1];if cap==0 || cap>32 {direct_result(f,-22);return}
- if c.len[actor]==0 {direct_result(f,-11);return}
- let index=c.head[actor];let message=c.queues[actor][index];let peer=1-actor;
- if message.len==0 || message.len>32 || message.sender!=peer as u64
-  || message.sender_inc!=c.incarnations[peer] || message.dest_inc!=c.incarnations[actor] || message.channel_id!=c.channel_id {halt()}
+ if c.len[endpoint]==0 {direct_result(f,-11);return}
+ let index=c.head[endpoint];let message=c.queues[endpoint][index];
+ if message.len==0 || message.len>32 || message.sender!=c.slots[peer] as u64
+  || message.sender_inc!=c.incarnations[peer] || message.dest_inc!=c.incarnations[endpoint] || message.channel_id!=c.channel_id {halt()}
  if message.len>cap as usize {direct_result(f,-34);return}
  let address=f.regs[0];if user_location(actor,address,cap as usize,true,false).is_none() {direct_result(f,-14);return}
  for i in 0..message.len {unsafe{writebyte(address+i as u64,message.bytes[i])}}
- clear_direct_message(&mut c.queues[actor][index]);c.head[actor]=(index+1)%2;c.len[actor]-=1;
- c.received[actor]=c.received[actor].saturating_add(1);
+ clear_direct_message(&mut c.queues[endpoint][index]);c.head[endpoint]=(index+1)%2;c.len[endpoint]-=1;
+ c.received[endpoint]=c.received[endpoint].saturating_add(1);
  f.regs[0]=message.len as u64;f.regs[1]=message.sender;f.regs[2]=message.sender_inc;
 }
 /// Explicit service close: old channel IDs cannot close a reopened channel.
@@ -408,18 +414,19 @@ pub fn close_direct(id:u64,boot:[u8;16])->Result<(), &'static str> {
 }
 fn close_direct_for(actor:usize) {
  let c=unsafe{&mut *addr_of_mut!(DIRECT)};
- if !c.bound || actor>=2 || c.incarnations[actor]!=incarnation(actor) {return}
+ let Some(endpoint)=direct_endpoint(c,actor) else{return};
+ if c.incarnations[endpoint]!=incarnation(actor) {return}
  retire_direct(c)
 }
 fn retire_direct(c:&mut DirectChannel) {
  // Timeout wins if due when close is serialized, including peer exit/stop.
  poll_direct_timeouts();
- for actor in 0..2 {wake_direct(actor,c.channel_id,c.incarnations[actor],-107)}
+ for endpoint in 0..2 {wake_direct(c.slots[endpoint],c.channel_id,c.incarnations[endpoint],-107)}
  for dest in 0..2 {
   c.dropped[dest]=c.dropped[dest].saturating_add(c.len[dest] as u64);
   for message in &mut c.queues[dest] {clear_direct_message(message)}
  }
- c.len=[0;2];c.head=[0;2];c.bound=false;c.incarnations=[0;2];
+ c.len=[0;2];c.head=[0;2];c.bound=false;c.slots=[0;2];c.incarnations=[0;2];
  c.scrubbed=c.queues.iter().flatten().all(|m|m.len==0 && m.bytes.iter().all(|b|*b==0));
  if !c.scrubbed {halt()}
 }
@@ -1252,7 +1259,7 @@ pub fn stop_independent(slot:usize,expected:u64,boot_id:[u8;16])->Result<(), &'s
   || unsafe{read_volatile(addr_of!(TASK_FRAMES).cast::<usize>().add(slot))}==0
   || unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES).cast::<usize>().add(slot))}==0 {return Err("process stop requires service boundary")}
  unsafe {
-  if slot<2 {clear_direct_wait(slot)}
+  clear_direct_wait(slot);
   write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(slot),4);
   write_volatile(addr_of_mut!(PAIR_EXIT_CODES).cast::<Option<u64>>().add(slot),None);
   write_volatile(addr_of_mut!(TASK_STATE).cast::<u64>().add(slot),3);

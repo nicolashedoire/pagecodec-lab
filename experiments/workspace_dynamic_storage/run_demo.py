@@ -839,7 +839,7 @@ def main():
    state=g.wait_independent(lambda s:s.get('slot_states')==['exited','ready'],'first IPC exchange and A exit')
    if state.get('exit_codes',[None,None])[0]!=0 or state.get('outcomes',[None,None])[0]!=1 or state.get('incarnations')!=[first['incarnation'],second['incarnation']] or state.get('frame_pool_assigned')!=3:raise RuntimeError('first IPC exchange failed: '+str(state))
    channel=g.call('ipc_direct_status',{})
-   if set(channel)!={'bound','channel_id','incarnations','queued','sent','received','dropped','scrubbed','full_rejections','peer_unbound','waiting','wait_count','wake_message','wake_close','wake_timeout'} or channel.get('bound') is not False or channel.get('queued')!=[0,0] or channel.get('sent')!=[2,2] or channel.get('received')!=[2,2] or channel.get('scrubbed') is not True:raise RuntimeError('direct IPC closure or first exchange invalid: '+str(channel))
+   if set(channel)!={'bound','channel_id','slots','incarnations','queued','sent','received','dropped','scrubbed','full_rejections','peer_unbound','all_peer_unbound','waiting','wait_count','wake_message','wake_close','wake_timeout','all_waiting','all_wait_count','all_wake_message','all_wake_close','all_wake_timeout'} or channel.get('bound') is not False or channel.get('queued')!=[0,0] or channel.get('sent')!=[2,2] or channel.get('received')!=[2,2] or channel.get('scrubbed') is not True:raise RuntimeError('direct IPC closure or first exchange invalid: '+str(channel))
    replacement=g.call('process_spawn_staged',{'id':upload_id})
    if replacement.get('slot')!=0 or replacement.get('incarnation',0)<=second['incarnation'] or replacement.get('boot_id')!=first['boot_id']:raise RuntimeError('IPC sender readmission invalid')
    reject(g,'ipc_direct_bind',args,'stale process incarnation')
@@ -1047,6 +1047,71 @@ def main():
    for name in ('a-gate','b-gate','c-gate'):
     if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('three-task gate cleanup failed')
    if g.call('file_list',{})!=files_before:raise RuntimeError('three-task fixture left files behind')
+   if a.exercise_storage_fault:
+    # A single direct channel can choose any two of three live actors.
+    for name in ('a-igate','b-igate','c-igate'):
+     if any(entry.get('name')==name for entry in files_before):raise RuntimeError('IPC-three gate already exists')
+     if not g.call('file_put',{'name':name,'data':'0'}).get('readback_verified'):raise RuntimeError('IPC-three gate setup failed')
+    ipc_three=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-ipc-three.hex').read_text().strip())
+    ipc_upload=stage_program(g,ipc_three)
+    ia=g.call('process_spawn_staged',{'id':ipc_upload});ib=g.call('process_spawn_staged',{'id':ipc_upload});ic=g.call('process_spawn_staged',{'id':ipc_upload})
+    if [ia.get('slot'),ib.get('slot'),ic.get('slot')]!=[0,1,2] or len({ia.get('boot_id'),ib.get('boot_id'),ic.get('boot_id')})!=1:raise RuntimeError('IPC-three admission failed')
+    all_tasks(lambda x:x.get('all_slot_states')==['ready']*3 and min(x.get('all_io_completed',[0]*3))>0,'IPC-three actors active')
+    if g.call('debug_timeout_clock_freeze',{})!={'ok':True}:raise RuntimeError('IPC-three clock freeze failed')
+    bind12={'a_slot':2,'a_incarnation':ic['incarnation_text'],'b_slot':1,'b_incarnation':ib['incarnation_text'],'boot_id':ia['boot_id']}
+    reject(g,'ipc_direct_bind',dict(bind12,a_slot=3),'invalid channel slots')
+    old_id=g.call('ipc_direct_bind',bind12)['channel_id']
+    if g.call('ipc_direct_status',{}).get('slots')!=[1,2]:raise RuntimeError('IPC endpoints not sorted')
+    def ipcg(name,value):
+     if not g.call('file_put',{'name':name,'data':value}).get('readback_verified'):raise RuntimeError('IPC-three gate failed')
+    def ipcphase(name,value):
+     for _ in range(80):
+      got=g.call('file_get',{'name':name}).get('hex')
+      if got==value.encode().hex():return
+      time.sleep(.2)
+     raise RuntimeError('IPC-three phase not reached: '+str((name,value,got)))
+    for name in ('a-igate','b-igate','c-igate'):ipcg(name,'1')
+    ipcphase('a-igate','v')  # Nonmember tested peer/send/recv/wait/timed.
+    wait_direct(lambda x:x.get('all_waiting',[False]*3)[2] is True,'slot 2 timed waiter')
+    ipcg('b-igate','2')
+    full=wait_direct(lambda x:x.get('slots')==[1,2] and x.get('queued')==[0,2] and x.get('full_rejections',[0,0])[0]>0,'1-to-2 full FIFO')
+    ipcg('c-igate','3')
+    consumed=wait_direct(lambda x:x.get('received')==[0,2] and x.get('all_waiting',[False]*3)[2] is True,'slot 2 consumed FIFO and reblocked')
+    baseline_timeout=consumed['all_wake_timeout']
+    if g.call('debug_timeout_clock_advance',{'ns':'10000000000'})!={'ok':True}:raise RuntimeError('IPC-three timeout advance failed')
+    ipcphase('c-igate','t')
+    timed=wait_direct(lambda x:x.get('all_waiting',[False]*3)[2] is True and x.get('all_wake_timeout',[0]*3)[2]==baseline_timeout[2]+1,'slot 2 timeout and reblock')
+    stopped=g.call('process_stop',{'slot':2,'incarnation':ic['incarnation_text'],'boot_id':ic['boot_id']})
+    if stopped.get('stopped') is not True:raise RuntimeError('IPC member stop failed')
+    wait_direct(lambda x:x.get('bound') is False and x.get('all_waiting',[False]*3)[2] is False,'member stop revoked channel')
+    ipcphase('b-igate','d')
+    ipcg('c-igate','0')
+    ic2=g.call('process_spawn_staged',{'id':ipc_upload})
+    if ic2.get('slot')!=2 or ic2.get('incarnation',0)<=ic['incarnation']:raise RuntimeError('IPC member readmission failed')
+    all_tasks(lambda x:x.get('all_slot_states')==['ready']*3,'IPC member readmitted')
+    stale={'a_slot':2,'a_incarnation':ic['incarnation_text'],'b_slot':0,'b_incarnation':ia['incarnation_text'],'boot_id':ia['boot_id']}
+    reject(g,'ipc_direct_bind',stale,'stale process incarnation')
+    bind02=dict(stale,a_incarnation=ic2['incarnation_text'])
+    new_id=g.call('ipc_direct_bind',bind02)['channel_id']
+    if int(new_id)<=int(old_id) or g.call('ipc_direct_status',{}).get('slots')!=[0,2]:raise RuntimeError('0-to-2 binding invalid')
+    reject(g,'ipc_direct_close',{'channel_id':old_id,'boot_id':ia['boot_id']},'stale direct channel')
+    ipcg('b-igate','7');ipcphase('b-igate','v')  # Slot 1 is now the outsider.
+    ipcg('a-igate','4');ipcg('c-igate','4')
+    wait_direct(lambda x:x.get('all_waiting',[False]*3)[2] is True,'readmitted slot 2 waiting')
+    ipcg('a-igate','5');ipcphase('c-igate','n')
+    wait_direct(lambda x:x.get('slots')==[0,2] and x.get('all_waiting')==[True,False,True] and x.get('sent')==[1,0] and x.get('received')==[0,1],'0-to-2 delivery and both blocked')
+    if g.call('ipc_direct_close',{'channel_id':new_id,'boot_id':ia['boot_id']})!={'closed':True}:raise RuntimeError('IPC 0-to-2 close failed')
+    all_tasks(lambda x:x.get('all_slot_states')==['exited','ready','exited'],'0-to-2 members exited after close')
+    ipcg('b-igate','9')
+    finished=all_tasks(lambda x:x.get('all_slot_states')==['exited']*3,'IPC-three cleanup')
+    if finished.get('all_outcomes')!=[1]*3 or finished.get('all_exit_codes')!=[0]*3 or finished.get('all_data_scrubbed')!=[True]*3 or finished.get('all_code_scrubbed')!=[True]*3 or finished.get('all_stack_scrubbed')!=[True]*3 or finished.get('frame_pool_assigned')!=0:raise RuntimeError('IPC-three task cleanup invalid: '+str(finished))
+    final_channel=g.call('ipc_direct_status',{})
+    if final_channel.get('bound') is not False or final_channel.get('queued')!=[0,0] or final_channel.get('scrubbed') is not True:raise RuntimeError('IPC-three channel cleanup invalid: '+str(final_channel))
+    if g.call('debug_timeout_clock_unfreeze',{})!={'ok':True}:raise RuntimeError('IPC-three clock restore failed')
+    g.call('upload_reset',{'id':ipc_upload})
+    for name in ('a-igate','b-igate','c-igate'):
+     if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('IPC-three gate cleanup failed')
+    if g.call('file_list',{})!=files_before:raise RuntimeError('IPC-three fixture left files behind')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
   # No NIC: the same Rust program must see -19 without requiring a peer.
