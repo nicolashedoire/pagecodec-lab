@@ -2,6 +2,7 @@
 #![no_main]
 mod mmu;
 mod el0;
+mod vfs;
 extern crate alloc;
 use alloc::format;
 use alloc::string::String;
@@ -343,8 +344,21 @@ fn checksum_slot(data:&[u8;RECORD_BYTES],len:usize)->u32 {
     for &b in data[8..20].iter().chain(data[512..512+len].iter()) { h=(h^u32::from(b)).wrapping_mul(16777619); }
     h
 }
-fn encode_snapshot(doc:&DocumentDemo,generation:u64)->Option<[u8;RECORD_BYTES]> {
-    let v=doc.snapshot(); DocumentDemo::from_snapshot(&v)?;
+fn snapshot_payload(doc:&DocumentDemo,files:&vfs::Files)->Value {
+    json!({"format":"workspace-files-v1","document":doc.snapshot(),"files":files.snapshot()})
+}
+fn parse_payload(value:&Value)->Option<(DocumentDemo,vfs::Files)> {
+    let object=value.as_object()?;
+    if object.contains_key("format") {
+        if object.len()!=3 || object.get("format")?.as_str()? != "workspace-files-v1" {return None}
+        Some((DocumentDemo::from_snapshot(object.get("document")?)?,vfs::Files::from_snapshot(object.get("files")?)?))
+    } else {
+        // Only the exact former three-key document schema is accepted here.
+        Some((DocumentDemo::from_snapshot(value)?,vfs::Files::default()))
+    }
+}
+fn encode_snapshot(doc:&DocumentDemo,files:&vfs::Files,generation:u64)->Option<[u8;RECORD_BYTES]> {
+    let v=snapshot_payload(doc,files); parse_payload(&v)?;
     let payload=serde_json::to_vec(&v).ok()?;
     if generation==0 || payload.is_empty() || payload.len()>RECORD_BYTES-512 {return None}
     let mut out=[0u8;RECORD_BYTES];out[..8].copy_from_slice(b"GSLOT001");
@@ -356,7 +370,7 @@ fn encode_snapshot(doc:&DocumentDemo,generation:u64)->Option<[u8;RECORD_BYTES]> 
     // Byte 24 stays zero until a separate final metadata-sector write.
     Some(out)
 }
-fn decode_slot(data:&[u8;RECORD_BYTES])->Option<(u64,DocumentDemo)> {
+fn decode_slot(data:&[u8;RECORD_BYTES])->Option<(u64,DocumentDemo,vfs::Files)> {
     if &data[..8]!=b"GSLOT001" || data[24]!=0xa5 || data[25..512].iter().any(|&b|b!=0) {return None}
     let generation=u64::from_le_bytes(data[8..16].try_into().ok()?);
     let len=u32::from_le_bytes(data[16..20].try_into().ok()?) as usize;
@@ -364,7 +378,8 @@ fn decode_slot(data:&[u8;RECORD_BYTES])->Option<(u64,DocumentDemo)> {
     let sum=u32::from_le_bytes(data[20..24].try_into().ok()?);
     if checksum_slot(data,len)!=sum || data[512+len..].iter().any(|&b|b!=0) {return None}
     let parsed:Value=serde_json::from_slice(&data[512..512+len]).ok()?;
-    Some((generation,DocumentDemo::from_snapshot(&parsed)?))
+    let (doc,files)=parse_payload(&parsed)?;
+    Some((generation,doc,files))
 }
 // Surface degraded redundancy; a blank slot is distinct from a corrupt one.
 // The checksum detects accidental corruption and is not authentication.
@@ -375,14 +390,14 @@ fn slot_state(data:&[u8;RECORD_BYTES])->&'static str {
 }
 // `Ok(None)` is allowed only for a completely blank pair. An invalid or
 // interrupted first write is never silently mistaken for a fresh disk.
-fn select_slots(a:&[u8;RECORD_BYTES],b:&[u8;RECORD_BYTES])->Result<Option<(usize,u64,DocumentDemo)>, &'static str> {
+fn select_slots(a:&[u8;RECORD_BYTES],b:&[u8;RECORD_BYTES])->Result<Option<(usize,u64,DocumentDemo,vfs::Files)>, &'static str> {
     let x=decode_slot(a); let y=decode_slot(b);
     match (x,y) {
-        (Some((ga,da)),Some((gb,db))) => {
-            if ga==gb {Err("duplicate generations")} else if ga>gb {Ok(Some((0,ga,da)))} else {Ok(Some((1,gb,db)))}
+        (Some((ga,da,fa)),Some((gb,db,fb))) => {
+            if ga==gb {Err("duplicate generations")} else if ga>gb {Ok(Some((0,ga,da,fa)))} else {Ok(Some((1,gb,db,fb)))}
         }
-        (Some((g,d)),None)=>Ok(Some((0,g,d))),
-        (None,Some((g,d)))=>Ok(Some((1,g,d))),
+        (Some((g,d,f)),None)=>Ok(Some((0,g,d,f))),
+        (None,Some((g,d,f)))=>Ok(Some((1,g,d,f))),
         (None,None) if a.iter().all(|&v|v==0) && b.iter().all(|&v|v==0)=>Ok(None),
         (None,None)=>Err("no valid committed snapshot"),
     }
@@ -395,11 +410,11 @@ fn read_pair<T:Transport>(disk:&mut VirtIOBlk<VmHal,T>)->Result<([u8;RECORD_BYTE
     disk.read_blocks(SLOT_SECTORS[1],&mut b).map_err(|_|"slot read failed")?;
     Ok((a,b))
 }
-fn save_snapshot<T:Transport>(disk:&mut VirtIOBlk<VmHal,T>,doc:&DocumentDemo)->Result<(usize,u64),&'static str> {
+fn save_snapshot<T:Transport>(disk:&mut VirtIOBlk<VmHal,T>,doc:&DocumentDemo,files:&vfs::Files)->Result<(usize,u64),&'static str> {
     let (a,b)=read_pair(disk)?;
     let selected=select_slots(&a,&b)?;
-    let (slot,generation)=match selected {None=>(0,1),Some((slot,g,_))=>(1-slot,g.checked_add(1).ok_or("generation exhausted")?)};
-    let mut data=encode_snapshot(doc,generation).ok_or("invalid snapshot")?;
+    let (slot,generation)=match selected {None=>(0,1),Some((slot,g,_,_))=>(1-slot,g.checked_add(1).ok_or("generation exhausted")?)};
+    let mut data=encode_snapshot(doc,files,generation).ok_or("invalid snapshot")?;
     disk.write_blocks(SLOT_SECTORS[slot],&data).map_err(|_|"stage write failed")?;
     disk.flush().map_err(|_|"stage flush failed")?;
     data[24]=0xa5;
@@ -409,7 +424,7 @@ fn save_snapshot<T:Transport>(disk:&mut VirtIOBlk<VmHal,T>,doc:&DocumentDemo)->R
     // does not prove that a volatile cache persisted through power loss.
     let mut verified=[0u8;RECORD_BYTES];
     disk.read_blocks(SLOT_SECTORS[slot],&mut verified).map_err(|_|"readback failed")?;
-    if verified!=data || !matches!(decode_slot(&verified),Some((g,_)) if g==generation) {
+    if verified!=data || !matches!(decode_slot(&verified),Some((g,_,_)) if g==generation) {
         return Err("readback mismatch");
     }
     Ok((slot,generation))
@@ -479,6 +494,7 @@ pub extern "C" fn graph_main() -> ! {
         || !move_pointer(&mut router, &remote, &rs, 300, 510) { halt() }
     // The bounded journal overwrites its oldest entries without per-move allocation.
     let mut document = DocumentDemo::new();
+    let mut files=vfs::Files::default();
     let restore_before=document.snapshot();
     let mut restore_status="unavailable";
     let mut restore_generation:Option<u64>=None;
@@ -488,7 +504,7 @@ pub extern "C" fn graph_main() -> ! {
             restore_slots=Some([slot_state(&a),slot_state(&b)]);
             select_slots(&a,&b)
         }) {
-            Ok(Some((_,generation,restored)))=>{document=restored;restore_generation=Some(generation);restore_status="restored";}
+            Ok(Some((_,generation,restored,restored_files)))=>{document=restored;files=restored_files;restore_generation=Some(generation);restore_status="restored";}
             Ok(None)=>restore_status="blank",
             Err(_)=>restore_status="invalid",
         }
@@ -526,7 +542,7 @@ pub extern "C" fn graph_main() -> ! {
                 let success=if request.save {
                     // Recheck authority at the owner boundary. IRQ/SVC never touch the disk.
                     if request.actor!=0 {false} else if let Some(ref mut disk)=block {
-                        match save_snapshot(disk,&document) {
+                        match save_snapshot(disk,&document,&files) {
                             Ok((slot,generation))=>{storage_state["save"]=json!({"slot":slot,"generation":generation,"readback_verified":true,"snapshot":document.snapshot()});true},
                             Err(_)=>{storage_state["save"]=json!({"error":"save failed"});false},
                         }
@@ -623,6 +639,8 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"remote_state","description":"Read the third synthetic actor's logical position.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"exercise_human_moves","description":"Run 1101 synthetic human moves in this VM; overwrites older bounded trace entries.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"storage_status","description":"Read synthetic startup restore and last SVC save status.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"file_get","description":"Read one synthetic flat file as hexadecimal bytes; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}},
+                                        {"name":"file_put","description":"Save one bounded synthetic UTF-8 file with the current workspace snapshot; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"data":{"type":"string"}},"required":["name","data"],"additionalProperties":false}},
                                         {"name":"ipc_status","description":"Read the bounded FIFO and task completion status.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"document_view","description":"Read a field from a synthetic document copy.","inputSchema":{"type":"object","properties":{"actor":{"type":"string","enum":["human","assistant"]},"space":{"type":"string","enum":["human-space","assistant-space"]},"key":{"type":"string","description":"Non-empty; at most 32 UTF-8 bytes."}},"required":["actor","space","key"],"additionalProperties":false}},
                                         {"name":"document_merge","description":"Merge synthetic copies and return fields, origins and conflicts.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
@@ -661,6 +679,29 @@ pub extern "C" fn graph_main() -> ! {
                                                 let args=params.and_then(|p|p.get("arguments"));
                                                 if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"status requires empty arguments");}
                                                 else {tool_json(id,storage_state.clone());}
+                                            }
+                                            Some("file_get") => {
+                                                let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
+                                                let name=args.and_then(|o|o.get("name")).and_then(Value::as_str);
+                                                if !args.is_some_and(|o|o.len()==1) || name.is_none() {tool_error(id,"invalid file_get arguments");}
+                                                else if files.get(name.unwrap()).is_none() {tool_error(id,"file not found");}
+                                                else {tool_json(id,json!({"name":name,"hex":files.snapshot().get(name.unwrap()).cloned()}));}
+                                            }
+                                            Some("file_put") => {
+                                                let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
+                                                let name=args.and_then(|o|o.get("name")).and_then(Value::as_str);
+                                                let data=args.and_then(|o|o.get("data")).and_then(Value::as_str);
+                                                if !args.is_some_and(|o|o.len()==2) || name.is_none() || data.is_none() {tool_error(id,"invalid file_put arguments");}
+                                                else {
+                                                    let mut next=files.clone();
+                                                    if next.put(name.unwrap(),data.unwrap().as_bytes()).is_err() {tool_error(id,"file bounds or name rejected");}
+                                                    else if let Some(ref mut disk)=block {
+                                                        match save_snapshot(disk,&document,&next) {
+                                                            Ok((slot,generation))=>{files=next;tool_json(id,json!({"slot":slot,"generation":generation,"readback_verified":true}));},
+                                                            Err(_)=>tool_error(id,"file save failed"),
+                                                        }
+                                                    } else {tool_error(id,"storage unavailable");}
+                                                }
                                             }
                                             Some("ipc_status") => {
                                                 let args=params.and_then(|p|p.get("arguments"));

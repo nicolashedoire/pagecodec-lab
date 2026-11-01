@@ -14,7 +14,7 @@ static mut L3_ALIAS_A:Table=Table([0;512]);static mut L3_ALIAS_B:Table=Table([0;
 static mut L3_RAM_A:[Table;64]=[const {Table([0;512])};64];
 static mut L3_RAM_B:[Table;64]=[const {Table([0;512])};64];
 #[no_mangle] static mut ROOTS:[u64;2]=[0;2];
-extern "C" {static __image_start:u8;static __image_end:u8;static __text_end:u8;static __rodata_end:u8;static __data_start:u8;static __bss_end:u8;static __stack_top:u8;static __usertext_start:u8;static __usertext_split:u8;static __usertext_end:u8;static __userstack_start:u8;static __userstack_end:u8;}
+extern "C" {static __image_start:u8;static __image_end:u8;static __text_end:u8;static __rodata_end:u8;static __data_start:u8;static __bss_end:u8;static __stack_guard:u8;static __stack_bottom:u8;static __stack_top:u8;static __usertext_start:u8;static __usertext_split:u8;static __usertext_end:u8;static __userstack_start:u8;static __userstack_end:u8;}
 fn observed(v:usize)->usize {let r:usize;unsafe{asm!("mov {r}, {v}",r=out(reg) r,v=in(reg) v,options(nomem,nostack,preserves_flags));}r}
 fn symbol(p:*const u8)->usize {observed(p as usize)}
 fn table_addr(p:*mut Table,start:usize,end:usize)->u64 {let a=observed(p as usize);assert!(a%PAGE==0 && a>=start && a.checked_add(PAGE).is_some_and(|v|v<=end));a as u64}
@@ -41,13 +41,14 @@ pub fn shareable_range(start:usize,len:usize)->bool {
 pub fn init(heap:usize,heap_len:usize,dma:usize,dma_len:usize,a:usize,b:usize) {
  let heap=observed(heap);let dma=observed(dma);let a=observed(a);let b=observed(b);
  let start=symbol(addr_of!(__image_start));let end=symbol(addr_of!(__image_end));let text_end=symbol(addr_of!(__text_end));let ro_end=symbol(addr_of!(__rodata_end));let data=symbol(addr_of!(__data_start));
- let bss_end=symbol(addr_of!(__bss_end));let stack_top=symbol(addr_of!(__stack_top));let ut0=symbol(addr_of!(__usertext_start));let split=symbol(addr_of!(__usertext_split));let ut1=symbol(addr_of!(__usertext_end));let us0=symbol(addr_of!(__userstack_start));let us1=symbol(addr_of!(__userstack_end));
+ let bss_end=symbol(addr_of!(__bss_end));let guard=symbol(addr_of!(__stack_guard));let stack_bottom=symbol(addr_of!(__stack_bottom));let stack_top=symbol(addr_of!(__stack_top));let ut0=symbol(addr_of!(__usertext_start));let split=symbol(addr_of!(__usertext_split));let ut1=symbol(addr_of!(__usertext_end));let us0=symbol(addr_of!(__userstack_start));let us1=symbol(addr_of!(__userstack_end));
  let mut sp:usize;let mut sctlr:u64;unsafe{asm!("mov {},sp",out(reg) sp);asm!("mrs {},SCTLR_EL1",out(reg) sctlr);}
  assert!(sctlr&((1<<0)|(1<<2)|(1<<12)|(1<<25))==0);
  assert!(start>=RAM_BASE && end<=RAM_END && start%PAGE==0 && end%PAGE==0 && start<text_end && text_end<=ut0 && ut0<ut1 && ut1<=ro_end && ro_end==data && data<us0 && us0<us1 && us1==end);
  assert!([ut0,ut1,us0,us1,a,b].iter().all(|x|x%PAGE==0) && ut0.checked_add(PAGE)==Some(split) && split.checked_add(PAGE)==Some(ut1) && us0.checked_add(4*PAGE)==Some(us1));
  assert!(a>=us0 && b>=us0 && a.checked_add(PAGE).is_some_and(|v|v<=us1) && b.checked_add(PAGE).is_some_and(|v|v<=us1) && (a+PAGE<=b || b+PAGE<=a));
- assert!(sp>bss_end && sp<=stack_top && stack_top<=us0 && sp%16==0);
+ assert!(guard==bss_end && guard%PAGE==0 && guard.checked_add(PAGE)==Some(stack_bottom) && stack_bottom.checked_add(0x40000)==Some(stack_top));
+ assert!(sp>stack_bottom && sp<=stack_top && stack_top<=us0 && sp%16==0);
  let heap_end=heap.checked_add(heap_len).unwrap();let dma_end=dma.checked_add(dma_len).unwrap();
  assert!(heap%PAGE==0 && dma%PAGE==0 && heap>=data && dma>=data && heap_end<=bss_end && dma_end<=bss_end && (heap_end<=dma || dma_end<=heap));
  let tables=[addr_of_mut!(L0_A),addr_of_mut!(L0_B),addr_of_mut!(L1_A),addr_of_mut!(L1_B),addr_of_mut!(L2_LOW),addr_of_mut!(L2_RAM_A),addr_of_mut!(L2_RAM_B),addr_of_mut!(L3_UART),addr_of_mut!(L3_VIRTIO),addr_of_mut!(L3_GIC),addr_of_mut!(L3_ALIAS_A),addr_of_mut!(L3_ALIAS_B)];
@@ -70,6 +71,8 @@ pub fn init(heap:usize,heap_len:usize,dma:usize,dma_len:usize,a:usize,b:usize) {
   set(tables[10],(ALIAS>>12)&511,a as u64|AF|SH|NORMAL|USER|PXN|UXN|NG|DESC);
   set(tables[11],(ALIAS>>12)&511,b as u64|AF|SH|NORMAL|USER|PXN|UXN|NG|DESC);
   for address in (start..end).step_by(PAGE) {
+   // Keep the entire guard unmapped in both roots. The stack grows down.
+   if address==guard {continue}
    let index=(address-RAM_BASE)/(2*1024*1024);let entry=(address>>12)&511;
    let kernel_flags=if address<text_end {AF|SH|NORMAL|RO|UXN}
     else if address>=ut0 && address<ut1 {AF|SH|NORMAL|RO|PXN|UXN|NG}
@@ -90,7 +93,8 @@ pub fn init(heap:usize,heap_len:usize,dma:usize,dma_len:usize,a:usize,b:usize) {
   switch_root(root);assert!(active_root()==root);
   let alias=query(ALIAS,false,true);let expected=if i==0 {a} else {b};
   assert!(alias&1==0 && alias&PA_MASK==expected as u64 && query(ALIAS,true,true)&1==0 && query(ALIAS+PAGE,false,true)&1!=0);
-  assert!(identity_range(start,end-start) && identity_range(heap,heap_len) && identity_range(dma,dma_len));
+  assert!(identity_range(start,guard-start) && identity_range(stack_bottom,end-stack_bottom) && identity_range(heap,heap_len) && identity_range(dma,dma_len));
+  assert!(query(guard,false,false)&1!=0 && query(guard,true,false)&1!=0 && query(guard+PAGE-1,false,false)&1!=0);
   assert!(identity_range(UART,PAGE) && identity_range(VIRTIO,4*PAGE) && identity_range(GICD,PAGE) && identity_range(GICC,PAGE));
   assert!(query(start-PAGE,false,false)&1!=0 && query(end,false,false)&1!=0 && query(UART+PAGE,false,false)&1!=0 && query(VIRTIO+4*PAGE,false,false)&1!=0);
   assert!(query(start,true,false)&1!=0 && query(data,true,false)&1==0);

@@ -32,9 +32,13 @@ SECTIONS
   .bss (NOLOAD) : ALIGN(4096) {
     __bss_start = .;
     *(.bss .bss.* COMMON)
-    . = ALIGN(16);
+    . = ALIGN(4096);
     __bss_end = .;
-    . += 0x10000;
+    /* The MMU leaves this page unmapped to catch EL1 stack overflow. */
+    __stack_guard = .;
+    . += 0x1000;
+    __stack_bottom = .;
+    . += 0x40000;
     __stack_top = .;
     . = ALIGN(4096);
   }

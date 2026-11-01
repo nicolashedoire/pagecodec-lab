@@ -4,11 +4,17 @@ import argparse,json,tempfile,subprocess,time
 from pathlib import Path
 from vm_harness import Guest,SIZE,create,sha,fnv
 
-def validate_slot(slot,generation,snapshot):
+def validate_slot(slot,generation,snapshot,files):
  if slot[:8]!=b'GSLOT001' or int.from_bytes(slot[8:16],'little')!=generation or slot[24]!=0xa5:raise RuntimeError('bad slot header')
  n=int.from_bytes(slot[16:20],'little')
  if not 0<n<=3584 or fnv(slot[8:20]+slot[512:512+n])!=int.from_bytes(slot[20:24],'little'):raise RuntimeError('bad slot checksum')
- if json.loads(slot[512:512+n])!=snapshot or any(slot[25:512]) or any(slot[512+n:]):raise RuntimeError('bad slot payload/padding')
+ if json.loads(slot[512:512+n])!={'format':'workspace-files-v1','document':snapshot,'files':files} or any(slot[25:512]) or any(slot[512+n:]):raise RuntimeError('bad slot payload/padding')
+
+def legacy_slot(generation,snapshot):
+ payload=json.dumps(snapshot,separators=(',',':')).encode();slot=bytearray(4096)
+ slot[:8]=b'GSLOT001';slot[8:16]=generation.to_bytes(8,'little');slot[16:20]=len(payload).to_bytes(4,'little');slot[512:512+len(payload)]=payload
+ slot[20:24]=fnv(slot[8:20]+payload).to_bytes(4,'little');slot[24]=0xa5
+ return bytes(slot)
 
 def main():
  p=argparse.ArgumentParser();p.add_argument('--qemu',required=True);p.add_argument('--guest',required=True);p.add_argument('--transport',choices=['modern','legacy'],default='modern');p.add_argument('--output-dir',required=True);a=p.parse_args()
@@ -17,14 +23,17 @@ def main():
  guest=Path(a.guest);h=sha(guest.read_bytes());qemu=subprocess.run([a.qemu,'--version'],check=True,capture_output=True,text=True,timeout=10).stdout.splitlines()[0]
  blank={'base':{'title':'base','common':'seed'},'human':{'title':'base','common':'seed'},'assistant':{'title':'base','common':'seed'}}
  final={'base':blank['base'],'human':{'title':'base','common':'seed','theme':'human-two'},'assistant':{'title':'base','common':'seed','layout':'assistant'}}
- traces=[];states=[];qmp_events=[]
+ traces=[];states=[];qmp_events=[];file_hex=b'persisted through recovery'.hex()
  with tempfile.TemporaryDirectory(prefix='workspace-storage-ipc-') as tmp:
   disk=Path(tmp)/'disk.raw';create(disk,bytes(SIZE));first_image=None
-  for index in (1,2,3):
+  for index in (1,2,3,4):
    if index==3:
     # Simulate a damaged newest snapshot while the guest is stopped. The
     # following boot must use the intact older slot, then repair redundancy.
-    damaged=bytearray(disk.read_bytes());damaged[12*512+512]^=1;disk.write_bytes(damaged)
+    damaged=bytearray(disk.read_bytes());damaged[4*512+512]^=1;disk.write_bytes(damaged)
+   if index==4:
+    # An old-format committed image must restore through the same service.
+    disk=Path(tmp)/'legacy.raw';old=bytearray(SIZE);old[4*512:12*512]=legacy_slot(1,final);create(disk,old)
    g=Guest(a.qemu,guest,disk,tmp,index,out,a.transport)
    try:
     for _ in range(8):
@@ -34,8 +43,11 @@ def main():
     else:raise RuntimeError('FIFO did not finish: '+str(ipc))
     if any(ipc.get(k)!=[1,2,3,4] for k in ('accepted','applied','consumed')) or not ipc.get('save_denied') or not ipc.get('denial_consumed') or ipc.get('queue_len')!=0 or not ipc.get('full_rejected') or not ipc.get('full_consumed') or any(ipc.get(k)!=[True,True] for k in ('range_rejected','overflow_rejected','duplicate_rejected','utf8_rejected','spoof_rejected')) or ipc.get('source')!='synthetic descriptors and bytes constructed by EL0':raise RuntimeError('IPC save and rejection invariants failed: '+str(ipc))
     storage=g.call('storage_status',{})
-    expected={'restore':'blank' if index==1 else 'restored','restore_generation':None if index==1 else 1,'restore_slots':(['blank','blank'] if index==1 else ['valid','blank'] if index==2 else ['valid','invalid']),'before':blank,'after':blank if index==1 else final,'save':{'slot':0 if index==1 else 1,'generation':1 if index==1 else 2,'readback_verified':True,'snapshot':final}}
+    expected={'restore':'blank' if index==1 else 'restored','restore_generation':None if index==1 else 2 if index in (2,3) else 1,'restore_slots':(['blank','blank'] if index==1 else ['valid','valid'] if index==2 else ['invalid','valid'] if index==3 else ['valid','blank']),'before':blank,'after':blank if index==1 else final,'save':{'slot':0 if index in (1,2,3) else 1,'generation':1 if index==1 else 3 if index in (2,3) else 2,'readback_verified':True,'snapshot':final}}
     if storage!=expected:raise RuntimeError('restore/save mismatch: '+str(storage))
+    if index==1:
+     if g.call('file_put',{'name':'notes.txt','data':'persisted through recovery'})!={'slot':1,'generation':2,'readback_verified':True}:raise RuntimeError('file save failed')
+    if index in (1,2,3) and g.call('file_get',{'name':'notes.txt'})!={'name':'notes.txt','hex':file_hex}:raise RuntimeError('named file lost during restore')
     if g.call('document_snapshot',{})!=final:raise RuntimeError('bad document state')
     merge=g.call('document_merge',{});fields={x['key']:x for x in merge['fields']}
     if merge['conflicts'] or fields['theme']['origin']!='human' or fields['layout']['origin']!='assistant':raise RuntimeError('provenance mismatch')
@@ -60,14 +72,20 @@ def main():
      qmp_events=g.qmp_trace
     g.progress('save, restore and input');traces.append(g.trace);states.append(storage)
    finally:g.close()
-   data=disk.read_bytes();validate_slot(data[4*512:12*512],1,final)
+   data=disk.read_bytes()
    if index==1:
-    if data[:4*512]!=bytes(4*512) or data[12*512:]!=bytes(SIZE-12*512):raise RuntimeError('out-of-slot writes')
+    validate_slot(data[4*512:12*512],1,final,{})
+    validate_slot(data[12*512:20*512],2,final,{'notes.txt':file_hex})
+    if data[:4*512]!=bytes(4*512) or data[20*512:]!=bytes(SIZE-20*512):raise RuntimeError('out-of-slot writes')
     first_image=data
+   elif index in (2,3):
+    validate_slot(data[4*512:12*512],3,final,{'notes.txt':file_hex})
+    if data[:4*512]!=first_image[:4*512] or data[12*512:]!=first_image[12*512:]:raise RuntimeError('recovery changed other sectors')
    else:
-    validate_slot(data[12*512:20*512],2,final)
-    if data[:12*512]!=first_image[:12*512] or data[20*512:]!=bytes(SIZE-20*512):raise RuntimeError('second write changed other sectors')
+    if data[4*512:12*512]!=legacy_slot(1,final):raise RuntimeError('legacy slot changed')
+    validate_slot(data[12*512:20*512],2,final,{})
+    if data[:4*512]!=bytes(4*512) or data[20*512:]!=bytes(SIZE-20*512):raise RuntimeError('migration changed unrelated sectors')
  if sha(guest.read_bytes())!=h:raise RuntimeError('image changed')
  (out/'workspace-dynamic-storage-evidence.json').write_text(json.dumps({'guest_sha256':h,'qemu_version':qemu,'transport':a.transport,'states':states,'qmp_input':qmp_events,'sessions':traces},indent=2)+'\n')
- print('PASS QEMU EL0 FIFO edits, readback-verified save, restart and corrupted-slot recovery')
+ print('PASS QEMU EL0 FIFO edits, named file, restart, corrupted-slot recovery and legacy migration')
 if __name__=='__main__':main()

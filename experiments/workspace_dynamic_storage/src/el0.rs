@@ -31,6 +31,7 @@ static mut PROBE_DONE:u64=0;
 #[no_mangle] static mut SLICE_MODE:u64=0;
 #[no_mangle] static mut SLICE_IRQS:u64=0;
 #[no_mangle] static mut SLICE_TOTAL:u64=0;
+#[no_mangle] static mut SLICE_DISPATCHES:u64=0;
 #[no_mangle] static mut SLICE_COUNTS:[u64;2]=[0;2];
 #[no_mangle] static mut USER_TOPS:[u64;2]=[0;2];
 #[no_mangle] static mut SLICE_DELTA:u64=0;
@@ -196,7 +197,7 @@ extern "C" fn unexpected_vector()->! {
 extern "C" {
  static __image_start:u8;static __image_end:u8;static __text_end:u8;
  static __usertext_start:u8;static __usertext_split:u8;static __usertext_end:u8;static __userstack_start:u8;static __userstack_end:u8;
- static __bss_end:u8;static __stack_top:u8;static vector_table:u8;
+ static __stack_bottom:u8;static __stack_top:u8;static vector_table:u8;
  static task_a_loop:u8;static task_a_end:u8;static task_b_loop:u8;static task_b_end:u8;
  static task_a_cross_fault:u8;static task_b_cross_fault:u8;
  static task_a_init:u8;static task_a_init_end:u8;static task_b_init:u8;static task_b_init_end:u8;
@@ -234,7 +235,7 @@ pub fn start()->! {
  let text_end=physical(addr_of!(__text_end) as usize);let ut0=physical(addr_of!(__usertext_start) as usize);let split=physical(addr_of!(__usertext_split) as usize);let ut1=physical(addr_of!(__usertext_end) as usize);
  let us0=physical(addr_of!(__userstack_start) as usize);let us1=physical(addr_of!(__userstack_end) as usize);
  let a=physical(task_frame(0));let b=physical(task_frame(1));
- let kb=physical(addr_of!(__bss_end) as usize);let kt=physical(addr_of!(__stack_top) as usize);
+ let kb=physical(addr_of!(__stack_bottom) as usize);let kt=physical(addr_of!(__stack_top) as usize);
  let vector=physical(addr_of!(vector_table) as usize);
  let apc=physical(addr_of!(task_a_loop) as usize);let aend=physical(addr_of!(task_a_end) as usize);
  let bpc=physical(addr_of!(task_b_loop) as usize);let bend=physical(addr_of!(task_b_end) as usize);
@@ -273,7 +274,11 @@ pub fn prepare_slices() {
  unsafe {for i in 0..2 {let p=read_volatile(addr_of!(SAVED).cast::<u64>().add(i)) as *mut Frame;(*p).regs[5]=42;}}
  let mut freq:u64;let mut daif:u64;unsafe{asm!("mrs {},CNTFRQ_EL0",out(reg) freq);asm!("mrs {},DAIF",out(reg) daif);}
  check(daif&(1<<7)!=0,"kernel IRQ not masked");let delta=freq/200;check(delta>0 && delta<=i32::MAX as u64,"slice timer frequency");
+ // The boot probe returns from task B into EL1. Both tasks are now ready;
+ // start_slice is responsible for dispatching one and marking it RUNNING.
+ check(unsafe{read_volatile(addr_of!(CURRENT))}==1 && unsafe{read_volatile(addr_of!(TASK_STATE))}==[1,2],"probe task states");
  unsafe {
+  write_volatile(addr_of_mut!(TASK_STATE).cast::<u64>().add(1),1);
   write_volatile(addr_of_mut!(SLICE_DELTA),delta);write_volatile(addr_of_mut!(SLICE_MODE),1);
   write_volatile((GICD+0x000) as *mut u32,0);write_volatile((GICC+0x000) as *mut u32,0);
   write_volatile((GICD+0x180) as *mut u32,1<<27);write_volatile((GICD+0x280) as *mut u32,1<<27);
@@ -287,11 +292,12 @@ pub fn run_slice() {
  check(super::mmu::active_root()==super::mmu::root(0),"service root");
  let current=unsafe{read_volatile(addr_of!(CURRENT))};check(current<2,"slice actor");
  let frame=unsafe{read_volatile(addr_of!(SAVED).cast::<u64>().add(current as usize))} as *const Frame;
- let before=unsafe{read_volatile(addr_of!(SLICE_TOTAL))};let delta=unsafe{read_volatile(addr_of!(SLICE_DELTA))};check(delta!=0,"slice not initialized");
+ let before=unsafe{read_volatile(addr_of!(SLICE_TOTAL))};let dispatches=unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))};let delta=unsafe{read_volatile(addr_of!(SLICE_DELTA))};check(delta!=0,"slice not initialized");
+ check(unsafe{read_volatile(addr_of!(TASK_STATE))}==[1,1],"tasks not ready at service boundary");
  let counts_before=[unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>())},unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>().add(1))}];
  let allocations_before=super::HEAP_NEXT.load(Ordering::Relaxed);
  let mut sentinel=[0u64;2];let p=sentinel.as_mut_ptr();let ptr=physical(p as usize);
- let bottom=physical(addr_of!(__bss_end) as usize);let top=physical(addr_of!(__stack_top) as usize);
+ let bottom=physical(addr_of!(__stack_bottom) as usize);let top=physical(addr_of!(__stack_top) as usize);
  check(ptr>=bottom && ptr.checked_add(16).is_some_and(|v|v<=top),"service sentinel stack");
  unsafe{p.write_volatile(0x1122_3344_5566_7788);p.add(1).write_volatile(0x0102_0304_0506_0708);}
  unsafe {
@@ -299,6 +305,7 @@ pub fn run_slice() {
   check(slice_probe(frame)==1,"kernel call context");
  }
  let after=unsafe{read_volatile(addr_of!(SLICE_TOTAL))};check(before.checked_add(2)==Some(after),"slice IRQ count");
+ check(dispatches.checked_add(2)==Some(unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))}) && unsafe{read_volatile(addr_of!(TASK_STATE))}==[1,1],"slice task state transitions");
  let counts_after=[unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>())},unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>().add(1))}];
  check(counts_after[0]>counts_before[0] && counts_after[1]>counts_before[1],"EL0 slice progress");
  check(super::HEAP_NEXT.load(Ordering::Relaxed)==allocations_before,"IRQ allocation");
@@ -313,7 +320,8 @@ pub fn status()->Value {
  let counts:Vec<u64>=(0..2).map(|i|unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>().add(i))}).collect();
  let slice_ticks=unsafe{read_volatile(addr_of!(SLICE_TOTAL))};
  let values=[unsafe{read_volatile(task_frame(0) as *const u64)},unsafe{read_volatile(task_frame(1) as *const u64)}];
- json!({"validated":done,"ticks":8,"el":"EL0","events":events,"timer":"disabled","interrupts":"masked","slice_ticks":slice_ticks,"slice_counts":counts,"mode":"service-boundary","private_values":values,"service_asid":super::mmu::active_root()>>48,"cross_code_read_denied":unsafe{read_volatile(addr_of!(CROSS_READ_DENIED))},"frame_pool_capacity":4,"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()})
+ let states=unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|s|match s {1=>"ready",2=>"running",_=>"invalid"});
+ json!({"validated":done,"ticks":8,"el":"EL0","events":events,"timer":"disabled","interrupts":"masked","slice_ticks":slice_ticks,"slice_counts":counts,"mode":"service-boundary","private_values":values,"service_asid":super::mmu::active_root()>>48,"cross_code_read_denied":unsafe{read_volatile(addr_of!(CROSS_READ_DENIED))},"task_states":states,"dispatches":unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))},"frame_pool_capacity":4,"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()})
 }
 
 global_asm!(r#"
@@ -710,10 +718,29 @@ slice_check_pc:
     str x6, [x5]
     cmp x6, #2
     b.hi irq_schedule_fail
+    // Interrupt deschedules RUNNING -> READY. Only a READY task may be
+    // dispatched; at the second interrupt we return to EL1 with both READY.
+    adrp x4, TASK_STATE
+    add x4, x4, :lo12:TASK_STATE
+    ldr x5, [x4, x2, lsl #3]
+    cmp x5, #2
+    b.ne irq_schedule_fail
+    mov x5, #1
+    str x5, [x4, x2, lsl #3]
     eor x2, x2, #1
     str x2, [x0]
     cmp x6, #2
     b.eq slice_return_kernel
+    ldr x5, [x4, x2, lsl #3]
+    cmp x5, #1
+    b.ne irq_schedule_fail
+    mov x5, #2
+    str x5, [x4, x2, lsl #3]
+    adrp x4, SLICE_DISPATCHES
+    add x4, x4, :lo12:SLICE_DISPATCHES
+    ldr x5, [x4]
+    add x5, x5, #1
+    str x5, [x4]
     adrp x4, ROOTS
     add x4, x4, :lo12:ROOTS
     ldr x5, [x4, x2, lsl #3]
@@ -841,6 +868,20 @@ start_slice:
     ldr x10, [x9]
     cmp x10, #1
     b.hi irq_fatal
+    // READY -> RUNNING before entering EL0. This is authoritative: a task
+    // in any other state cannot be selected by this scheduler.
+    adrp x11, TASK_STATE
+    add x11, x11, :lo12:TASK_STATE
+    ldr x12, [x11, x10, lsl #3]
+    cmp x12, #1
+    b.ne irq_fatal
+    mov x12, #2
+    str x12, [x11, x10, lsl #3]
+    adrp x11, SLICE_DISPATCHES
+    add x11, x11, :lo12:SLICE_DISPATCHES
+    ldr x12, [x11]
+    add x12, x12, #1
+    str x12, [x11]
     adrp x9, ROOTS
     add x9, x9, :lo12:ROOTS
     ldr x10, [x9, x10, lsl #3]
@@ -1398,7 +1439,7 @@ el0_failure_b:
 pub extern "C" fn el0_finish()->! {
     check(unsafe{read_volatile(addr_of!(TICKS))}==8,"tick count");
     check(unsafe{read_volatile(addr_of!(CROSS_READ_DENIED))}==[true,true],"EL0 code isolation fault");
-    let kb=physical(addr_of!(__bss_end) as usize);let kt=physical(addr_of!(__stack_top) as usize);
+    let kb=physical(addr_of!(__stack_bottom) as usize);let kt=physical(addr_of!(__stack_top) as usize);
     let mut previous=[0u64;2];
     for i in 0..8 {
         let e=unsafe{read_volatile(addr_of!(EVENTS).cast::<Event>().add(i))};let actor=(i%2) as u64;

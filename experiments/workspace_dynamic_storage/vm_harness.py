@@ -129,6 +129,7 @@ class Guest:
         before=self.last_progress
         if current.get('mode')!='service-boundary' or current.get('slice_ticks',0)<=before.get('slice_ticks',0):raise RuntimeError('missing EL0 slices across '+label)
         if current.get('private_values')!=[0xa1a1,0xb2b2] or current.get('service_asid')!=1:raise RuntimeError('private markers or service ASID changed across '+label)
+        if current.get('task_states')!=['ready','ready'] or current.get('dispatches',0)<=before.get('dispatches',0):raise RuntimeError('task dispatch or ready state invalid across '+label)
         if len(current.get('slice_counts',[]))!=2 or any(a<=b for a,b in zip(current['slice_counts'],before['slice_counts'])):raise RuntimeError('EL0 tasks did not both progress across '+label)
         self.last_progress=current
         return current
