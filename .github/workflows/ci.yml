@@ -768,6 +768,55 @@ jobs:
             ${{ runner.temp }}/workspace-dynamic-storage-legacy-evidence/
           if-no-files-found: ignore
 
+  storage-diagnostics:
+    name: Storage IRQ / ${{ matrix.id }} / QEMU VM
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: fixed-fixture
+            directory: workspace_storage_ipc
+            binary: workspace-storage-ipc-demo
+          - id: dynamic-fixture
+            directory: workspace_dynamic_storage
+            binary: workspace-dynamic-storage-demo
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install ARM target and QEMU
+        run: |
+          rustup target add aarch64-unknown-none-softfloat
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends qemu-system-arm
+      - name: Exercise injected IRQ diagnostics
+        working-directory: experiments/${{ matrix.directory }}
+        run: |
+          CARGO_TARGET_DIR=target/ci-injected cargo build --release --locked --features irq-diagnostic-test
+          python3 irq_diagnostic_test.py --qemu qemu-system-aarch64 \
+            --guest "target/ci-injected/aarch64-unknown-none-softfloat/release/${{ matrix.binary }}" \
+            --output-dir "$RUNNER_TEMP/irq-injected-${{ matrix.id }}"
+      - name: Exercise normal storage guest
+        working-directory: experiments/${{ matrix.directory }}
+        run: |
+          cargo build --release --locked
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest "target/aarch64-unknown-none-softfloat/release/${{ matrix.binary }}" \
+            --output-dir "$RUNNER_TEMP/storage-normal-${{ matrix.id }}" --transport modern
+          python3 run_demo.py --qemu qemu-system-aarch64 \
+            --guest "target/aarch64-unknown-none-softfloat/release/${{ matrix.binary }}" \
+            --output-dir "$RUNNER_TEMP/storage-legacy-${{ matrix.id }}" --transport legacy
+      - name: Preserve storage diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: storage-diagnostics-${{ matrix.id }}
+          path: |
+            ${{ runner.temp }}/irq-injected-${{ matrix.id }}/
+            ${{ runner.temp }}/storage-normal-${{ matrix.id }}/
+            ${{ runner.temp }}/storage-legacy-${{ matrix.id }}/
+          if-no-files-found: ignore
+
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM
     runs-on: ubuntu-latest

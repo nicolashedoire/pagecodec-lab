@@ -28,7 +28,7 @@ def main():
      if ipc.get('finished') is True:break
      time.sleep(.1)
     else:raise RuntimeError('FIFO did not finish: '+str(ipc))
-    if any(ipc.get(k)!=[1,2,3,4] for k in ('accepted','applied','consumed')) or not ipc.get('save_denied') or ipc.get('queue_len')!=0 or not ipc.get('full_rejected') or not ipc.get('full_consumed') or any(ipc.get(k)!=[True,True] for k in ('range_rejected','overflow_rejected','duplicate_rejected','utf8_rejected','spoof_rejected')) or ipc.get('source')!='synthetic descriptors and bytes constructed by EL0':raise RuntimeError('IPC save and rejection invariants failed: '+str(ipc))
+    if any(ipc.get(k)!=[1,2,3,4] for k in ('accepted','applied','consumed')) or not ipc.get('save_denied') or not ipc.get('denial_consumed') or ipc.get('queue_len')!=0 or not ipc.get('full_rejected') or not ipc.get('full_consumed') or any(ipc.get(k)!=[True,True] for k in ('range_rejected','overflow_rejected','duplicate_rejected','utf8_rejected','spoof_rejected')) or ipc.get('source')!='synthetic descriptors and bytes constructed by EL0':raise RuntimeError('IPC save and rejection invariants failed: '+str(ipc))
     storage=g.call('storage_status',{})
     expected={'restore':'blank' if index==1 else 'restored','restore_generation':None if index==1 else 1,'before':blank,'after':blank if index==1 else final,'save':{'slot':index-1,'generation':index,'snapshot':final}}
     if storage!=expected:raise RuntimeError('restore/save mismatch: '+str(storage))

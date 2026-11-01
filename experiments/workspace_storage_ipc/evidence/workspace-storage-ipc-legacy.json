@@ -1,5 +1,5 @@
 {
-  "guest_sha256": "5e72ed3b54bb2f9d5bfe425857dbbbf72d85a82b25ae075148d5d3cdf4268d72",
+  "guest_sha256": "ff247729374675202b031eec69743a1b396d3306289fb95a8f91319745799ad9",
   "qemu_version": "QEMU emulator version 11.1.3",
   "transport": "legacy",
   "states": [
@@ -383,7 +383,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":2354,\"next\":1,\"task\":0},{\"count\":2289,\"next\":0,\"task\":1},{\"count\":4465,\"next\":1,\"task\":0},{\"count\":4315,\"next\":0,\"task\":1},{\"count\":6797,\"next\":1,\"task\":0},{\"count\":6223,\"next\":0,\"task\":1},{\"count\":9062,\"next\":1,\"task\":0},{\"count\":8620,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[14320,14281],\"slice_ticks\":10,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":1579,\"next\":1,\"task\":0},{\"count\":2010,\"next\":0,\"task\":1},{\"count\":3744,\"next\":1,\"task\":0},{\"count\":4029,\"next\":0,\"task\":1},{\"count\":5815,\"next\":1,\"task\":0},{\"count\":5730,\"next\":0,\"task\":1},{\"count\":7915,\"next\":1,\"task\":0},{\"count\":7903,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[12942,12963],\"slice_ticks\":10,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -584,7 +584,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":2354,\"next\":1,\"task\":0},{\"count\":2289,\"next\":0,\"task\":1},{\"count\":4465,\"next\":1,\"task\":0},{\"count\":4315,\"next\":0,\"task\":1},{\"count\":6797,\"next\":1,\"task\":0},{\"count\":6223,\"next\":0,\"task\":1},{\"count\":9062,\"next\":1,\"task\":0},{\"count\":8620,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[23493,23278],\"slice_ticks\":28,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":1579,\"next\":1,\"task\":0},{\"count\":2010,\"next\":0,\"task\":1},{\"count\":3744,\"next\":1,\"task\":0},{\"count\":4029,\"next\":0,\"task\":1},{\"count\":5815,\"next\":1,\"task\":0},{\"count\":5730,\"next\":0,\"task\":1},{\"count\":7915,\"next\":1,\"task\":0},{\"count\":7903,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[21996,21639],\"slice_ticks\":28,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -865,7 +865,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":2052,\"next\":1,\"task\":0},{\"count\":2387,\"next\":0,\"task\":1},{\"count\":4389,\"next\":1,\"task\":0},{\"count\":4116,\"next\":0,\"task\":1},{\"count\":6175,\"next\":1,\"task\":0},{\"count\":5857,\"next\":0,\"task\":1},{\"count\":7804,\"next\":1,\"task\":0},{\"count\":8295,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[12785,13885],\"slice_ticks\":10,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":2080,\"next\":1,\"task\":0},{\"count\":2174,\"next\":0,\"task\":1},{\"count\":4192,\"next\":1,\"task\":0},{\"count\":4407,\"next\":0,\"task\":1},{\"count\":6195,\"next\":1,\"task\":0},{\"count\":6324,\"next\":0,\"task\":1},{\"count\":8333,\"next\":1,\"task\":0},{\"count\":8472,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[13115,13552],\"slice_ticks\":10,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],
@@ -1066,7 +1066,7 @@
           "result": {
             "content": [
               {
-                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":2052,\"next\":1,\"task\":0},{\"count\":2387,\"next\":0,\"task\":1},{\"count\":4389,\"next\":1,\"task\":0},{\"count\":4116,\"next\":0,\"task\":1},{\"count\":6175,\"next\":1,\"task\":0},{\"count\":5857,\"next\":0,\"task\":1},{\"count\":7804,\"next\":1,\"task\":0},{\"count\":8295,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[22818,22792],\"slice_ticks\":28,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
+                "text": "{\"el\":\"EL0\",\"events\":[{\"count\":2080,\"next\":1,\"task\":0},{\"count\":2174,\"next\":0,\"task\":1},{\"count\":4192,\"next\":1,\"task\":0},{\"count\":4407,\"next\":0,\"task\":1},{\"count\":6195,\"next\":1,\"task\":0},{\"count\":6324,\"next\":0,\"task\":1},{\"count\":8333,\"next\":1,\"task\":0},{\"count\":8472,\"next\":2,\"task\":1}],\"interrupts\":\"masked\",\"mode\":\"service-boundary\",\"private_values\":[41377,45746],\"service_asid\":1,\"slice_counts\":[22035,22903],\"slice_ticks\":28,\"ticks\":8,\"timer\":\"disabled\",\"validated\":true}",
                 "type": "text"
               }
             ],

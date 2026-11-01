@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
+[features]
+irq-diagnostic-test = []
+
 [dependencies]
 dynamic-input-sketch = { path = "../dynamic_input" }
 actor-core-sketch = { path = "../actor_core" }

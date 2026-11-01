@@ -16,6 +16,12 @@ Each slot has a metadata sector and seven payload sectors. A checksum detects ac
 
 The guest remains a one-CPU QEMU experiment: tasks are interleaved by virtual timer IRQ, EL1 yields at service-loop boundaries, and there is no arbitrary EL1 preemption or multicore parallelism. Page translation probes are not real fault recovery, the MCP socket is not authenticated, and there is no real Apple driver, IOMMU, physical DMA safety, person authentication or production persistence guarantee. The task-identity rule is a kernel-controlled fixture, not a general permissions system.
 
+## Fatal IRQ diagnostics
+
+Two Ubuntu CI runs produced only `F` on the guest UART before `mmu_status`. In that version several different fatal checks shared this output; the failing predicate and underlying cause are **not established**. The updated guest preserves those checks and, when a complete exception frame is available, reports a bounded synthetic guest context: family 1 covers IRQ entry and initial scheduling checks, 2 the slice register checks, 3 saved PC/status checks, and 4 slice or ready-queue scheduling checks. It includes the current actor, TTBR, EL0 SP, ELR, SPSR and saved x0–x30. Paths without a saved frame report ELR, SPSR and ESR without dereferencing a frame. A new failure may still prevent diagnostics from being emitted; these messages are not a general fault handler.
+
+The optional `irq-diagnostic-test` build deliberately changes saved EL0 x5 to 42 before a slice. The [QEMU injection test](evidence/irq-diagnostic-evidence.json) checks that the family 2 report contains `x5=42`. This validates a diagnostic path only; it does not reproduce or explain the Ubuntu failures. Normal builds do not enable the feature. Rerunning Linux CI with this version is needed to obtain more information if the original failure recurs.
+
 ## Reproduce
 
 With Rust target `aarch64-unknown-none-softfloat`, QEMU AArch64 and Python 3:
@@ -26,6 +32,13 @@ python3 run_demo.py --qemu /path/to/qemu-system-aarch64 \
   --guest target/aarch64-unknown-none-softfloat/release/workspace-storage-ipc-demo \
   --output-dir /path/to/empty-output
 # Repeat with --transport legacy and another empty directory.
+
+# Optional deliberate corruption test: use a separate target directory.
+cargo build --release --locked --offline --features irq-diagnostic-test \
+  --target-dir /path/to/diagnostic-build
+python3 irq_diagnostic_test.py --qemu /path/to/qemu-system-aarch64 \
+  --guest /path/to/diagnostic-build/aarch64-unknown-none-softfloat/release/workspace-storage-ipc-demo \
+  --output-dir /path/to/another-empty-output
 ```
 
 The harness records synthetic MCP I/O, guest hash and QEMU version and checks the image hash did not change. Inter glyphs are distributed under the [SIL Open Font License](assets/OFL.txt).

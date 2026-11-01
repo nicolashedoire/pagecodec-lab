@@ -36,8 +36,8 @@ static mut PROBE_DONE:u64=0;
 pub struct Request {pub actor:usize,pub id:u64,pub save:bool,pub key:[u8;16],pub key_len:usize,pub value:[u8;32],pub value_len:usize}
 #[derive(Clone,Copy,PartialEq,Eq)] struct Completion {actor:usize,id:u64,popped:bool,applied:bool,success:bool,delivered:bool,consumed:bool}
 const EMPTY_COMPLETION:Completion=Completion{actor:0,id:0,popped:false,applied:false,success:false,delivered:false,consumed:false};
-struct Ipc {queue:[Option<Request>;2],head:usize,len:usize,completions:[Completion;4],accepted:[u64;4],accepted_len:usize,applied:[u64;4],applied_len:usize,consumed:[u64;4],consumed_len:usize,full:bool,full_consumed:bool,range:[bool;2],overflow:[bool;2],duplicate:[bool;2],utf8:[bool;2],spoof:[bool;2],save_denied:bool}
-static mut IPC:Ipc=Ipc{queue:[None;2],head:0,len:0,completions:[EMPTY_COMPLETION;4],accepted:[0;4],accepted_len:0,applied:[0;4],applied_len:0,consumed:[0;4],consumed_len:0,full:false,full_consumed:false,range:[false;2],overflow:[false;2],duplicate:[false;2],utf8:[false;2],spoof:[false;2],save_denied:false};
+struct Ipc {queue:[Option<Request>;2],head:usize,len:usize,completions:[Completion;4],accepted:[u64;4],accepted_len:usize,applied:[u64;4],applied_len:usize,consumed:[u64;4],consumed_len:usize,full:bool,full_consumed:bool,range:[bool;2],overflow:[bool;2],duplicate:[bool;2],utf8:[bool;2],spoof:[bool;2],save_denied:bool,denial_consumed:bool}
+static mut IPC:Ipc=Ipc{queue:[None;2],head:0,len:0,completions:[EMPTY_COMPLETION;4],accepted:[0;4],accepted_len:0,applied:[0;4],applied_len:0,consumed:[0;4],consumed_len:0,full:false,full_consumed:false,range:[false;2],overflow:[false;2],duplicate:[false;2],utf8:[false;2],spoof:[false;2],save_denied:false,denial_consumed:false};
 fn in_page(p:u64,n:usize)->bool {n>0 && p>=super::mmu::ALIAS as u64 && p.checked_add(n as u64).is_some_and(|end|end<=(super::mmu::ALIAS+PAGE) as u64)}
 unsafe fn read64(p:u64)->u64 {let v:u64;asm!("ldr {v}, [{p}]",p=in(reg)p,v=out(reg)v,options(nostack,preserves_flags));v}
 unsafe fn write64(p:u64,v:u64){asm!("str {v}, [{p}]",p=in(reg)p,v=in(reg)v,options(nostack,preserves_flags));}
@@ -76,8 +76,8 @@ pub fn complete(actor:usize,id:u64,success:bool)->bool {
 }
 pub fn ipc_status()->Value {
  let s=unsafe{&*addr_of!(IPC)};
- let finished=s.consumed_len==4 && s.applied_len==4 && s.full && s.full_consumed && s.range==[true;2] && s.overflow==[true;2] && s.duplicate==[true;2] && s.utf8==[true;2] && s.spoof==[true;2] && s.save_denied && s.completions.iter().all(|c|c.success);
- json!({"finished":finished,"capacity":2,"queue_len":s.len,"accepted":&s.accepted[..s.accepted_len],"applied":&s.applied[..s.applied_len],"consumed":&s.consumed[..s.consumed_len],"full_rejected":s.full,"full_consumed":s.full_consumed,"range_rejected":s.range,"overflow_rejected":s.overflow,"duplicate_rejected":s.duplicate,"utf8_rejected":s.utf8,"spoof_rejected":s.spoof,"save_denied":s.save_denied,"source":"synthetic descriptors and bytes constructed by EL0"})
+ let finished=s.consumed_len==4 && s.applied_len==4 && s.full && s.full_consumed && s.range==[true;2] && s.overflow==[true;2] && s.duplicate==[true;2] && s.utf8==[true;2] && s.spoof==[true;2] && s.save_denied && s.denial_consumed && s.completions.iter().all(|c|c.success);
+ json!({"finished":finished,"capacity":2,"queue_len":s.len,"accepted":&s.accepted[..s.accepted_len],"applied":&s.applied[..s.applied_len],"consumed":&s.consumed[..s.consumed_len],"full_rejected":s.full,"full_consumed":s.full_consumed,"range_rejected":s.range,"overflow_rejected":s.overflow,"duplicate_rejected":s.duplicate,"utf8_rejected":s.utf8,"spoof_rejected":s.spoof,"save_denied":s.save_denied,"denial_consumed":s.denial_consumed,"source":"synthetic descriptors and bytes constructed by EL0"})
 }
 #[no_mangle]
 extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64) {
@@ -119,7 +119,21 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64) {
    if unsafe{read64(h+16)}!=(super::mmu::ALIAS+360) as u64 || unsafe{read64(h+24)}!=1 || unsafe{readbyte((super::mmu::ALIAS+360) as u64)}!=0xff || descriptor(actor,5,id).is_some() || s.queue!=before || s.completions!=comp || s.accepted!=accepted || s.accepted_len!=count || s.head!=head || s.len!=len {halt()}
    s.utf8[actor]=true;
   },
-  0x110 if actor==1 => {s.save_denied=true;},
+  0x110 if actor==1 && !s.save_denied => {
+   // Dedicated one-shot denial response, separate from queued completions.
+   let queue=s.queue;let head=s.head;let len=s.len;let completions=s.completions;
+   let accepted=s.accepted;let accepted_len=s.accepted_len;
+   unsafe{write64((super::mmu::ALIAS+16) as u64,5);write64((super::mmu::ALIAS+24) as u64,4)};
+   if s.queue!=queue || s.head!=head || s.len!=len || s.completions!=completions || s.accepted!=accepted || s.accepted_len!=accepted_len {halt()}
+   s.save_denied=true;
+  },
+  0x111 if actor==1 && s.save_denied && !s.denial_consumed => {
+   let id=unsafe{read64((super::mmu::ALIAS+32) as u64)};let code=unsafe{read64((super::mmu::ALIAS+40) as u64)};
+   if id==5 && code==4 {
+    s.denial_consumed=true;
+    unsafe{write64((super::mmu::ALIAS+16) as u64,0);write64((super::mmu::ALIAS+24) as u64,0);write64((super::mmu::ALIAS+32) as u64,0);write64((super::mmu::ALIAS+40) as u64,0)};
+   }
+  },
   0x110 if actor==0 && s.consumed_len==3 && s.completions[3].id==0 => {
    let r=Request{actor,id:4,save:true,key:[0;16],key_len:0,value:[0;32],value_len:0};
    if !submit(s,r) {halt()}
@@ -140,6 +154,27 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64) {
   },
   _=>{}
  }
+}
+// Only reached from a saved, full 272-byte IRQ frame; addresses are guest
+// values from this synthetic fixture. This path never returns to the guest.
+#[no_mangle]
+extern "C" fn irq_report(frame:*const Frame,family:u64)->! {
+ let f=unsafe{read_volatile(frame)};
+ let actor=unsafe{read_volatile(addr_of!(CURRENT))};
+ super::write("FAIL IRQ family=");super::write_decimal(family as usize);
+ super::write(" current=");super::write_decimal(actor as usize);
+ super::write(" ttbr=");super::write_decimal(super::mmu::active_root() as usize);
+ super::write(" elr=");super::write_decimal(f.elr as usize);
+ super::write(" spsr=");super::write_decimal(f.spsr as usize);
+ for i in 0..31 {super::write(" x");super::write_decimal(i);super::write("=");super::write_decimal(f.regs[i] as usize);}
+ super::write("\n");loop{unsafe{asm!("wfe",options(nomem,nostack))}}
+}
+#[no_mangle]
+extern "C" fn unexpected_vector()->! {
+ let mut elr:u64;let mut spsr:u64;unsafe{asm!("mrs {},ELR_EL1",out(reg) elr);asm!("mrs {},SPSR_EL1",out(reg) spsr);}
+ super::write("FAIL IRQ no_frame elr=");super::write_decimal(elr as usize);
+ super::write(" spsr=");super::write_decimal(spsr as usize);super::write("\n");
+ loop{unsafe{asm!("wfe",options(nomem,nostack))}}
 }
 // SP, x18, x19..x30; preserved EL1 call continuation.
 #[no_mangle] static mut KERNEL_CONTEXT:[u64;14]=[0;14];
@@ -199,6 +234,11 @@ pub fn start()->! {
 
 /// Explicit service-boundary yielding, never arbitrary EL1 preemption.
 pub fn prepare_slices() {
+ // Test-only fault injection: corrupt x5 in both fixed saved EL0 frames so
+ // the next timer IRQ must take the register-diagnostic path. Not in release
+ // images unless the explicit feature is enabled.
+ #[cfg(feature="irq-diagnostic-test")]
+ unsafe {for i in 0..2 {let p=read_volatile(addr_of!(SAVED).cast::<u64>().add(i)) as *mut Frame;(*p).regs[5]=42;}}
  let mut freq:u64;let mut daif:u64;unsafe{asm!("mrs {},CNTFRQ_EL0",out(reg) freq);asm!("mrs {},DAIF",out(reg) daif);}
  check(daif&(1<<7)!=0,"kernel IRQ not masked");let delta=freq/200;check(delta>0 && delta<=i32::MAX as u64,"slice timer frequency");
  unsafe {
@@ -310,12 +350,12 @@ lower_el_irq:
     mrs x0, SPSR_EL1
     str x0, [sp, #264]
     and x1, x0, #0xf
-    cbnz x1, irq_fatal
+    cbnz x1, irq_entry_fail
     mov x1, #0x08010000
     ldr w0, [x1, #0x0c]
     and w2, w0, #0x3ff
     cmp w2, #27
-    b.ne irq_fatal
+    b.ne irq_entry_fail
     msr CNTV_CTL_EL0, xzr
     isb
     dsb sy
@@ -325,13 +365,13 @@ lower_el_irq:
     add x0, x0, :lo12:CURRENT
     ldr x2, [x0]
     cmp x2, #1
-    b.hi irq_fatal
+    b.hi irq_entry_fail
     adrp x4, ROOTS
     add x4, x4, :lo12:ROOTS
     ldr x5, [x4, x2, lsl #3]
     mrs x6, TTBR0_EL1
     cmp x5, x6
-    b.ne irq_fatal
+    b.ne irq_entry_fail
     adrp x3, SAVED
     add x3, x3, :lo12:SAVED
     ldr x3, [x3, x2, lsl #3]
@@ -350,7 +390,7 @@ lower_el_irq:
     add x5, x5, :lo12:TICKS
     ldr x6, [x5]
     cmp x6, #8
-    b.hs irq_fatal
+    b.hs irq_entry_fail
     adrp x7, EVENTS
     add x7, x7, :lo12:EVENTS
     mov x8, #56
@@ -377,19 +417,19 @@ lower_el_irq:
     add x4, x4, :lo12:TASK_STATE
     ldr x5, [x4, x2, lsl #3]
     cmp x5, #2
-    b.ne irq_fatal
+    b.ne irq_entry_fail
     mov x5, #1
     str x5, [x4, x2, lsl #3]
     adrp x4, READY_LEN
     add x4, x4, :lo12:READY_LEN
     ldr x5, [x4]
     cmp x5, #1
-    b.hi irq_fatal
+    b.hi irq_entry_fail
     adrp x6, READY_HEAD
     add x6, x6, :lo12:READY_HEAD
     ldr x6, [x6]
     cmp x6, #1
-    b.hi irq_fatal
+    b.hi irq_entry_fail
     add x6, x6, x5
     and x6, x6, #1
     adrp x7, READY_QUEUE
@@ -399,7 +439,7 @@ lower_el_irq:
     str x5, [x4]
     bl select_ready
     cmp x0, #2
-    b.hs irq_fatal
+    b.hs irq_entry_fail
     adrp x9, TICKS
     add x9, x9, :lo12:TICKS
     ldr x9, [x9]
@@ -424,7 +464,7 @@ lower_el_irq:
     isb
     mrs x6, TTBR0_EL1
     cmp x5, x6
-    b.ne irq_fatal
+    b.ne irq_entry_fail
     adrp x5, DELTA
     add x5, x5, :lo12:DELTA
     ldr x5, [x5]
@@ -443,7 +483,7 @@ slice_interrupt:
     mov x7, #0x50000000
     ldr x8, [sp, #0]
     cmp x8, x7
-    b.ne irq_fatal
+    b.ne irq_register_fail
     cbnz x2, slice_marker_b
     mov x7, #0xa1a1
     b slice_marker_check
@@ -452,7 +492,7 @@ slice_marker_b:
 slice_marker_check:
     ldr x8, [sp, #8]
     cmp x8, x7
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #256]
     cbnz x2, slice_init_b
     adrp x9, task_a_init
@@ -471,131 +511,131 @@ slice_init_range:
     cmp x8, x10
     b.hs slice_non_init
     ldr x8, [sp, #24]
-    cbnz x8, irq_fatal
+    cbnz x8, irq_register_fail
     b slice_after_temps
 slice_non_init:
     ldr x8, [sp, #16]
     cmp x8, #5
     b.ls slice_x2_ok
     cmp x8, x7
-    b.ne irq_fatal
+    b.ne irq_register_fail
 slice_x2_ok:
     ldr x8, [sp, #24]
     cmp x8, #7
-    b.hi irq_fatal
+    b.hi irq_register_fail
 slice_after_temps:
     ldr x8, [sp, #32]
     cmp x8, #1
-    b.ne irq_fatal
+    b.ne irq_register_fail
     mov x7, #1000
     mov x8, #100
     madd x7, x2, x8, x7
     ldr x8, [sp, #40]
     add x9, x7, #5
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #48]
     add x9, x7, #6
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #56]
     add x9, x7, #7
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #64]
     add x9, x7, #8
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #72]
     add x9, x7, #9
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #80]
     add x9, x7, #10
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #88]
     add x9, x7, #11
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #96]
     add x9, x7, #12
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #104]
     add x9, x7, #13
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #112]
     add x9, x7, #14
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #120]
     add x9, x7, #15
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #128]
     add x9, x7, #16
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #136]
     add x9, x7, #17
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #144]
     add x9, x7, #18
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #160]
     add x9, x7, #20
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #168]
     add x9, x7, #21
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #176]
     add x9, x7, #22
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #184]
     add x9, x7, #23
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #192]
     add x9, x7, #24
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #200]
     add x9, x7, #25
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #208]
     add x9, x7, #26
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #216]
     add x9, x7, #27
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #224]
     add x9, x7, #28
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #232]
     add x9, x7, #29
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     ldr x8, [sp, #240]
     add x9, x7, #30
     cmp x8, x9
-    b.ne irq_fatal
+    b.ne irq_register_fail
     adrp x7, USER_TOPS
     add x7, x7, :lo12:USER_TOPS
     ldr x7, [x7, x2, lsl #3]
     ldr x8, [sp, #248]
     cmp x8, x7
-    b.ne irq_fatal
+    b.ne irq_register_fail
     cbnz x2, slice_check_b
     adrp x7, task_a_loop
     add x7, x7, :lo12:task_a_loop
@@ -612,16 +652,16 @@ slice_check_b:
 slice_check_pc:
     ldr x8, [sp, #256]
     cmp x8, x7
-    b.lo irq_fatal
+    b.lo irq_state_fail
     cmp x8, x9
-    b.hs irq_fatal
+    b.hs irq_state_fail
     ldr x8, [sp, #264]
     mov x7, #0xf0000000
     orr x7, x7, #0x3ff
     and x8, x8, x7
     add x10, x10, #0x340
     cmp x8, x10
-    b.ne irq_fatal
+    b.ne irq_state_fail
     adrp x5, SLICE_COUNTS
     add x5, x5, :lo12:SLICE_COUNTS
     ldr x6, [sp, #152]
@@ -637,7 +677,7 @@ slice_check_pc:
     add x6, x6, #1
     str x6, [x5]
     cmp x6, #2
-    b.hi irq_fatal
+    b.hi irq_schedule_fail
     eor x2, x2, #1
     str x2, [x0]
     cmp x6, #2
@@ -653,7 +693,7 @@ slice_check_pc:
     isb
     mrs x6, TTBR0_EL1
     cmp x5, x6
-    b.ne irq_fatal
+    b.ne irq_schedule_fail
     adrp x5, SLICE_DELTA
     add x5, x5, :lo12:SLICE_DELTA
     ldr x5, [x5]
@@ -679,7 +719,7 @@ slice_return_kernel:
     isb
     mrs x6, TTBR0_EL1
     cmp x5, x6
-    b.ne irq_fatal
+    b.ne irq_schedule_fail
     add sp, sp, #272
     adrp x9, KERNEL_CONTEXT
     add x9, x9, :lo12:KERNEL_CONTEXT
@@ -705,22 +745,22 @@ select_ready:
     ldr x2, [x1]
     cbz x2, select_empty
     cmp x2, #2
-    b.hi irq_fatal
+    b.hi irq_schedule_fail
     adrp x3, READY_HEAD
     add x3, x3, :lo12:READY_HEAD
     ldr x4, [x3]
     cmp x4, #1
-    b.hi irq_fatal
+    b.hi irq_schedule_fail
     adrp x5, READY_QUEUE
     add x5, x5, :lo12:READY_QUEUE
     ldr x0, [x5, x4, lsl #3]
     cmp x0, #2
-    b.hs irq_fatal
+    b.hs irq_schedule_fail
     adrp x5, TASK_STATE
     add x5, x5, :lo12:TASK_STATE
     ldr x6, [x5, x0, lsl #3]
     cmp x6, #1
-    b.ne irq_fatal
+    b.ne irq_schedule_fail
     mov x6, #2
     str x6, [x5, x0, lsl #3]
     eor x4, x4, #1
@@ -731,10 +771,24 @@ select_ready:
 select_empty:
     mov x0, #2
     ret
+irq_entry_fail:
+    mov x1, #1
+    b irq_report_frame
+irq_register_fail:
+    mov x1, #2
+    b irq_report_frame
+irq_state_fail:
+    mov x1, #3
+    b irq_report_frame
+irq_schedule_fail:
+    mov x1, #4
+irq_report_frame:
+    msr daifset, #0xf
+    mov x0, sp
+    b irq_report
 irq_fatal:
     msr daifset, #0xf
-2:  wfe
-    b 2b
+    b unexpected_vector
 
     .global start_slice
 start_slice:
@@ -1252,6 +1306,19 @@ task_b_init_end:
     svc #0x101
     svc #0x107
     svc #0x110
+    // Compare and acknowledge this task's denied save request (ID 5, code 4).
+    ldr x2, [x0, #16]
+    cbz x2, 13f
+    sub x3, x2, #5
+    cbnz x3, el0_failure
+    str x2, [x0, #32]
+    ldr x2, [x0, #24]
+    eor x3, x2, #4
+    cbnz x3, el0_failure
+    str x2, [x0, #40]
+13: ldr x2, [x0]
+    mov x3, #0
+    svc #0x111
     svc #0x103
     // Each task compares the delivered ID with its next expected ID and
     // the result with success=1 before echoing both to the kernel.
