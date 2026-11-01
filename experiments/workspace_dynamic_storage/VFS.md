@@ -10,9 +10,17 @@ each, and at most 800 bytes in total. `file_put` accepts UTF-8 strings;
 bytes can be stored; reads return hexadecimal bytes. These limits are not a full filesystem
 and requests can also fail if the shared 3,584-byte snapshot payload is full.
 
-`init.bin` is a reserved boot-image name: `file_delete` refuses its removal,
-so a confirmed deletion cannot be silently undone by boot-time seeding. A PUT
-can still replace its bytes; the loader admits only the exact approved image.
+`init.bin` and `next.bin` are reserved boot-image names: `file_delete` refuses
+their removal, so a confirmed deletion cannot be silently undone by boot-time
+seeding. A PUT can still replace their bytes. The loader validates a narrow ELF
+format but does not authenticate code; a conforming replacement may execute.
+The MCP serial interface is unauthenticated, so a client with socket access
+can write a conforming ELF and have it run automatically in the guest. Run it
+only in an isolated QEMU VM without networking, host directory sharing, or
+physical devices. These experimental boundaries are not a production sandbox.
+This is not a general program loader: the two demo tasks are also subject to
+fixed register sentinels and expected SVC instruction locations. A structurally
+valid ELF that does not obey these fixture rules can halt or hang the guest.
 
 `file_put` and `file_delete` prepare a bounded candidate catalog, write it with the current
 workspace to the inactive VirtIO slot, flushes, commits, flushes, and verifies
@@ -44,15 +52,25 @@ checks the length and every returned byte before its fixed exit. The request
 name is limited to 16 UTF-8 bytes. This task reuses logical actor slot 0: it
 does not have independent identity or authority and does not establish a
 general file API, third user, access-control model, or process isolation.
+After this task exits and its code/data pages have been removed and scrubbed,
+the service loads `next.bin` as a second ELF image into a fresh admission using
+the same logical actor slot. That program writes a private marker and exits;
+the guest verifies its pages are reclaimed independently. The scenario checks
+two distinct file contents and both completions, not concurrent execution or
+independent identities.
 
-At boot, after a blank or valid restore, the service creates the approved
-`init.bin` in the in-memory catalog only when it is absent. The normal workspace
-save persists it with the other files. A present file is never silently replaced.
-The internal loader path borrows the file's bytes only if nonempty and at most
-512 bytes, then the loader separately validates and maps the approved program;
-this size check alone does not authenticate code. A full catalog can prevent
-seeding. The serial endpoint is unauthenticated, and the code identity check is
-limited to the approved fixture rather than a general signing system.
+At boot, after a blank or valid restore, the service creates the two demo ELF
+files in the in-memory catalog only when absent. The exact previously published
+raw `init.bin` is the sole migration exception: it is replaced in memory by its
+ELF equivalent, and the next normal workspace save persists the migration.
+Unknown existing bytes are never silently replaced. `storage_status` reports
+whether each program was present, seeded, migrated, or could not be seeded.
+The internal loader borrows each file only if nonempty and at most 512 bytes,
+then separately validates and maps it. A full catalog can prevent seeding.
+The serial endpoint is unauthenticated, and there is no code signature check.
+The accepted subset is ELF64 little-endian AArch64 ET_EXEC, with one fully
+file-backed read/execute segment at the guest's fixed virtual code address;
+there is no dynamic linker, relocation, writable segment, or general ELF ABI.
 
 The integrated QEMU scenario includes the task's PUT and GET, writes and reads
 `notes.txt` through MCP, creates, lists and deletes another file, verifies

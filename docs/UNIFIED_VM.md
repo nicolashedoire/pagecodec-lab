@@ -1,10 +1,11 @@
 # Running the integrated system guest
 
 `workspace_dynamic_storage` is the current integration guest: it boots one
-Rust image with two fixed EL0 tasks, a third task loaded from one exact approved
-disk image, virtual devices, a graphical demonstration, MCP and a synthetic
-workspace saved on a VirtIO disk. It is not a general OS, a general application
-loader, or a native Apple Silicon boot image. See its
+Rust image with two fixed EL0 tasks and two programs loaded from a restricted
+ELF subset on a virtual disk, virtual devices, a graphical demonstration, MCP
+and a synthetic workspace saved on a VirtIO disk. Programs must obey this
+fixture's ABI or they can halt or hang the guest. It is not a general OS,
+general application loader, or native Apple Silicon boot image. See its
 [README](../experiments/workspace_dynamic_storage/README.md) for the precise
 capabilities and limitations.
 
@@ -22,8 +23,8 @@ Use `--display gtk` on a QEMU installation with GTK, or `--display none` for a
 headless run. The launcher creates a private temporary socket directory and a
 disposable virtual disk. It prints the socket path for local MCP access. The
 guest's subset of MCP is unauthenticated and must not be exposed to a network or
-untrusted local users. It accepts synthetic requests only, with no guest network
-or host directory sharing.
+untrusted local users. MCP can modify the ELF files the guest executes; use it
+only for isolated experiments. The guest has no network or host directory sharing.
 
 To retain the **synthetic** disk between runs, add `--create-image /path/new.raw`
 on the first run. It refuses to overwrite an existing path. On later runs use

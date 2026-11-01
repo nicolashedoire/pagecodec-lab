@@ -2,6 +2,7 @@
 #![no_main]
 mod mmu;
 mod el0;
+mod loader;
 mod vfs;
 extern crate alloc;
 use alloc::format;
@@ -442,7 +443,7 @@ fn put_file<T:Transport>(disk:&mut VirtIOBlk<VmHal,T>,doc:&DocumentDemo,files:&m
 fn delete_file<T:Transport>(disk:&mut VirtIOBlk<VmHal,T>,doc:&DocumentDemo,files:&mut vfs::Files,name:&str)->Result<(usize,u64),&'static str> {
     // Keep the boot image name reserved: deleting it and reseeding it on the
     // next boot would violate the persistent-delete contract.
-    if name=="init.bin" {return Err("reserved file")}
+    if matches!(name,"init.bin"|"next.bin") {return Err("reserved file")}
     let mut next=files.clone();
     next.remove(name)?;
     let commit=save_snapshot(disk,doc,&next)?;
@@ -529,12 +530,21 @@ pub extern "C" fn graph_main() -> ! {
             Err(_)=>restore_status="invalid",
         }
     }
-    // Seed only an absent initial file after a valid or blank restore. The
-    // normal task save persists it; never replace a present altered program.
-    if matches!(restore_status,"blank"|"restored") && matches!(files.get("init.bin"),Err("file not found")) {
-        let _=files.put("init.bin",el0::approved_program());
+    // Seed absent programs and migrate only the exact previously published
+    // raw image. Unknown existing bytes are never silently replaced.
+    let mut program_bootstrap=["unavailable";2];
+    if matches!(restore_status,"blank"|"restored") {
+        let migrate=files.get("init.bin").is_ok_and(|p|p==el0::legacy_program());
+        for (which,name) in [(0,"init.bin"),(1,"next.bin")] {
+            let absent=matches!(files.get(name),Err("file not found"));
+            if absent || (which==0 && migrate) {
+                program_bootstrap[which]=if let Some(program)=el0::approved_program(which) {
+                    if files.put(name,&program).is_ok() {if absent {"seeded"}else{"migrated-raw"}} else {"capacity-error"}
+                } else {"image-error"};
+            } else {program_bootstrap[which]="present"}
+        }
     }
-    let mut storage_state=json!({"restore":restore_status,"restore_generation":restore_generation,"restore_slots":restore_slots,"before":restore_before,"after":document.snapshot(),"save":null});
+    let mut storage_state=json!({"restore":restore_status,"restore_generation":restore_generation,"restore_slots":restore_slots,"program_bootstrap":program_bootstrap,"before":restore_before,"after":document.snapshot(),"save":null});
     let mut hclick = false;
     let mut interaction=Interaction::default();
     let mut pending_move: Option<(Value,u32,u32)> = None;
@@ -561,7 +571,7 @@ pub extern "C" fn graph_main() -> ! {
     let mut service_polls=SERVICE_POLLS;
     loop {
         if service_polls>=SERVICE_POLLS {
-            el0::run_slice(files.read_for_load("init.bin",512).ok());
+            el0::run_slice([files.read_for_load("init.bin",512).ok(),files.read_for_load("next.bin",512).ok()]);
             // No EL0 task runs while this sole service owns the document.
             // Two entries at most can have been queued before this slice ends.
             for _ in 0..2 {
