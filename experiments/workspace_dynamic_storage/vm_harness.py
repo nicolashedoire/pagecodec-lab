@@ -57,7 +57,7 @@ class Guest:
             self.tools=names
             if not {'ipc_status','document_snapshot','document_merge','pointer_state','interaction_state','move_ai','click_ai','mmu_status','el0_status'}.issubset(names):raise RuntimeError('missing MCP tools')
             status=self.call('mmu_status',{})
-            expected={'enabled':True,'caches':False,'mapping':'identity','image':'normal-nc','virtio':'device-xn','range_checks':'full','kernel_el0':'samples-denied','user_code':'ro','user_stack':'private-alias-rw','address_spaces':2,'asids':[1,2],'gic':'device-xn'}
+            expected={'enabled':True,'caches':False,'mapping':'identity','image':'normal-nc','virtio':'device-xn','range_checks':'full','kernel_el0':'samples-denied','user_code':'ro','user_stack':'private-alias-rw','address_spaces':3,'asids':[1,2,3],'gic':'device-xn'}
             if status!=expected:raise RuntimeError('MMU validation status mismatch: '+str(status))
             preempt=self.call('el0_status',{})
             if not preempt.get('validated') or preempt.get('ticks')!=8 or preempt.get('el')!='EL0' or preempt.get('timer')!='disabled' or preempt.get('interrupts')!='masked':raise RuntimeError('EL0 probe status invalid')

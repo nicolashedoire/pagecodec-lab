@@ -4,7 +4,7 @@ use serde_json::{json,Value};
 use core::{arch::{asm,global_asm},ptr::{addr_of,addr_of_mut,read_volatile,write_volatile}};
 // This is still the exact number of real contexts and address spaces.
 // Widen only together with tables, resources, ownership and admission.
-const PROCESS_CAPACITY:usize=2;
+const PROCESS_CAPACITY:usize=3;
 pub const FRAME_CAPACITY:usize=9;
 const PAGE:usize=4096;
 const GICD:usize=0x0800_0000;const GICC:usize=0x0801_0000;
@@ -16,13 +16,13 @@ const EMPTY:Frame=Frame{regs:[0;31],sp:0,elr:0,spsr:0};
 // Frames are exclusively assigned to task addresses and zeroed before mapping.
 #[link_section=".userstack"] static mut USER_FRAMES:[UserStack;FRAME_CAPACITY]=[const {UserStack([0;PAGE])};FRAME_CAPACITY];
 static mut FRAME_BITMAP:u16=0;
-static mut TASK_FRAMES:[usize;2]=[0;2];
+static mut TASK_FRAMES:[usize;3]=[0;3];
 static mut CROSS_READ_DENIED:[bool;2]=[false;2];
 static mut KERNEL_DATA:u64=0x0123_4567_89ab_cdef;
-static mut A_FRAME:Frame=EMPTY;static mut B_FRAME:Frame=EMPTY;
-#[no_mangle] static mut SAVED:[u64;2]=[0;2];
+static mut A_FRAME:Frame=EMPTY;static mut B_FRAME:Frame=EMPTY;static mut C_FRAME:Frame=EMPTY;
+#[no_mangle] static mut SAVED:[u64;3]=[0;3];
 #[no_mangle] static mut CURRENT:u64=0;
-#[no_mangle] static mut TASK_STATE:[u64;2]=[0;2];
+#[no_mangle] static mut TASK_STATE:[u64;3]=[0,0,3];
 #[no_mangle] static mut READY_QUEUE:[u64;2]=[0;2];
 #[no_mangle] static mut READY_HEAD:u64=0;
 #[no_mangle] static mut READY_LEN:u64=0;
@@ -65,7 +65,7 @@ static mut COMPLETIONS_REVOKED:[bool;4]=[false;4];
 static mut STALE_RESPONSE_BLOCKED:bool=false;
 // A slot identifies an address space, not a task lifetime. Kernel-assigned
 // nonzero generations distinguish later admissions into the same slot.
-static mut TASK_INCARNATIONS:[u64;2]=[1,2];
+static mut TASK_INCARNATIONS:[u64;3]=[1,2,0];
 static mut NEXT_INCARNATION:u64=3;
 static mut IMAGE_INCARNATIONS:[u64;4]=[0;4];
 static mut STALE_TOKEN:Option<CompletionToken>=None;
@@ -82,34 +82,34 @@ static mut PAIR_MODE:u8=0;
 static mut PAIR_STARTED:bool=false;
 static mut PAIR_RUN_ID:u64=0;
 // Tokens alone are retained for a delayed-reply rejection check; never payloads.
-static mut PAIR_LAST_TOKENS:[Option<CompletionToken>;2]=[None;2];
-static mut PAIR_STALE_TOKENS:[Option<CompletionToken>;2]=[None;2];
-static mut PAIR_STALE_REJECTED:[bool;2]=[false;2];
-static mut PAIR_OLD_INCARNATION_REJECTED:[bool;2]=[false;2];
+static mut PAIR_LAST_TOKENS:[Option<CompletionToken>;3]=[None;3];
+static mut PAIR_STALE_TOKENS:[Option<CompletionToken>;3]=[None;3];
+static mut PAIR_STALE_REJECTED:[bool;3]=[false;3];
+static mut PAIR_OLD_INCARNATION_REJECTED:[bool;3]=[false;3];
 static mut PAIR_DONE:bool=false;
-static mut PAIR_INCARNATIONS:[u64;2]=[0;2];
-static mut PAIR_CODE_FRAMES:[usize;2]=[0;2];
-static mut PAIR_STACK_FRAMES:[usize;2]=[0;2];
-static mut PAIR_STACK_SCRUBBED:[bool;2]=[false;2];
-static mut PAIR_RW_INIT_VERIFIED:[bool;2]=[false;2];
-static mut PAIR_TWO_SEGMENT:[bool;2]=[false;2];
-static mut PAIR_CODE_LEN:[u64;2]=[0;2];
-static mut PAIR_IRQS:[u64;2]=[0;2];
+static mut PAIR_INCARNATIONS:[u64;3]=[0;3];
+static mut PAIR_CODE_FRAMES:[usize;3]=[0;3];
+static mut PAIR_STACK_FRAMES:[usize;3]=[0;3];
+static mut PAIR_STACK_SCRUBBED:[bool;3]=[false;3];
+static mut PAIR_RW_INIT_VERIFIED:[bool;3]=[false;3];
+static mut PAIR_TWO_SEGMENT:[bool;3]=[false;3];
+static mut PAIR_CODE_LEN:[u64;3]=[0;3];
+static mut PAIR_IRQS:[u64;3]=[0;3];
 static mut PAIR_BARRIER_SEEN:[bool;2]=[false;2];
 static mut PAIR_BARRIER_OPEN:bool=false;
 // 0 running, 1 explicit exit, 2 fault or unsupported SVC, 3 IRQ budget,
 // 4 stopped by the EL1 service (not an EL0 exit).
-static mut PAIR_OUTCOMES:[u8;2]=[0;2];
+static mut PAIR_OUTCOMES:[u8;3]=[0;3];
 static mut PAIR_LIVE_MARKERS:[u64;2]=[0;2];
-static mut PAIR_IO_SUBMITTED:[u64;2]=[0;2];
-static mut PAIR_IO_COMPLETED:[u64;2]=[0;2];
-static mut PAIR_IO_CANCELLED:[u64;2]=[0;2];
-static mut PAIR_EXIT_CODES:[Option<u64>;2]=[None;2];
-static mut PAIR_MARKERS:[u64;2]=[0;2];
-static mut PAIR_DATA_SCRUBBED:[bool;2]=[false;2];
-static mut PAIR_CODE_SCRUBBED:[bool;2]=[false;2];
+static mut PAIR_IO_SUBMITTED:[u64;3]=[0;3];
+static mut PAIR_IO_COMPLETED:[u64;3]=[0;3];
+static mut PAIR_IO_CANCELLED:[u64;3]=[0;3];
+static mut PAIR_EXIT_CODES:[Option<u64>;3]=[None;3];
+static mut PAIR_MARKERS:[u64;3]=[0;3];
+static mut PAIR_DATA_SCRUBBED:[bool;3]=[false;3];
+static mut PAIR_CODE_SCRUBBED:[bool;3]=[false;3];
 static mut PAIR_MAPPINGS_VERIFIED:bool=false;
-static mut SLOT_MAPPINGS_VERIFIED:[bool;2]=[false;2];
+static mut SLOT_MAPPINGS_VERIFIED:[bool;3]=[false;3];
 static mut CODE_FRAME:usize=0;
 static mut CODE_ALIAS_REMOVED:bool=false;
 static mut CODE_FRAME_SCRUBBED:bool=false;
@@ -119,8 +119,8 @@ static mut IMAGE_LOADED:bool=false;
 #[no_mangle] static mut SPAWN_TICKS:u64=0;
 // Diagnostic for the synthetic test: it does not affect scheduling.
 #[no_mangle] static mut SPAWN_IRQ_X19_MAX_SEEN:bool=false;
-#[no_mangle] static mut SLICE_COUNTS:[u64;2]=[0;2];
-#[no_mangle] static mut USER_TOPS:[u64;2]=[0;2];
+#[no_mangle] static mut SLICE_COUNTS:[u64;3]=[0;3];
+#[no_mangle] static mut USER_TOPS:[u64;3]=[0;3];
 #[no_mangle] static mut SLICE_DELTA:u64=0;
 // Single CPU, EL1 service executes only between slices; IRQs are masked on
 // exception entry. The request queue and completions are fixed-size.
@@ -132,8 +132,8 @@ pub struct Request {pub actor:usize,pub incarnation:u64,pub id:u64,pub save:bool
 impl Request {fn token(&self)->CompletionToken {CompletionToken{actor:self.actor,incarnation:self.incarnation,id:self.id}}}
 #[derive(Clone,Copy,PartialEq,Eq)] struct Completion {actor:usize,incarnation:u64,id:u64,popped:bool,applied:bool,success:bool,oversize:bool,invalid_name:bool,access_denied:bool,write_errno:i64,delivered:bool,consumed:bool,data:[u8;32],data_len:usize}
 const EMPTY_COMPLETION:Completion=Completion{actor:0,incarnation:0,id:0,popped:false,applied:false,success:false,oversize:false,invalid_name:false,access_denied:false,write_errno:0,delivered:false,consumed:false,data:[0;32],data_len:0};
-struct Ipc {queue:[Option<Request>;2],head:usize,len:usize,completions:[Completion;9],accepted:[u64;8],accepted_len:usize,applied:[u64;8],applied_len:usize,consumed:[u64;8],consumed_len:usize,full:bool,full_consumed:bool,range:[bool;2],overflow:[bool;2],duplicate:[bool;2],utf8:[bool;2],spoof:[bool;2],save_denied:bool,denial_consumed:bool}
-static mut IPC:Ipc=Ipc{queue:[None;2],head:0,len:0,completions:[EMPTY_COMPLETION;9],accepted:[0;8],accepted_len:0,applied:[0;8],applied_len:0,consumed:[0;8],consumed_len:0,full:false,full_consumed:false,range:[false;2],overflow:[false;2],duplicate:[false;2],utf8:[false;2],spoof:[false;2],save_denied:false,denial_consumed:false};
+struct Ipc {queue:[Option<Request>;2],head:usize,len:usize,completions:[Completion;10],accepted:[u64;8],accepted_len:usize,applied:[u64;8],applied_len:usize,consumed:[u64;8],consumed_len:usize,full:bool,full_consumed:bool,range:[bool;2],overflow:[bool;2],duplicate:[bool;2],utf8:[bool;2],spoof:[bool;2],save_denied:bool,denial_consumed:bool}
+static mut IPC:Ipc=Ipc{queue:[None;2],head:0,len:0,completions:[EMPTY_COMPLETION;10],accepted:[0;8],accepted_len:0,applied:[0;8],applied_len:0,consumed:[0;8],consumed_len:0,full:false,full_consumed:false,range:[false;2],overflow:[false;2],duplicate:[false;2],utf8:[false;2],spoof:[false;2],save_denied:false,denial_consumed:false};
 // A loaded process can have one generic file operation in flight. Only copied
 // bytes and offsets within its private page are retained, never Rust borrows.
 #[derive(Clone,Copy,PartialEq,Eq)]
@@ -142,7 +142,7 @@ enum UserRegion {Data,Stack}
 struct UserLocation {region:UserRegion,offset:usize}
 #[derive(Clone,Copy)]
 struct GenericIo {token:CompletionToken,file_op:u8,name:[u8;16],name_len:usize,name_location:UserLocation,dest_location:UserLocation,capacity:usize}
-static mut GENERIC_IO:[Option<GenericIo>;2]=[None;2];
+static mut GENERIC_IO:[Option<GenericIo>;3]=[None;3];
 static mut NEXT_GENERIC_ID:u64=8;
 // Aggregate only; never expose filenames, user addresses or file contents.
 static mut GENERIC_READ_SUBMITTED:u64=0;
@@ -150,7 +150,7 @@ static mut GENERIC_READ_COMPLETED:u64=0;
 static mut GENERIC_WRITE_SUBMITTED:u64=0;
 static mut GENERIC_WRITE_COMPLETED:u64=0;
 fn clear_generic_io(actor:usize) {
- assert!(actor<2);
+ assert!(actor<PROCESS_CAPACITY);
  // Writing `None` alone may leave the old Option payload bytes in memory.
  // Volatile-zero the copied name, offsets and token while the variant is
  // still Some, then clear the discriminant. Single CPU, SVC/service only.
@@ -163,11 +163,11 @@ fn clear_generic_io(actor:usize) {
  unsafe{write_volatile(p,None)};
 }
 fn completion_slot(actor:usize,id:u64)->Option<usize> {
- if actor>=2 {return None}
+ if actor>=PROCESS_CAPACITY {return None}
  match id {1..=7=>Some((id-1) as usize),8.. =>Some(7+actor),_=>None}
 }
 fn incarnation(actor:usize)->u64 {
- assert!(actor<2);
+ assert!(actor<PROCESS_CAPACITY);
  let id=unsafe{read_volatile(addr_of!(TASK_INCARNATIONS).cast::<u64>().add(actor))};
  assert!(id!=0);id
 }
@@ -175,7 +175,7 @@ fn in_page(p:u64,n:usize)->bool {n>0 && p>=super::mmu::ALIAS as u64 && p.checked
 // Capture only a region and offset. The frame and current EL0 mapping are
 // revalidated on each retry, with no guest reference retained across SVCs.
 fn user_location(actor:usize,address:u64,len:usize,write:bool,allow_empty:bool)->Option<UserLocation> {
- if actor>=2 || super::mmu::active_root()!=super::mmu::root(actor) || (len==0 && !allow_empty) {return None}
+ if actor>=PROCESS_CAPACITY || super::mmu::active_root()!=super::mmu::root(actor) || (len==0 && !allow_empty) {return None}
  let end=address.checked_add(u64::try_from(len).ok()?)?;
  for region in [UserRegion::Data,UserRegion::Stack] {
   let (base,frame)=match region {
@@ -267,7 +267,7 @@ fn wake_direct(actor:usize,channel:u64,inc:u64,code:i64) {
   write_volatile(counter,read_volatile(counter).saturating_add(1));
   write_volatile(addr_of_mut!(TASK_STATE).cast::<u64>().add(actor),1);
   let current=read_volatile(addr_of!(CURRENT)) as usize;
-  if current>=2 || !matches!(states[current],1|2) {write_volatile(addr_of_mut!(CURRENT),actor as u64)}
+  if current>=PROCESS_CAPACITY || !matches!(states[current],1|2) {write_volatile(addr_of_mut!(CURRENT),actor as u64)}
  }
 }
 /// Advance deadlines even if no EL0 task is READY. Call only with IRQ masked;
@@ -286,6 +286,7 @@ pub fn poll_direct_timeouts() {
   }
  }
 }
+fn first_two<T:Copy>(values:[T;3])->[T;2] {[values[0],values[1]]}
 fn direct_result(f:&mut Frame,code:i64) {f.regs[0]=code as u64}
 /// Establish exactly one channel between the two current independent tasks.
 /// The boot ID is a public freshness value, not client authentication.
@@ -312,7 +313,7 @@ pub fn bind_direct(a:usize,ai:u64,b:usize,bi:u64,boot:[u8;16])->Result<u64, &'st
 /// Exposes metadata only; message bytes and virtual addresses remain private.
 pub fn direct_status()->Value {
  let c=unsafe{&*addr_of!(DIRECT)};
- json!({"bound":c.bound,"channel_id":c.channel_id,"incarnations":c.incarnations,"queued":c.len,"sent":c.sent,"received":c.received,"dropped":c.dropped,"full_rejections":c.full_rejections,"peer_unbound":c.peer_unbound,"scrubbed":c.scrubbed,"waiting":unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|s|s==4),"wait_count":unsafe{read_volatile(addr_of!(DIRECT_WAIT_COUNT))},"wake_message":unsafe{read_volatile(addr_of!(DIRECT_WAKE_MESSAGE))},"wake_close":unsafe{read_volatile(addr_of!(DIRECT_WAKE_CLOSE))},"wake_timeout":unsafe{read_volatile(addr_of!(DIRECT_WAKE_TIMEOUT))}})
+ json!({"bound":c.bound,"channel_id":c.channel_id,"incarnations":c.incarnations,"queued":c.len,"sent":c.sent,"received":c.received,"dropped":c.dropped,"full_rejections":c.full_rejections,"peer_unbound":c.peer_unbound,"scrubbed":c.scrubbed,"waiting":first_two(unsafe{read_volatile(addr_of!(TASK_STATE))}).map(|s|s==4),"wait_count":unsafe{read_volatile(addr_of!(DIRECT_WAIT_COUNT))},"wake_message":unsafe{read_volatile(addr_of!(DIRECT_WAKE_MESSAGE))},"wake_close":unsafe{read_volatile(addr_of!(DIRECT_WAKE_CLOSE))},"wake_timeout":unsafe{read_volatile(addr_of!(DIRECT_WAKE_TIMEOUT))}})
 }
 fn direct_live(c:&DirectChannel,actor:usize)->bool {
  if actor>=2 || !c.bound || c.channel_id==0 || !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} || unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {return false}
@@ -322,12 +323,14 @@ fn direct_live(c:&DirectChannel,actor:usize)->bool {
   && incarnation(actor)==c.incarnations[actor] && incarnation(peer)==c.incarnations[peer]
 }
 fn direct_peer(f:&mut Frame,actor:usize) {
+ if actor>=2 {direct_result(f,-38);return}
  if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {direct_result(f,-38);return}
  let c=unsafe{&mut *addr_of_mut!(DIRECT)};
  if !direct_live(c,actor) {c.peer_unbound[actor]=c.peer_unbound[actor].saturating_add(1);direct_result(f,-107);return}
  let peer=1-actor;f.regs[0]=peer as u64;f.regs[1]=c.incarnations[peer];f.regs[2]=c.channel_id;
 }
 fn direct_send(f:&mut Frame,actor:usize) {
+ if actor>=2 {direct_result(f,-38);return}
  // Serialize already-expired waits before accepting a new message.
  poll_direct_timeouts();
  if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {direct_result(f,-38);return}
@@ -347,6 +350,7 @@ fn direct_send(f:&mut Frame,actor:usize) {
 // Return 2 to the exception stub only after atomically checking an empty
 // queue and recording a channel+incarnation. IRQs remain masked throughout.
 fn direct_wait(f:&mut Frame,actor:usize,timed:bool)->u64 {
+ if actor>=2 {direct_result(f,-38);return 0}
  if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {direct_result(f,-38);return 0}
  let c=unsafe{&mut *addr_of_mut!(DIRECT)};
  if !direct_live(c,actor) {direct_result(f,-107);return 0}
@@ -374,6 +378,7 @@ fn clear_direct_message(m:&mut DirectMessage) {
  m.sender=0;m.sender_inc=0;m.dest_inc=0;m.channel_id=0;m.len=0;
 }
 fn direct_recv(f:&mut Frame,actor:usize) {
+ if actor>=2 {direct_result(f,-38);return}
  if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {direct_result(f,-38);return}
  let c=unsafe{&mut *addr_of_mut!(DIRECT)};
  if !direct_live(c,actor) {direct_result(f,-107);return}
@@ -421,9 +426,9 @@ fn retire_direct(c:&mut DirectChannel) {
 /// Current two-process identities for the isolated VM Ethernet service.
 pub fn network_identities()->Option<[u64;2]> {
  if !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} || unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {return None}
- let state=unsafe{read_volatile(addr_of!(TASK_STATE))};if !state.iter().all(|s|matches!(*s,1|2|4)) {return None}
+ let state=unsafe{read_volatile(addr_of!(TASK_STATE))};if !state[..2].iter().all(|s|matches!(*s,1|2|4)) {return None}
  let ids=unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS))};
- if ids[0]==0 || ids[1]==0 || ids[0]!=incarnation(0) || ids[1]!=incarnation(1) {return None}Some(ids)
+ if ids[0]==0 || ids[1]==0 || ids[0]!=incarnation(0) || ids[1]!=incarnation(1) {return None}Some([ids[0],ids[1]])
 }
 /// Grant both current independent processes access to the isolated VM link.
 /// The public boot identity is freshness information, not authentication.
@@ -434,7 +439,7 @@ pub fn network_grant_open(a:usize,ai:u64,b:usize,bi:u64,boot:[u8;16])->Result<u6
  let mut daif:u64;let mut timer:u64;unsafe{asm!("mrs {},DAIF",out(reg) daif);asm!("mrs {},CNTV_CTL_EL0",out(reg) timer)}
  if daif&(1<<7)==0 || timer&1!=0 || super::mmu::active_root()!=super::mmu::root(0) {return Err("network grant requires service boundary")}
  let ids=network_identities().ok_or("independent processes not active")?;
- if unsafe{read_volatile(addr_of!(TASK_STATE))}!=[1,1] {return Err("process is not ready")}
+ if unsafe{read_volatile(addr_of!(TASK_STATE))}[..2]!=[1,1] {return Err("process is not ready")}
  if ai==0 || bi==0 || ids[a]!=ai || ids[b]!=bi {return Err("stale process incarnation")}
  super::net::open_grant(ids)
 }
@@ -446,6 +451,7 @@ pub fn network_grant_close(id:u64,boot:[u8;16])->Result<(), &'static str> {
  super::net::close_grant(id)
 }
 fn network_send(f:&mut Frame,actor:usize) {
+ if actor>=2 {direct_result(f,-38);return}
  if !super::net::available() {direct_result(f,-19);return}
  let Some(ids)=network_identities() else{direct_result(f,-107);return};
  let Some(grant)=super::net::grant_for(ids) else{direct_result(f,-13);return};
@@ -456,6 +462,7 @@ fn network_send(f:&mut Frame,actor:usize) {
  if super::net::enqueue(actor,packet) {direct_result(f,0)}else{direct_result(f,-11)}
 }
 fn network_recv(f:&mut Frame,actor:usize) {
+ if actor>=2 {direct_result(f,-38);return}
  if !super::net::available() {direct_result(f,-19);return}
  let Some(ids)=network_identities() else{direct_result(f,-107);return};
  let Some(grant)=super::net::grant_for(ids) else{direct_result(f,-13);return};
@@ -485,7 +492,7 @@ fn descriptor(actor:usize,index:usize,id:u64)->Option<Request> {
 }
 fn submit(state:&mut Ipc,req:Request)->bool {
  let Some(i)=completion_slot(req.actor,req.id) else{return false};
- if req.actor>=2 || req.incarnation!=incarnation(req.actor) || state.completions[i].id!=0 || state.len==2 || (req.id<=7 && state.accepted_len>=state.accepted.len()) {return false}
+ if req.actor>=PROCESS_CAPACITY || req.incarnation!=incarnation(req.actor) || state.completions[i].id!=0 || state.len==2 || (req.id<=7 && state.accepted_len>=state.accepted.len()) {return false}
  let slot=(state.head+state.len)%2;state.queue[slot]=Some(req);state.len+=1;
  state.completions[i]=Completion{actor:req.actor,incarnation:req.incarnation,id:req.id,..EMPTY_COMPLETION};
  if req.id<=7 {state.accepted[state.accepted_len]=req.id;state.accepted_len+=1;}true
@@ -502,7 +509,7 @@ pub fn pop_request()->Option<Request> {
 /// Check a popped request before a service effect. The service is synchronous
 /// on one CPU; this is not an atomic lease across future async/SMP execution.
 pub fn request_is_live(request:&Request)->bool {
- if request.actor>=2 || request.incarnation!=incarnation(request.actor) {return false}
+ if request.actor>=PROCESS_CAPACITY || request.incarnation!=incarnation(request.actor) {return false}
  let state=unsafe{read_volatile(addr_of!(TASK_STATE).cast::<u64>().add(request.actor))};
  if !matches!(state,1|2|4) {return false}
  let s=unsafe{&*addr_of!(IPC)};
@@ -512,7 +519,7 @@ pub fn request_is_live(request:&Request)->bool {
 fn apply_completion(s:&mut Ipc,token:CompletionToken,success:bool,data:&[u8])->bool {
  // Replay only a token captured from an actual earlier incarnation, while
  // the new incarnation's request is popped and awaiting a service response.
- if token.actor<2 && token.id>=8 && unsafe{read_volatile(addr_of!(PAIR_ACTIVE))}
+ if token.actor<PROCESS_CAPACITY && token.id>=8 && unsafe{read_volatile(addr_of!(PAIR_ACTIVE))}
   && token.incarnation==incarnation(token.actor) {
   let p=unsafe{addr_of_mut!(PAIR_STALE_TOKENS).cast::<Option<CompletionToken>>().add(token.actor)};
   let flag=unsafe{addr_of_mut!(PAIR_STALE_REJECTED).cast::<bool>().add(token.actor)};
@@ -532,7 +539,7 @@ fn apply_completion(s:&mut Ipc,token:CompletionToken,success:bool,data:&[u8])->b
  apply_completion_inner(s,token,success,data)
 }
 fn apply_completion_inner(s:&mut Ipc,token:CompletionToken,success:bool,data:&[u8])->bool {
- if token.actor>=2 || token.incarnation!=incarnation(token.actor) || data.len()>32 {return false}
+ if token.actor>=PROCESS_CAPACITY || token.incarnation!=incarnation(token.actor) || data.len()>32 {return false}
  let Some(i)=completion_slot(token.actor,token.id) else{return false};let c=&mut s.completions[i];
  if c.actor!=token.actor || c.incarnation!=token.incarnation || c.id!=token.id || !c.popped || c.applied || (token.id<=7 && s.applied_len>=s.applied.len()) {return false}
  c.data[..data.len()].copy_from_slice(data);c.data_len=data.len();
@@ -584,7 +591,7 @@ pub fn complete_file_write_error(request:&Request,error:WriteError)->bool {
 /// Historical name: the owner enforces the experimental per-actor namespace
 /// in both single and pair modes, after checking request liveness.
 pub fn is_pair_request(request:&Request)->bool {
- request.actor<2 && request.id>=8 && unsafe{read_volatile(addr_of!(PAIR_ACTIVE))}
+ request.actor<PROCESS_CAPACITY && request.id>=8 && unsafe{read_volatile(addr_of!(PAIR_ACTIVE))}
   && unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS).cast::<u64>().add(request.actor))}==request.incarnation
 }
 pub fn complete_file_access_denied(request:&Request)->bool {
@@ -717,14 +724,14 @@ extern "C" fn user_bad_pc() {
 #[no_mangle]
 extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
  let f=unsafe{&mut *frame};let actor=unsafe{read_volatile(addr_of!(CURRENT))} as usize;
- if actor>=2 || super::mmu::active_root()!=super::mmu::root(actor) || f.spsr&0xf!=0 {halt()}
+ if actor>=PROCESS_CAPACITY || super::mmu::active_root()!=super::mmu::root(actor) || f.spsr&0xf!=0 {halt()}
  if unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} {
   let len=unsafe{read_volatile(addr_of!(PAIR_CODE_LEN).cast::<u64>().add(actor))};
   let lo=super::mmu::USER_CODE as u64;
   let valid=esr>>26==0x15 && esr&(1<<25)!=0 && f.elr>lo && f.elr<=lo+len && f.elr&3==0;
   if !valid {unsafe{write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(actor),2)};return 1}
   match esr&0xffff {
-   0x150=>{if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=2 {f.regs[0]=(-38i64) as u64;return 0};unsafe{write_volatile(addr_of_mut!(PAIR_BARRIER_SEEN).cast::<bool>().add(actor),true)};let counts=unsafe{read_volatile(addr_of!(PAIR_IRQS))};let seen=unsafe{read_volatile(addr_of!(PAIR_BARRIER_SEEN))};let frames=unsafe{read_volatile(addr_of!(TASK_FRAMES))};let live=if frames.iter().all(|p|*p!=0) {unsafe{[read_volatile(frames[0] as *const u64),read_volatile(frames[1] as *const u64)]}} else {[0;2]};if counts[0]>0 && counts[1]>0 && seen==[true,true] && frames.iter().all(|p|*p!=0) {unsafe{write_volatile(addr_of_mut!(PAIR_LIVE_MARKERS),live);write_volatile(addr_of_mut!(PAIR_BARRIER_OPEN),true)}};f.regs[0]=if unsafe{read_volatile(addr_of!(PAIR_BARRIER_OPEN))} {0} else {(-11i64) as u64};return 0},
+   0x150=>{if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=2 {f.regs[0]=(-38i64) as u64;return 0};unsafe{write_volatile(addr_of_mut!(PAIR_BARRIER_SEEN).cast::<bool>().add(actor),true)};let counts=unsafe{read_volatile(addr_of!(PAIR_IRQS))};let seen=unsafe{read_volatile(addr_of!(PAIR_BARRIER_SEEN))};let frames=unsafe{read_volatile(addr_of!(TASK_FRAMES))};let live=if frames[..2].iter().all(|p|*p!=0) {unsafe{[read_volatile(frames[0] as *const u64),read_volatile(frames[1] as *const u64)]}} else {[0;2]};if counts[0]>0 && counts[1]>0 && seen==[true,true] && frames[..2].iter().all(|p|*p!=0) {unsafe{write_volatile(addr_of_mut!(PAIR_LIVE_MARKERS),live);write_volatile(addr_of_mut!(PAIR_BARRIER_OPEN),true)}};f.regs[0]=if unsafe{read_volatile(addr_of!(PAIR_BARRIER_OPEN))} {0} else {(-11i64) as u64};return 0},
    0x170=>{network_send(f,actor);return 0},
    0x171=>{network_recv(f,actor);return 0},
    0x160=>{direct_peer(f,actor);return 0},
@@ -924,7 +931,7 @@ pub fn private_stacks()->(usize,usize) {
  (task_frame(0),task_frame(1))
 }
 fn allocate_task_frame(actor:usize)->usize {
- check(actor<2 && unsafe{read_volatile(addr_of!(TASK_FRAMES).cast::<usize>().add(actor))}==0,"task already owns a frame");
+ check(actor<PROCESS_CAPACITY && unsafe{read_volatile(addr_of!(TASK_FRAMES).cast::<usize>().add(actor))}==0,"task already owns a frame");
  let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
  let slot=(0..FRAME_CAPACITY).find(|i|used&(1<<i)==0).unwrap_or_else(||halt());
  let frame=unsafe{addr_of_mut!(USER_FRAMES).cast::<UserStack>().add(slot)} as *mut u8;
@@ -934,13 +941,13 @@ fn allocate_task_frame(actor:usize)->usize {
  frame as usize
 }
 fn task_frame(actor:usize)->usize {
- check(actor<2,"frame actor");
+ check(actor<PROCESS_CAPACITY,"frame actor");
  let frame=unsafe{read_volatile(addr_of!(TASK_FRAMES).cast::<usize>().add(actor))};
  check(frame!=0,"frame uninitialized");frame
 }
 fn frame(actor:u64,sp:usize,pc:usize)->Frame {
  let mut f=EMPTY;for i in 0..31 {f.regs[i]=1000+actor*100+i as u64;}
- f.regs[0]=super::mmu::ALIAS as u64;f.regs[1]=if actor==0 {0xa1a1}else{0xb2b2};f.regs[2]=0;f.regs[3]=0;f.regs[4]=0;
+ f.regs[0]=super::mmu::ALIAS as u64;f.regs[1]=match actor {0=>0xa1a1,1=>0xb2b2,_=>0xc3c3};f.regs[2]=0;f.regs[3]=0;f.regs[4]=0;
  f.regs[19]=0;f.sp=sp as u64;f.elr=pc as u64;
  f.spsr=if actor==0 {0xa000_0340}else{0x5000_0340};f
 }
@@ -979,7 +986,7 @@ pub fn start()->! {
  unsafe {
   addr_of_mut!(A_FRAME).write(frame(0,super::mmu::ALIAS+PAGE,addr_of!(task_a_loop) as usize));addr_of_mut!(B_FRAME).write(frame(1,super::mmu::ALIAS+PAGE,addr_of!(task_b_loop) as usize));
   addr_of_mut!(USER_TOPS).cast::<u64>().write((super::mmu::ALIAS+PAGE) as u64);addr_of_mut!(USER_TOPS).cast::<u64>().add(1).write((super::mmu::ALIAS+PAGE) as u64);
-  addr_of_mut!(SAVED).cast::<u64>().write(addr_of!(A_FRAME) as u64);addr_of_mut!(SAVED).cast::<u64>().add(1).write(addr_of!(B_FRAME) as u64);
+  addr_of_mut!(SAVED).cast::<u64>().write(addr_of!(A_FRAME) as u64);addr_of_mut!(SAVED).cast::<u64>().add(1).write(addr_of!(B_FRAME) as u64);addr_of_mut!(SAVED).cast::<u64>().add(2).write(addr_of!(C_FRAME) as u64);
   addr_of_mut!(TASK_STATE).cast::<u64>().write(2);addr_of_mut!(TASK_STATE).cast::<u64>().add(1).write(1);
   addr_of_mut!(READY_QUEUE).cast::<u64>().write(1);addr_of_mut!(READY_HEAD).write(0);addr_of_mut!(READY_LEN).write(1);addr_of_mut!(DELTA).write(delta);
   write_volatile((GICD+0x000) as *mut u32,0);write_volatile((GICC+0x000) as *mut u32,0);
@@ -1041,10 +1048,10 @@ fn external_admission_ready()->bool {
  let fixture_policy=unsafe{read_volatile(addr_of!(IMAGE_COUNT))}>=4 || unsafe{read_volatile(addr_of!(FIXTURE_PAUSE_REQUESTED))};
  fixture_policy && unsafe{read_volatile(addr_of!(INITIAL_TASKS_RECLAIMED))}
   && !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} && !unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))}
-  && unsafe{read_volatile(addr_of!(TASK_STATE))}==[3,3] && unsafe{read_volatile(addr_of!(FRAME_BITMAP))}==0
-  && unsafe{read_volatile(addr_of!(TASK_FRAMES))}==[0,0] && unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES))}==[0,0] && unsafe{read_volatile(addr_of!(PAIR_STACK_FRAMES))}==[0,0]
+  && unsafe{read_volatile(addr_of!(TASK_STATE))}==[3,3,3] && unsafe{read_volatile(addr_of!(FRAME_BITMAP))}==0
+  && unsafe{read_volatile(addr_of!(TASK_FRAMES))}==[0,0,0] && unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES))}==[0,0,0] && unsafe{read_volatile(addr_of!(PAIR_STACK_FRAMES))}==[0,0,0]
   && unsafe{read_volatile(addr_of!(GENERIC_IO))}.iter().all(Option::is_none)
-  && ipc.full_consumed && ipc.len==0 && ipc.completions[7..9].iter().all(|c|c.id==0)
+  && ipc.full_consumed && ipc.len==0 && ipc.completions[7..10].iter().all(|c|c.id==0)
   && super::mmu::active_root()==super::mmu::root(0)
 }
 pub fn fixture_status()->Value {json!({
@@ -1090,24 +1097,24 @@ fn start_programs(a:&[u8],b:Option<&[u8]>)->Result<(), &'static str> {
   write_volatile(addr_of_mut!(A_FRAME),frame(0,super::mmu::ALIAS+PAGE,super::mmu::USER_CODE+images[0].as_ref().unwrap_or_else(||halt()).entry_offset));
   if let Some(image)=images[1].as_ref() {write_volatile(addr_of_mut!(B_FRAME),frame(1,super::mmu::ALIAS+PAGE,super::mmu::USER_CODE+image.entry_offset))}
   write_volatile(addr_of_mut!(PAIR_STALE_TOKENS),read_volatile(addr_of!(PAIR_LAST_TOKENS)));
-  write_volatile(addr_of_mut!(PAIR_LAST_TOKENS),[None;2]);
-  write_volatile(addr_of_mut!(PAIR_STALE_REJECTED),[false;2]);write_volatile(addr_of_mut!(PAIR_OLD_INCARNATION_REJECTED),[false;2]);
-  write_volatile(addr_of_mut!(PAIR_IRQS),[0;2]);
+  write_volatile(addr_of_mut!(PAIR_LAST_TOKENS),[None;3]);
+  write_volatile(addr_of_mut!(PAIR_STALE_REJECTED),[false;3]);write_volatile(addr_of_mut!(PAIR_OLD_INCARNATION_REJECTED),[false;3]);
+  write_volatile(addr_of_mut!(PAIR_IRQS),[0;3]);
   write_volatile(addr_of_mut!(PAIR_BARRIER_SEEN),[false;2]);write_volatile(addr_of_mut!(PAIR_BARRIER_OPEN),false);
-  write_volatile(addr_of_mut!(PAIR_OUTCOMES),[0;2]);write_volatile(addr_of_mut!(PAIR_LIVE_MARKERS),[0;2]);
-  write_volatile(addr_of_mut!(PAIR_IO_SUBMITTED),[0;2]);write_volatile(addr_of_mut!(PAIR_IO_COMPLETED),[0;2]);write_volatile(addr_of_mut!(PAIR_IO_CANCELLED),[0;2]);
-  write_volatile(addr_of_mut!(PAIR_EXIT_CODES),[None;2]);write_volatile(addr_of_mut!(PAIR_MARKERS),[0;2]);
-  write_volatile(addr_of_mut!(PAIR_DATA_SCRUBBED),[false;2]);write_volatile(addr_of_mut!(PAIR_CODE_SCRUBBED),[false;2]);
-  write_volatile(addr_of_mut!(PAIR_STACK_SCRUBBED),[false;2]);write_volatile(addr_of_mut!(PAIR_RW_INIT_VERIFIED),[false;2]);write_volatile(addr_of_mut!(PAIR_TWO_SEGMENT),[false;2]);
+  write_volatile(addr_of_mut!(PAIR_OUTCOMES),[0;3]);write_volatile(addr_of_mut!(PAIR_LIVE_MARKERS),[0;2]);
+  write_volatile(addr_of_mut!(PAIR_IO_SUBMITTED),[0;3]);write_volatile(addr_of_mut!(PAIR_IO_COMPLETED),[0;3]);write_volatile(addr_of_mut!(PAIR_IO_CANCELLED),[0;3]);
+  write_volatile(addr_of_mut!(PAIR_EXIT_CODES),[None;3]);write_volatile(addr_of_mut!(PAIR_MARKERS),[0;3]);
+  write_volatile(addr_of_mut!(PAIR_DATA_SCRUBBED),[false;3]);write_volatile(addr_of_mut!(PAIR_CODE_SCRUBBED),[false;3]);
+  write_volatile(addr_of_mut!(PAIR_STACK_SCRUBBED),[false;3]);write_volatile(addr_of_mut!(PAIR_RW_INIT_VERIFIED),[false;3]);write_volatile(addr_of_mut!(PAIR_TWO_SEGMENT),[false;3]);
   write_volatile(addr_of_mut!(PAIR_DONE),false);write_volatile(addr_of_mut!(PAIR_RUN_ID),run_id);
-  write_volatile(addr_of_mut!(PAIR_CODE_FRAMES),code);
-  write_volatile(addr_of_mut!(PAIR_CODE_LEN),[images[0].as_ref().unwrap_or_else(||halt()).code.len() as u64,images[1].as_ref().map_or(0,|image|image.code.len() as u64)]);
-  write_volatile(addr_of_mut!(PAIR_INCARNATIONS),[first,if count==2 {first+1}else{0}]);
+  write_volatile(addr_of_mut!(PAIR_CODE_FRAMES),[code[0],code[1],0]);
+  write_volatile(addr_of_mut!(PAIR_CODE_LEN),[images[0].as_ref().unwrap_or_else(||halt()).code.len() as u64,images[1].as_ref().map_or(0,|image|image.code.len() as u64),0]);
+  write_volatile(addr_of_mut!(PAIR_INCARNATIONS),[first,if count==2 {first+1}else{0},0]);
   let prior=read_volatile(addr_of!(TASK_INCARNATIONS));
-  write_volatile(addr_of_mut!(TASK_INCARNATIONS),[first,if count==2 {first+1}else{prior[1]}]);
+  write_volatile(addr_of_mut!(TASK_INCARNATIONS),[first,if count==2 {first+1}else{prior[1]},prior[2]]);
   write_volatile(addr_of_mut!(NEXT_INCARNATION),next);
-  write_volatile(addr_of_mut!(PAIR_MAPPINGS_VERIFIED),true);write_volatile(addr_of_mut!(SLOT_MAPPINGS_VERIFIED),if count==2 {[true,true]}else{[true,false]});
-  write_volatile(addr_of_mut!(CURRENT),0);write_volatile(addr_of_mut!(TASK_STATE),if count==2 {[1,1]}else{[1,3]});
+  write_volatile(addr_of_mut!(PAIR_MAPPINGS_VERIFIED),true);write_volatile(addr_of_mut!(SLOT_MAPPINGS_VERIFIED),if count==2 {[true,true,false]}else{[true,false,false]});
+  write_volatile(addr_of_mut!(CURRENT),0);write_volatile(addr_of_mut!(TASK_STATE),if count==2 {[1,1,3]}else{[1,3,3]});
   write_volatile(addr_of_mut!(PAIR_MODE),count as u8);
   write_volatile(addr_of_mut!(PAIR_STARTED),true);write_volatile(addr_of_mut!(PAIR_ACTIVE),true);
  }
@@ -1132,23 +1139,26 @@ pub fn start_independent(bytes:&[u8])->Result<(usize,u64), &'static str> {
  let states=unsafe{read_volatile(addr_of!(TASK_STATE))};let frames=unsafe{read_volatile(addr_of!(TASK_FRAMES))};let codes=unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES))};let stacks=unsafe{read_volatile(addr_of!(PAIR_STACK_FRAMES))};
  let ipc=unsafe{&*addr_of!(IPC)};let pending=unsafe{read_volatile(addr_of!(GENERIC_IO))};
  if !ipc.full_consumed {return Err("process slots unavailable")}
- let slot=(0..2).find(|&i|states[i]==3 && frames[i]==0 && codes[i]==0 && stacks[i]==0 && pending[i].is_none()
+ let slot=(0..PROCESS_CAPACITY).find(|&i|states[i]==3 && frames[i]==0 && codes[i]==0 && stacks[i]==0 && pending[i].is_none()
   && ipc.completions[7+i].id==0 && !ipc.queue.iter().flatten().any(|r|r.actor==i)).ok_or("no free process slot")?;
- let peer=1-slot;
- // A live peer must be a real independent READY task at this boundary. Never
- // infer ownership from an old status entry or reuse a partially cleaned slot.
- if active && (states[peer]!=1 || frames[peer]==0 || codes[peer]==0) {return Err("process slots unavailable")}
- if !active && (states!=[3,3] || frames!=[0,0] || codes!=[0,0] || stacks!=[0,0] || unsafe{read_volatile(addr_of!(FRAME_BITMAP))}!=0 || ipc.len!=0 || ipc.completions[7..9].iter().any(|c|c.id!=0) || pending.iter().any(Option::is_some)) {return Err("process slots unavailable")}
+ if !active && (states!=[3,3,3] || frames!=[0,0,0] || codes!=[0,0,0] || stacks!=[0,0,0] || unsafe{read_volatile(addr_of!(FRAME_BITMAP))}!=0 || ipc.len!=0 || ipc.completions[7..10].iter().any(|c|c.id!=0) || pending.iter().any(Option::is_some)) {return Err("process slots unavailable")}
  let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
- if active {
-  let base=addr_of_mut!(USER_FRAMES) as usize;
-  let bit=|p:usize| -> Option<u16> {let off=p.checked_sub(base)?;if off%PAGE!=0 || off/PAGE>=FRAME_CAPACITY {return None};Some(1u16<<(off/PAGE))};
-  let Some(data_bit)=bit(frames[peer]) else{return Err("process slots unavailable")};
-  let Some(code_bit)=bit(codes[peer]) else{return Err("process slots unavailable")};
-  let mut expected=data_bit|code_bit;
-  if stacks[peer]!=0 {let Some(bit)=bit(stacks[peer]) else{return Err("process slots unavailable")};if expected&bit!=0 {return Err("process slots unavailable")};expected|=bit}
-  if data_bit==code_bit || used!=expected {return Err("process slots unavailable")}
+ let base=addr_of_mut!(USER_FRAMES) as usize;
+ let bit=|p:usize| -> Option<u16> {let off=p.checked_sub(base)?;if off%PAGE!=0 || off/PAGE>=FRAME_CAPACITY {return None};Some(1u16<<(off/PAGE))};
+ let mut expected=0u16;
+ for actor in 0..PROCESS_CAPACITY {
+  if actor==slot {continue}
+  if states[actor]==3 {
+   if frames[actor]!=0 || codes[actor]!=0 || stacks[actor]!=0 {return Err("process slots unavailable")}
+   continue
+  }
+  if !active || !matches!(states[actor],1|4) || frames[actor]==0 || codes[actor]==0 {return Err("process slots unavailable")}
+  for pointer in [frames[actor],codes[actor],stacks[actor]] {
+   if pointer==0 {continue}let Some(frame_bit)=bit(pointer) else{return Err("process slots unavailable")};
+   if expected&frame_bit!=0 {return Err("process slots unavailable")};expected|=frame_bit;
+  }
  }
+ if used!=expected {return Err("process slots unavailable")}
  let image=super::loader::parse(bytes).ok_or("invalid ELF")?;
  let need=if image.data.is_some() {3}else{2};
  if FRAME_CAPACITY.saturating_sub(used.count_ones() as usize)<need {return Err("no free process frames")}
@@ -1176,9 +1186,9 @@ pub fn start_independent(bytes:&[u8])->Result<(usize,u64), &'static str> {
  }else{0};
  super::mmu::map_task_alias(slot,data);super::mmu::map_task_code(slot,code as usize);
  if stack!=0 {super::mmu::map_task_stack(slot,stack)}
- let verified=super::mmu::verify_slot(slot,data,code as usize,if active {Some((frames[peer],codes[peer]))}else{None})
-  && if stack!=0 {super::mmu::verify_stack(slot,stack,if active && stacks[peer]!=0 {Some(stacks[peer])}else{None})}
-     else if active && stacks[peer]!=0 {super::mmu::verify_stack(peer,stacks[peer],None)}else{true};
+ let mut all_data=frames;let mut all_code=codes;let mut all_stack=stacks;
+ all_data[slot]=data;all_code[slot]=code as usize;all_stack[slot]=stack;
+ let verified=super::mmu::verify_independent(all_data,all_code,all_stack);
  if !verified {
   if stack!=0 {super::mmu::unmap_task_stack(slot,stack)}
   super::mmu::unmap_task_code(slot,code as usize);super::mmu::unmap_task_alias(slot,data);
@@ -1189,7 +1199,7 @@ pub fn start_independent(bytes:&[u8])->Result<(usize,u64), &'static str> {
  unsafe {
   let stack_top=if stack!=0 {super::mmu::USER_STACK+PAGE}else{super::mmu::ALIAS+PAGE};
   let context=frame(slot as u64,stack_top,super::mmu::USER_CODE+image.entry_offset);
-  if slot==0 {write_volatile(addr_of_mut!(A_FRAME),context)}else{write_volatile(addr_of_mut!(B_FRAME),context)}
+  match slot {0=>write_volatile(addr_of_mut!(A_FRAME),context),1=>write_volatile(addr_of_mut!(B_FRAME),context),_=>write_volatile(addr_of_mut!(C_FRAME),context)}
   let old=read_volatile(addr_of!(PAIR_LAST_TOKENS).cast::<Option<CompletionToken>>().add(slot));
   write_volatile(addr_of_mut!(PAIR_STALE_TOKENS).cast::<Option<CompletionToken>>().add(slot),old);
   write_volatile(addr_of_mut!(PAIR_LAST_TOKENS).cast::<Option<CompletionToken>>().add(slot),None);
@@ -1227,7 +1237,7 @@ pub fn start_independent(bytes:&[u8])->Result<(usize,u64), &'static str> {
 pub fn stop_independent(slot:usize,expected:u64,boot_id:[u8;16])->Result<(), &'static str> {
  let current_boot=super::boot_identity::identifier().ok_or("boot identity unavailable")?;
  if boot_id!=current_boot {return Err("stale boot identity")}
- if slot>=2 {return Err("invalid process slot")}
+ if slot>=PROCESS_CAPACITY {return Err("invalid process slot")}
  let mut daif:u64;let mut timer:u64;
  unsafe{asm!("mrs {},DAIF",out(reg) daif);asm!("mrs {},CNTV_CTL_EL0",out(reg) timer)}
  if daif&(1<<7)==0 || timer&1!=0 || super::mmu::active_root()!=super::mmu::root(0) || unsafe{read_volatile(addr_of!(SLICE_MODE))}!=1 {return Err("process stop requires service boundary")}
@@ -1237,36 +1247,36 @@ pub fn stop_independent(slot:usize,expected:u64,boot_id:[u8;16])->Result<(), &'s
  if expected==0 || expected!=incarnation || expected!=reported {return Err("stale process incarnation")}
  let states=unsafe{read_volatile(addr_of!(TASK_STATE))};
  if !matches!(states[slot],1|4) {return Err("process is not ready")}
- let peer=1-slot;let current=unsafe{read_volatile(addr_of!(CURRENT))} as usize;
- if current>=2 || !matches!(states[current],1|4) || !matches!(states[peer],1|3|4)
+ let current=unsafe{read_volatile(addr_of!(CURRENT))} as usize;
+ if current>=PROCESS_CAPACITY || !matches!(states[current],1|3|4) || !states.iter().all(|state|matches!(*state,1|3|4))
   || unsafe{read_volatile(addr_of!(TASK_FRAMES).cast::<usize>().add(slot))}==0
   || unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES).cast::<usize>().add(slot))}==0 {return Err("process stop requires service boundary")}
  unsafe {
-  clear_direct_wait(slot);
+  if slot<2 {clear_direct_wait(slot)}
   write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(slot),4);
   write_volatile(addr_of_mut!(PAIR_EXIT_CODES).cast::<Option<u64>>().add(slot),None);
   write_volatile(addr_of_mut!(TASK_STATE).cast::<u64>().add(slot),3);
-  if current==slot && states[peer]==1 {write_volatile(addr_of_mut!(CURRENT),peer as u64)}
+  if current==slot {if let Some(next)=(0..PROCESS_CAPACITY).find(|&i|i!=slot && states[i]==1) {write_volatile(addr_of_mut!(CURRENT),next as u64)}}
  }
  // Reclaim removes only this generation's still-queued request and its
  // completion; any earlier committed file operation is intentionally kept.
  reclaim_pair(slot);
- unsafe {if slot==0 {write_volatile(addr_of_mut!(A_FRAME),EMPTY)}else{write_volatile(addr_of_mut!(B_FRAME),EMPTY)}};
+ unsafe {match slot {0=>write_volatile(addr_of_mut!(A_FRAME),EMPTY),1=>write_volatile(addr_of_mut!(B_FRAME),EMPTY),_=>write_volatile(addr_of_mut!(C_FRAME),EMPTY)}};
  Ok(())
 }
 pub fn pair_status()->Value {json!({
- "boot_identity_ready":super::boot_identity::identifier().is_some(),"mode":match unsafe{read_volatile(addr_of!(PAIR_MODE))} {1=>"single",2=>"pair",3=>"independent",_=>"none"},"started":unsafe{read_volatile(addr_of!(PAIR_STARTED))},"done":unsafe{read_volatile(addr_of!(PAIR_DONE))},"run_id":unsafe{read_volatile(addr_of!(PAIR_RUN_ID))},"stale_completion_rejected":unsafe{read_volatile(addr_of!(PAIR_STALE_REJECTED))},"old_incarnation_same_id_rejected":unsafe{read_volatile(addr_of!(PAIR_OLD_INCARNATION_REJECTED))},
- "incarnations":unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS))},"mappings_verified":unsafe{read_volatile(addr_of!(PAIR_MAPPINGS_VERIFIED))},
- "slot_mappings_verified":unsafe{read_volatile(addr_of!(SLOT_MAPPINGS_VERIFIED))},
- "slot_states":unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|v|match v {1=>"ready",2=>"running",3=>"exited",4=>"waiting",_=>"invalid"}),
- "io_submitted":unsafe{read_volatile(addr_of!(PAIR_IO_SUBMITTED))},"io_completed":unsafe{read_volatile(addr_of!(PAIR_IO_COMPLETED))},"io_cancelled_before_apply":unsafe{read_volatile(addr_of!(PAIR_IO_CANCELLED))},"irq_counts":unsafe{read_volatile(addr_of!(PAIR_IRQS))},"exit_codes":unsafe{read_volatile(addr_of!(PAIR_EXIT_CODES))},"outcomes":unsafe{read_volatile(addr_of!(PAIR_OUTCOMES))},"barrier_seen":unsafe{read_volatile(addr_of!(PAIR_BARRIER_SEEN))},"live_markers":if unsafe{read_volatile(addr_of!(PAIR_MODE))}==3 {None}else{Some(unsafe{read_volatile(addr_of!(PAIR_LIVE_MARKERS))})},
- "markers":if unsafe{read_volatile(addr_of!(PAIR_MODE))}==3 {None}else{Some(unsafe{read_volatile(addr_of!(PAIR_MARKERS))})},"data_scrubbed":unsafe{read_volatile(addr_of!(PAIR_DATA_SCRUBBED))},
- "code_scrubbed":unsafe{read_volatile(addr_of!(PAIR_CODE_SCRUBBED))},"stack_scrubbed":unsafe{read_volatile(addr_of!(PAIR_STACK_SCRUBBED))},"rw_init_verified":unsafe{read_volatile(addr_of!(PAIR_RW_INIT_VERIFIED))},"two_segment":unsafe{read_volatile(addr_of!(PAIR_TWO_SEGMENT))},"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()
+ "boot_identity_ready":super::boot_identity::identifier().is_some(),"mode":match unsafe{read_volatile(addr_of!(PAIR_MODE))} {1=>"single",2=>"pair",3=>"independent",_=>"none"},"started":unsafe{read_volatile(addr_of!(PAIR_STARTED))},"done":unsafe{read_volatile(addr_of!(PAIR_DONE))},"run_id":unsafe{read_volatile(addr_of!(PAIR_RUN_ID))},"stale_completion_rejected":first_two(unsafe{read_volatile(addr_of!(PAIR_STALE_REJECTED))}),"old_incarnation_same_id_rejected":first_two(unsafe{read_volatile(addr_of!(PAIR_OLD_INCARNATION_REJECTED))}),
+ "incarnations":first_two(unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS))}),"mappings_verified":unsafe{read_volatile(addr_of!(PAIR_MAPPINGS_VERIFIED))},
+ "slot_mappings_verified":first_two(unsafe{read_volatile(addr_of!(SLOT_MAPPINGS_VERIFIED))}),
+ "slot_states":first_two(unsafe{read_volatile(addr_of!(TASK_STATE))}).map(|v|match v {1=>"ready",2=>"running",3=>"exited",4=>"waiting",_=>"invalid"}),
+ "io_submitted":first_two(unsafe{read_volatile(addr_of!(PAIR_IO_SUBMITTED))}),"io_completed":first_two(unsafe{read_volatile(addr_of!(PAIR_IO_COMPLETED))}),"io_cancelled_before_apply":first_two(unsafe{read_volatile(addr_of!(PAIR_IO_CANCELLED))}),"irq_counts":first_two(unsafe{read_volatile(addr_of!(PAIR_IRQS))}),"exit_codes":first_two(unsafe{read_volatile(addr_of!(PAIR_EXIT_CODES))}),"outcomes":first_two(unsafe{read_volatile(addr_of!(PAIR_OUTCOMES))}),"barrier_seen":unsafe{read_volatile(addr_of!(PAIR_BARRIER_SEEN))},"live_markers":if unsafe{read_volatile(addr_of!(PAIR_MODE))}==3 {None}else{Some(unsafe{read_volatile(addr_of!(PAIR_LIVE_MARKERS))})},
+ "markers":if unsafe{read_volatile(addr_of!(PAIR_MODE))}==3 {None}else{Some(first_two(unsafe{read_volatile(addr_of!(PAIR_MARKERS))}))},"data_scrubbed":first_two(unsafe{read_volatile(addr_of!(PAIR_DATA_SCRUBBED))}),
+ "code_scrubbed":first_two(unsafe{read_volatile(addr_of!(PAIR_CODE_SCRUBBED))}),"stack_scrubbed":first_two(unsafe{read_volatile(addr_of!(PAIR_STACK_SCRUBBED))}),"rw_init_verified":first_two(unsafe{read_volatile(addr_of!(PAIR_RW_INIT_VERIFIED))}),"two_segment":first_two(unsafe{read_volatile(addr_of!(PAIR_TWO_SEGMENT))}),"all_incarnations":unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS))},"all_slot_states":unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|v|match v {1=>"ready",2=>"running",3=>"exited",4=>"waiting",_=>"invalid"}),"all_irq_counts":unsafe{read_volatile(addr_of!(PAIR_IRQS))},"all_exit_codes":unsafe{read_volatile(addr_of!(PAIR_EXIT_CODES))},"all_outcomes":unsafe{read_volatile(addr_of!(PAIR_OUTCOMES))},"all_io_submitted":unsafe{read_volatile(addr_of!(PAIR_IO_SUBMITTED))},"all_io_completed":unsafe{read_volatile(addr_of!(PAIR_IO_COMPLETED))},"all_data_scrubbed":unsafe{read_volatile(addr_of!(PAIR_DATA_SCRUBBED))},"all_code_scrubbed":unsafe{read_volatile(addr_of!(PAIR_CODE_SCRUBBED))},"all_stack_scrubbed":unsafe{read_volatile(addr_of!(PAIR_STACK_SCRUBBED))},"all_mappings_verified":unsafe{read_volatile(addr_of!(SLOT_MAPPINGS_VERIFIED))},"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()
 })}
 #[no_mangle]
 extern "C" fn pair_irq_check(f:*const Frame)->u64 {
  let actor=unsafe{read_volatile(addr_of!(CURRENT))} as usize;
- if actor>=2 {halt()}
+ if actor>=PROCESS_CAPACITY {halt()}
  let frame=unsafe{&*f};let lo=super::mmu::USER_CODE as u64;
  let len=unsafe{read_volatile(addr_of!(PAIR_CODE_LEN).cast::<u64>().add(actor))};
  let p=unsafe{addr_of_mut!(PAIR_IRQS).cast::<u64>().add(actor)};
@@ -1318,7 +1328,7 @@ fn reclaim_pair(actor:usize) {
   write_volatile(addr_of_mut!(PAIR_MARKERS).cast::<u64>().add(actor),marker);
   write_volatile(addr_of_mut!(PAIR_DATA_SCRUBBED).cast::<bool>().add(actor),true);
   write_volatile(addr_of_mut!(PAIR_CODE_SCRUBBED).cast::<bool>().add(actor),true);
-  if read_volatile(addr_of!(TASK_FRAMES))==[0,0] {write_volatile(addr_of_mut!(PAIR_ACTIVE),false);write_volatile(addr_of_mut!(PAIR_DONE),true)}
+  if read_volatile(addr_of!(TASK_FRAMES))==[0,0,0] {write_volatile(addr_of_mut!(PAIR_ACTIVE),false);write_volatile(addr_of_mut!(PAIR_DONE),true)}
  }
 }
 
@@ -1366,7 +1376,7 @@ fn reclaim_exited(actor:usize) {
  let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};check(used&bit!=0,"frame already free");
  unsafe{write_volatile(addr_of_mut!(EXIT_MARKERS).cast::<u64>().add(actor),marker);write_volatile(p,0);write_volatile(addr_of_mut!(FRAME_BITMAP),used&!bit)}
  if image_number==0 && unsafe{read_volatile(addr_of!(IMAGE_COUNT))}==0
-  && unsafe{read_volatile(addr_of!(TASK_FRAMES))}==[0,0]
+  && unsafe{read_volatile(addr_of!(TASK_FRAMES))}==[0,0,0]
   && unsafe{read_volatile(addr_of!(FRAME_BITMAP))}==0 {
   unsafe{write_volatile(addr_of_mut!(INITIAL_TASKS_RECLAIMED),true)}
  }
@@ -1387,7 +1397,7 @@ fn marker(actor:usize)->u64 {
 // Admit a task from the restricted ELF loader after both initial
 // tasks have exited. No arbitrary binary loading or dynamic actor creation.
 fn admit_spawned_task(program:&[u8],entry_offset:usize) {
- check(unsafe{read_volatile(addr_of!(TASK_STATE))}==[3,3] && unsafe{read_volatile(addr_of!(IMAGE_COUNT))}<4 && !unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))},"invalid spawn admission");
+ check(unsafe{read_volatile(addr_of!(TASK_STATE))}==[3,3,3] && unsafe{read_volatile(addr_of!(IMAGE_COUNT))}<4 && !unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))},"invalid spawn admission");
  let process_id=unsafe{read_volatile(addr_of!(NEXT_INCARNATION))};
  let next_process_id=process_id.checked_add(1).unwrap_or_else(||halt());
  let frame_address=allocate_task_frame(0);
@@ -1435,7 +1445,7 @@ pub fn prepare_slices() {
  check(daif&(1<<7)!=0,"kernel IRQ not masked");let delta=freq/200;check(delta>0 && delta<=i32::MAX as u64,"slice timer frequency");
  // The boot probe returns from task B into EL1. Both tasks are now ready;
  // start_slice is responsible for dispatching one and marking it RUNNING.
- check(unsafe{read_volatile(addr_of!(CURRENT))}==1 && unsafe{read_volatile(addr_of!(TASK_STATE))}==[1,2],"probe task states");
+ check(unsafe{read_volatile(addr_of!(CURRENT))}==1 && unsafe{read_volatile(addr_of!(TASK_STATE))}==[1,2,3],"probe task states");
  unsafe {
   write_volatile(addr_of_mut!(TASK_STATE).cast::<u64>().add(1),1);
   write_volatile(addr_of_mut!(SLICE_DELTA),delta);write_volatile(addr_of_mut!(SLICE_MODE),1);
@@ -1450,7 +1460,7 @@ pub fn run_slice(programs:[Option<&[u8]>;4]) {
  let mut daif:u64;unsafe{asm!("mrs {},DAIF",out(reg) daif);}check(daif&(1<<7)!=0,"service IRQ unmasked");
  check(super::mmu::active_root()==super::mmu::root(0),"service root");
  let mut states_before=unsafe{read_volatile(addr_of!(TASK_STATE))};
- if states_before==[3,3] {
+ if states_before==[3,3,3] {
   let index=unsafe{read_volatile(addr_of!(IMAGE_COUNT))} as usize;
   if index>=4 || unsafe{read_volatile(addr_of!(FIXTURE_PAUSE_REQUESTED))} {return}
   let Some(bytes)=programs[index] else {unsafe{write_volatile(addr_of_mut!(LOADER_REJECTED),true)};return};
@@ -1462,7 +1472,7 @@ pub fn run_slice(programs:[Option<&[u8]>;4]) {
  check(states_before.iter().all(|v|matches!(*v,1|3|4)),"invalid service-boundary task states");
  if !states_before.contains(&1) {return} // service keeps processing MCP/device events
  let mut current=unsafe{read_volatile(addr_of!(CURRENT))};
- if current>=2 || states_before[current as usize]!=1 {
+ if current>=PROCESS_CAPACITY as u64 || states_before[current as usize]!=1 {
   current=states_before.iter().position(|state|*state==1).unwrap_or_else(||halt()) as u64;unsafe{write_volatile(addr_of_mut!(CURRENT),current)}
  }
  check(states_before[current as usize]==1,"slice actor");
@@ -1496,7 +1506,7 @@ pub fn run_slice(programs:[Option<&[u8]>;4]) {
  check(timer&1==0 && daif&(1<<7)!=0 && super::mmu::active_root()==super::mmu::root(0),"slice timer, IRQ mask or service root");
  if !loaded_before {check(marker(0)==0xa1a1,"private task A data")}
  if !pair_before {check(marker(1)==0xb2b2,"private task B data");}
- for actor in 0..2 {if states_after[actor]==3 {reclaim_exited(actor)}}
+ for actor in 0..PROCESS_CAPACITY {if states_after[actor]==3 {reclaim_exited(actor)}}
 }
 pub fn status()->Value {
  let done=unsafe{read_volatile(addr_of!(PROBE_DONE))}==1;
@@ -1504,7 +1514,7 @@ pub fn status()->Value {
  let counts:Vec<u64>=(0..2).map(|i|unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>().add(i))}).collect();
  let slice_ticks=unsafe{read_volatile(addr_of!(SLICE_TOTAL))};
  let values=if unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} && unsafe{read_volatile(addr_of!(PAIR_MODE))}==3 {None}else{Some([marker(0),marker(1)])};
- let states=unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|s|match s {1=>"ready",2=>"running",3=>"exited",4=>"waiting",_=>"invalid"});
+ let states=first_two(unsafe{read_volatile(addr_of!(TASK_STATE))}).map(|s|match s {1=>"ready",2=>"running",3=>"exited",4=>"waiting",_=>"invalid"});
  let outcomes=unsafe{read_volatile(addr_of!(IMAGE_OUTCOMES))}.map(|v|match v {0=>"pending",1=>"success",2=>"fault",3=>"bad_svc",4=>"file_error",5=>"timeout",6=>"exit_error",_=>"invalid"});
  let reclaimed=[unsafe{read_volatile(addr_of!(IMAGE1_RECLAIMED))},unsafe{read_volatile(addr_of!(IMAGE2_RECLAIMED))},unsafe{read_volatile(addr_of!(IMAGE3_RECLAIMED))},unsafe{read_volatile(addr_of!(IMAGE4_RECLAIMED))}];
  json!({"validated":done,"ticks":8,"el":"EL0","events":events,"timer":"disabled","interrupts":"masked","slice_ticks":slice_ticks,"slice_counts":counts,"mode":"service-boundary","private_values":values,"service_asid":super::mmu::active_root()>>48,"cross_code_read_denied":unsafe{read_volatile(addr_of!(CROSS_READ_DENIED))},"task_states":states,"frame_scrubbed":unsafe{read_volatile(addr_of!(FRAME_SCRUBBED))},"alias_removed":unsafe{read_volatile(addr_of!(ALIAS_REMOVED))},"dispatches":unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))},"loader_rejected":unsafe{read_volatile(addr_of!(LOADER_REJECTED))},"image_loaded":unsafe{read_volatile(addr_of!(IMAGE_LOADED))},"code_alias_removed":unsafe{read_volatile(addr_of!(CODE_ALIAS_REMOVED))},"code_frame_scrubbed":unsafe{read_volatile(addr_of!(CODE_FRAME_SCRUBBED))},"image_outcomes":outcomes,"image_exit_codes":unsafe{read_volatile(addr_of!(IMAGE_EXIT_CODES))},"image_irq_x19_max_seen":unsafe{read_volatile(addr_of!(IMAGE_IRQ_X19_MAX_SEEN))},"images_reclaimed":reclaimed,"completions_revoked":unsafe{read_volatile(addr_of!(COMPLETIONS_REVOKED))},"pending_cancelled":unsafe{read_volatile(addr_of!(PENDING_CANCELLED))},"stale_response_blocked":unsafe{read_volatile(addr_of!(STALE_RESPONSE_BLOCKED))},"image_incarnations":unsafe{read_volatile(addr_of!(IMAGE_INCARNATIONS))},"stale_generation_rejected":unsafe{read_volatile(addr_of!(STALE_GENERATION_REJECTED))},"image_count":unsafe{read_volatile(addr_of!(IMAGE_COUNT))},"image1_exited":unsafe{read_volatile(addr_of!(IMAGE1_EXITED))},"image2_exited":unsafe{read_volatile(addr_of!(IMAGE2_EXITED))},"image1_reclaimed":unsafe{read_volatile(addr_of!(IMAGE1_RECLAIMED))},"image2_reclaimed":unsafe{read_volatile(addr_of!(IMAGE2_RECLAIMED))},"spawn_admitted":unsafe{read_volatile(addr_of!(SPAWN_ADMITTED))},"spawn_executed":unsafe{read_volatile(addr_of!(SPAWN_EXECUTED))},"spawn_failed":unsafe{read_volatile(addr_of!(SPAWN_FAILED))},"spawn_exited":unsafe{read_volatile(addr_of!(SPAWN_EXITED))},"spawn_interrupts":unsafe{read_volatile(addr_of!(SPAWN_TICKS))},"spawn_irq_x19_max_seen":unsafe{read_volatile(addr_of!(SPAWN_IRQ_X19_MAX_SEEN))},"spawn_reused_frame":unsafe{read_volatile(addr_of!(SPAWN_REUSED))},"frame_pool_capacity":FRAME_CAPACITY,"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()})

@@ -19,9 +19,9 @@ unsafe fn receive(channel:u64,buf:*mut u8,cap:u64)->(u64,u64,u64) {
  let mut n=buf as u64;let mut slot=cap;let mut inc=channel;
  asm!("svc #0x162",inout("x0") n,inout("x1") slot,inout("x2") inc,options(nostack));(n,slot,inc)
 }
-unsafe fn gate() {
+unsafe fn gate(actor:u64) {
  // Host-only control signal. The IPC payload itself never uses VFS.
- let name=*b"a-wgate";let mut byte=[0u8];
+ let mut name=*b"a-wgate";if actor==0xc3c3{name[0]=b'c'};let mut byte=[0u8];
  loop {
   let mut r=name.as_ptr() as u64;
   asm!("svc #0x140",inout("x0") r,in("x1") name.len() as u64,in("x2") byte.as_mut_ptr() as u64,in("x3") 1u64,options(nostack));
@@ -30,14 +30,15 @@ unsafe fn gate() {
 }
 #[no_mangle] pub extern "C" fn _start(_page:*mut u8,actor:u64)->! {
  unsafe {
-  if (actor!=0xa1a1 && actor!=0xb2b2) || read_volatile(addr_of_mut!(INITIAL))!=0x1122_3344_5566_7788 {stop(42)}
+  if (actor!=0xa1a1 && actor!=0xb2b2 && actor!=0xc3c3) || read_volatile(addr_of_mut!(INITIAL))!=0x1122_3344_5566_7788 {stop(42)}
   let data=addr_of_mut!(BUF).cast::<u8>();if (0..8).any(|i|read_volatile(data.add(i))!=0){stop(42)}
   let mut stack=[0xa5u8,0,0x5a];let p=stack.as_mut_ptr().add(1);
   if (p as usize)<0x50003000 || (p as usize)>=0x50004000 {stop(42)}
+  if actor==0xc3c3 {gate(actor);stop(0)}
   let (slot,inc,channel)=wait_peer();if slot>1 || inc==0 || channel==0 {stop(42)}
   if wait(channel.wrapping_add(1))!=(-116i64) as u64 {stop(42)}
   if actor==0xa1a1 {
-   gate();write_volatile(p,b'W');
+   gate(actor);write_volatile(p,b'W');
    let sent=send(slot,inc,channel,p,1);
    if sent==(-107i64) as u64 {stop(0)}
    if sent!=0 {stop(42)}

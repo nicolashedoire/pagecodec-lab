@@ -511,12 +511,11 @@ def main():
    state=g.wait_independent(lambda s:s.get('slot_states')==['ready','ready'] and min(s.get('io_completed',[0,0]))>0,'A and B live and reading')
    if state.get('incarnations')!=[task_a['incarnation'],b['incarnation']] or state.get('frame_pool_assigned')!=4:raise RuntimeError('independent tasks not isolated concurrently: '+str(state))
    b_reads=state['io_completed'][1]
-   reject(g,'process_spawn',{'name':'a-ind.elf'},'no free process slot')
    reject(g,'process_stop',{'slot':0,'incarnation':task_a['incarnation'],'boot_id':task_a['boot_id']},'invalid process_stop arguments')
    reject(g,'process_stop',{'slot':0,'incarnation':'0'+task_a['incarnation_text'],'boot_id':task_a['boot_id']},'invalid process_stop arguments')
    reject(g,'process_stop',{'slot':0,'incarnation':'18446744073709551616','boot_id':task_a['boot_id']},'invalid process_stop arguments')
    reject(g,'process_stop',{'slot':0,'incarnation':task_a['incarnation_text'],'boot_id':'G'+task_a['boot_id'][1:]},'invalid process_stop arguments')
-   reject(g,'process_stop',{'slot':2,'incarnation':task_a['incarnation_text'],'boot_id':task_a['boot_id']},'invalid process slot')
+   reject(g,'process_stop',{'slot':3,'incarnation':task_a['incarnation_text'],'boot_id':task_a['boot_id']},'invalid process slot')
    stopped=g.call('process_stop',{'slot':0,'incarnation':task_a['incarnation_text'],'boot_id':task_a['boot_id']})
    if stopped!={'stopped':True,'slot':0,'incarnation':task_a['incarnation_text'],'boot_id':task_a['boot_id']}:raise RuntimeError('targeted stop failed: '+str(stopped))
    state=g.wait_independent(lambda s:s.get('slot_states')==['exited','ready'] and s.get('io_completed',[0,0])[1]>b_reads,'A exited while B continued reading')
@@ -920,6 +919,28 @@ def main():
     if state.get('data_scrubbed')!=[True,True] or state.get('code_scrubbed')!=[True,True] or state.get('stack_scrubbed')!=[True,True] or state.get('frame_pool_assigned')!=0:raise RuntimeError('wait task resources not cleaned: '+str(state))
     stopped_channel=g.call('ipc_direct_status',{})
     if stopped_channel.get('bound') is not False or stopped_channel.get('waiting')!=[False,False] or stopped_channel.get('scrubbed') is not True:raise RuntimeError('wait channel cleanup invalid: '+str(stopped_channel))
+   # A and B sleep on IPC while the third task is independently runnable.
+   if not g.call('file_put',{'name':'a-wgate','data':'0'}).get('readback_verified') or not g.call('file_put',{'name':'c-wgate','data':'0'}).get('readback_verified'):raise RuntimeError('three-task wait gates failed')
+   wa=g.call('process_spawn_staged',{'id':wait_upload});wb=g.call('process_spawn_staged',{'id':wait_upload})
+   if wa.get('slot')!=0 or wb.get('slot')!=1:raise RuntimeError('wait pair admission failed')
+   g.wait_independent(lambda x:x.get('slot_states')==['ready','ready'],'wait pair before third')
+   wab={'a_slot':0,'a_incarnation':wa['incarnation_text'],'b_slot':1,'b_incarnation':wb['incarnation_text'],'boot_id':wa['boot_id']}
+   wc_id=g.call('ipc_direct_bind',wab)['channel_id']
+   before_wait=wait_direct(lambda x:x.get('waiting',[False,False])[1] is True,'receiver asleep before third')
+   if not g.call('file_put',{'name':'a-wgate','data':'1'}).get('readback_verified'):raise RuntimeError('wait pair release failed')
+   wait_direct(lambda x:x.get('waiting')==[True,True] and x.get('wake_message',[0,0])[1]>before_wait.get('wake_message',[0,0])[1],'both waiting before third')
+   wc=g.call('process_spawn_staged',{'id':wait_upload})
+   if wc.get('slot')!=2 or wc.get('boot_id')!=wa.get('boot_id'):raise RuntimeError('third wait actor admission failed')
+   g.wait_independent(lambda x:x.get('all_slot_states')==['waiting','waiting','ready'] and x.get('all_io_completed',[0,0,0])[2]>0 and x.get('all_irq_counts',[0,0,0])[2]>0,'third runnable while pair sleeps')
+   stopped=g.call('process_stop',{'slot':2,'incarnation':wc['incarnation_text'],'boot_id':wc['boot_id']})
+   if stopped.get('stopped') is not True:raise RuntimeError('third stop failed')
+   waiting=g.call('ipc_direct_status',{})
+   if waiting.get('waiting')!=[True,True] or waiting.get('bound') is not True:raise RuntimeError('third stop disturbed sleeping pair: '+str(waiting))
+   stopped=g.call('process_stop',{'slot':1,'incarnation':wb['incarnation_text'],'boot_id':wb['boot_id']})
+   if stopped.get('stopped') is not True:raise RuntimeError('sleeping second stop failed')
+   state=g.wait_independent(lambda x:x.get('all_slot_states')==['exited']*3,'sleeping neighbor resumed after third stop')
+   if state.get('all_outcomes')!=[1,4,4] or state.get('all_exit_codes')!=[0,None,None] or state.get('all_data_scrubbed')!=[True]*3 or state.get('all_code_scrubbed')!=[True]*3 or state.get('all_stack_scrubbed')!=[True]*3 or state.get('frame_pool_assigned')!=0:raise RuntimeError('three-task sleep/stop cleanup invalid: '+str(state))
+   if not g.call('file_delete',{'name':'c-wgate'}).get('readback_verified'):raise RuntimeError('third wait gate cleanup failed')
    g.call('upload_reset',{'id':wait_upload})
    if not g.call('file_delete',{'name':'a-wgate'}).get('readback_verified') or g.call('file_list',{})!=files_before:raise RuntimeError('wait fixture cleanup failed')
    if a.exercise_storage_fault:
@@ -988,6 +1009,44 @@ def main():
     for name in ('a-tgate','b-tgate','a-tphase','b-tphase'):
      if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('timeout fixture cleanup failed')
     if g.call('file_list',{})!=files_before:raise RuntimeError('timeout fixture left files behind')
+   # Three independent loaded programs with isolated private data and stacks.
+   for name in ('a-gate','b-gate','c-gate'):
+    if any(entry.get('name')==name for entry in files_before):raise RuntimeError('three-task fixture name already exists')
+    if not g.call('file_put',{'name':name,'data':'0'}).get('readback_verified'):raise RuntimeError('three-task gate setup failed')
+   three=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-three-process.hex').read_text().strip())
+   three_upload=stage_program(g,three)
+   actors=[g.call('process_spawn_staged',{'id':three_upload}) for _ in range(3)]
+   if [a.get('slot') for a in actors]!=[0,1,2] or len({a.get('incarnation') for a in actors})!=3 or len({a.get('boot_id') for a in actors})!=1:raise RuntimeError('three independent admissions invalid: '+str(actors))
+   def all_tasks(predicate,label):
+    for _ in range(80):
+     snapshot=g.call('process_status',{})
+     if predicate(snapshot):return snapshot
+     time.sleep(.2)
+    raise RuntimeError('three tasks did not reach '+label+': '+str(snapshot))
+   live=all_tasks(lambda x:x.get('all_slot_states')==['ready']*3 and min(x.get('all_io_completed',[0,0,0]))>=6 and min(x.get('all_irq_counts',[0,0,0]))>0,'all actors running and checked')
+   if live.get('all_incarnations')!=[a['incarnation'] for a in actors] or live.get('all_mappings_verified')!=[True]*3 or live.get('frame_pool_assigned')!=9:raise RuntimeError('three-task isolation not established: '+str(live))
+   reject(g,'process_spawn_staged',{'id':three_upload},'no free process slot')
+   for name in ('a-gate','b-gate','c-gate'):
+    if g.call('file_get',{'name':name})!={'name':name,'hex':'30'}:raise RuntimeError('cross-actor write changed gate '+name)
+   previous=live['all_io_completed']
+   stopped=g.call('process_stop',{'slot':0,'incarnation':actors[0]['incarnation_text'],'boot_id':actors[0]['boot_id']})
+   if stopped.get('stopped') is not True:raise RuntimeError('three-task stop failed')
+   live=all_tasks(lambda x:x.get('all_slot_states')==['exited','ready','ready'] and all(x.get('all_io_completed',[0,0,0])[i]>previous[i] for i in (1,2)),'other actors progress after stop')
+   if live.get('all_outcomes',[None]*3)[0]!=4 or live.get('all_exit_codes',[0]*3)[0] is not None or live.get('all_data_scrubbed',[False]*3)[0] is not True or live.get('all_code_scrubbed',[False]*3)[0] is not True or live.get('all_stack_scrubbed',[False]*3)[0] is not True or live.get('frame_pool_assigned')!=6:raise RuntimeError('three-task stop cleanup invalid: '+str(live))
+   previous=live['all_io_completed']
+   replacement=g.call('process_spawn_staged',{'id':three_upload})
+   if replacement.get('slot')!=0 or replacement.get('incarnation',0)<=max(a['incarnation'] for a in actors) or replacement.get('boot_id')!=actors[0]['boot_id']:raise RuntimeError('three-task readmission invalid: '+str(replacement))
+   reject(g,'process_stop',{'slot':0,'incarnation':actors[0]['incarnation_text'],'boot_id':actors[0]['boot_id']},'stale process incarnation')
+   live=all_tasks(lambda x:x.get('all_slot_states')==['ready']*3 and x.get('all_io_completed',[0,0,0])[0]>=6 and x.get('all_irq_counts',[0,0,0])[0]>0 and all(x.get('all_io_completed',[0,0,0])[i]>previous[i] for i in (1,2)),'replaced actor and neighbors progress')
+   if live.get('all_incarnations')!=[replacement['incarnation'],actors[1]['incarnation'],actors[2]['incarnation']] or live.get('frame_pool_assigned')!=9:raise RuntimeError('three-task readmission disturbed neighbors: '+str(live))
+   for name in ('a-gate','b-gate','c-gate'):
+    if not g.call('file_put',{'name':name,'data':'1'}).get('readback_verified'):raise RuntimeError('three-task release failed')
+   done=all_tasks(lambda x:x.get('all_slot_states')==['exited']*3,'three-task teardown')
+   if done.get('all_outcomes')!=[1]*3 or done.get('all_exit_codes')!=[0]*3 or done.get('all_data_scrubbed')!=[True]*3 or done.get('all_code_scrubbed')!=[True]*3 or done.get('all_stack_scrubbed')!=[True]*3 or done.get('frame_pool_assigned')!=0:raise RuntimeError('three-task cleanup invalid: '+str(done))
+   g.call('upload_reset',{'id':three_upload})
+   for name in ('a-gate','b-gate','c-gate'):
+    if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('three-task gate cleanup failed')
+   if g.call('file_list',{})!=files_before:raise RuntimeError('three-task fixture left files behind')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
   # No NIC: the same Rust program must see -19 without requiring a peer.

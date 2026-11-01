@@ -642,7 +642,7 @@ pub extern "C" fn graph_main() -> ! {
                     let mut write_error=None;
                     let pair_request=el0::is_pair_request(&request);
                     let success=if request.actor!=0 && !pair_request {false} else if let (Some(key),Some(data))=(key,data) {
-                        if pair_request && !match request.actor {0=>key.starts_with("a-"),1=>key.starts_with("b-"),_=>false} {
+                        if pair_request && !match request.actor {0=>key.starts_with("a-"),1=>key.starts_with("b-"),2=>key.starts_with("c-"),_=>false} {
                             reply_denied=true;
                             false
                         } else {
@@ -792,7 +792,7 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"program_store_v2_commit","description":"Commit a sealed ELF to the dedicated V2 QEMU program area; no authentication.","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}},
                                         {"name":"program_store_v2_status","description":"Inspect V2 QEMU program records and shared write-block state.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"program_store_v2_spawn","description":"Admit the newest valid V2 ELF as an independent task.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
-                                        {"name":"process_stop","description":"Stop one independent guest task by slot, exact decimal incarnation and boot ID; no authentication.","inputSchema":{"type":"object","properties":{"slot":{"type":"integer","minimum":0,"maximum":1},"incarnation":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20},"boot_id":{"type":"string","pattern":"^[0-9a-f]{32}$"}},"required":["slot","incarnation","boot_id"],"additionalProperties":false}},
+                                        {"name":"process_stop","description":"Stop one independent guest task by slot, exact decimal incarnation and boot ID; no authentication.","inputSchema":{"type":"object","properties":{"slot":{"type":"integer","minimum":0,"maximum":2},"incarnation":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20},"boot_id":{"type":"string","pattern":"^[0-9a-f]{32}$"}},"required":["slot","incarnation","boot_id"],"additionalProperties":false}},
                                         {"name":"process_status","description":"Inspect the latest bounded guest task admission.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"ipc_direct_bind","description":"Bind two independent guest tasks by slot, exact incarnation and current boot ID; no authentication.","inputSchema":{"type":"object","properties":{"a_slot":{"type":"integer","minimum":0,"maximum":1},"a_incarnation":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20},"b_slot":{"type":"integer","minimum":0,"maximum":1},"b_incarnation":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20},"boot_id":{"type":"string","pattern":"^[0-9a-f]{32}$"}},"required":["a_slot","a_incarnation","b_slot","b_incarnation","boot_id"],"additionalProperties":false}},
                                         {"name":"ipc_direct_status","description":"Read direct-channel state and counters without message contents.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
@@ -1221,7 +1221,7 @@ pub extern "C" fn graph_main() -> ! {
                                             Some("mmu_status") => {
                                                 let args=params.and_then(|p|p.get("arguments"));
                                                 if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"status requires empty arguments");}
-                                                else {tool_json(id,json!({"enabled":true,"caches":false,"mapping":"identity","image":"normal-nc","virtio":"device-xn","range_checks":"full","kernel_el0":"samples-denied","user_code":"ro","user_stack":"private-alias-rw","address_spaces":2,"asids":[1,2],"gic":"device-xn"}));}
+                                                else {tool_json(id,json!({"enabled":true,"caches":false,"mapping":"identity","image":"normal-nc","virtio":"device-xn","range_checks":"full","kernel_el0":"samples-denied","user_code":"ro","user_stack":"private-alias-rw","address_spaces":3,"asids":[1,2,3],"gic":"device-xn"}));}
                                             }
                                             Some("interaction_state") => {
                                                 let args=params.and_then(|p|p.get("arguments"));

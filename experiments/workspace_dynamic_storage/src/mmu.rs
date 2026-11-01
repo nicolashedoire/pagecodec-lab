@@ -109,36 +109,35 @@ pub fn unmap_task_stack(actor:usize,frame:usize) {
  unsafe{write_volatile(entry,0);asm!("dsb ishst","tlbi vmalle1","dsb ish","isb");}
  switch_root(root(actor));assert!(query(USER_STACK,false,true)&1!=0 && query(USER_STACK,true,true)&1!=0);switch_root(root(0));
 }
-/// Verify private stack mappings and the lower guard in both roots; no user physical alias.
-pub fn verify_stack(actor:usize,frame:usize,peer:Option<usize>)->bool {
- if actor>=2 || active_root()!=root(0) || frame%PAGE!=0 || peer.is_some_and(|p|p%PAGE!=0 || p==frame) {return false}
- switch_root(root(actor));let r=query(USER_STACK,false,true);
- let mut ok=r&1==0 && r&PA_MASK==frame as u64 && query(USER_STACK,true,true)&1==0
-  && query(USER_STACK-PAGE,false,true)&1!=0 && query(frame,false,true)&1!=0;
- if let Some(p)=peer {ok &= query(p,false,true)&1!=0}
- switch_root(root(1-actor));ok &= query(USER_STACK-PAGE,false,true)&1!=0 && query(frame,false,true)&1!=0;
- if let Some(p)=peer {let r=query(USER_STACK,false,true);ok &= r&1==0 && r&PA_MASK==p as u64 && query(USER_STACK,true,true)&1==0}
- else {ok &= query(USER_STACK,false,true)&1!=0}
- switch_root(root(0));ok
-}
-/// Verify one slot's mappings with a possibly live peer. This is run only at
-/// a masked service boundary on the sole CPU; it is not an SMP page-table API.
-pub fn verify_slot(actor:usize,data:usize,code:usize,peer:Option<(usize,usize)>)->bool {
- if actor>=2 || active_root()!=root(0) || data%PAGE!=0 || code%PAGE!=0 || data==code {return false}
- if let Some((pd,pc))=peer {if pd%PAGE!=0 || pc%PAGE!=0 || pd==pc || [pd,pc].contains(&data) || [pd,pc].contains(&code) {return false}}
- switch_root(root(actor));
- let d=query(ALIAS,false,true);let dw=query(ALIAS,true,true);let c=query(USER_CODE,false,true);
- let mut ok=d&1==0 && dw&1==0 && d&PA_MASK==data as u64 && dw&PA_MASK==data as u64
-  && c&1==0 && c&PA_MASK==code as u64 && query(USER_CODE,true,true)&1!=0
-  && query(data,false,true)&1!=0 && query(code,false,true)&1!=0;
- if let Some((pd,pc))=peer {ok &= query(pd,false,true)&1!=0 && query(pc,false,true)&1!=0}
- switch_root(root(1-actor));
- ok &= query(data,false,true)&1!=0 && query(code,false,true)&1!=0;
- if let Some((pd,pc))=peer {
-  let d=query(ALIAS,false,true);let dw=query(ALIAS,true,true);let c=query(USER_CODE,false,true);
-  ok &= d&1==0 && dw&1==0 && d&PA_MASK==pd as u64 && dw&PA_MASK==pd as u64
-   && c&1==0 && c&PA_MASK==pc as u64 && query(USER_CODE,true,true)&1!=0;
- } else {ok &= query(ALIAS,false,true)&1!=0 && query(USER_CODE,false,true)&1!=0}
+/// Validate all independent mappings and frame separation across the 3 roots.
+pub fn verify_independent(data:[usize;3],code:[usize;3],stack:[usize;3])->bool {
+ if active_root()!=root(0) {return false}
+ let mut frames=[0usize;9];let mut n=0usize;
+ for actor in 0..3 {
+  if (data[actor]==0)!=(code[actor]==0) || (data[actor]==0 && stack[actor]!=0) {return false}
+  for frame in [data[actor],code[actor],stack[actor]] {
+   if frame==0 {continue}
+   if frame%PAGE!=0 || frames[..n].contains(&frame) {return false}
+   frames[n]=frame;n+=1;
+  }
+ }
+ let mut ok=true;
+ for actor in 0..3 {
+  switch_root(root(actor));
+  for &frame in &frames[..n] {ok &= query(frame,false,true)&1!=0 && query(frame,true,true)&1!=0}
+  for (va,frame,writable) in [(ALIAS,data[actor],true),(USER_CODE,code[actor],false),(USER_STACK,stack[actor],true)] {
+   let r=query(va,false,true);let w=query(va,true,true);
+   if frame==0 {ok &= r&1!=0 && w&1!=0}
+   else {
+    ok &= r&1==0 && r&PA_MASK==(frame as u64&PA_MASK);
+    if writable {ok &= w&1==0 && w&PA_MASK==(frame as u64&PA_MASK)}else{ok &= w&1!=0}
+    let entry=unsafe{read_volatile(alias_table(actor).cast::<u64>().add((va>>12)&511))};
+    let flags=if writable {USER|PXN|UXN|NG}else{RO|USER|PXN|NG};
+    ok &= entry&(RO|USER|PXN|UXN|NG)==flags;
+   }
+  }
+  ok &= query(USER_STACK-PAGE,false,true)&1!=0 && query(USER_STACK-PAGE,true,true)&1!=0;
+ }
  switch_root(root(0));ok
 }
 /// Verify the single loaded task owns both frames and the idle root cannot

@@ -124,7 +124,7 @@ successful exit, its scoped file reads and writes, cross-namespace refusals
 and frame cleanup, running a pair before and after it in the same boot, then
 restarts the virtual disk to check its committed write. Concurrent admission
 while the single task is active has not been forced in this scenario.
-This remains a fixed two-slot experimental guest, not a general process API.
+Single and pair modes remain bounded fixtures; independent admission can now use three fixed slots, not a general process API.
 
 ## Fixture arbitration
 
@@ -147,11 +147,12 @@ executing is not exercised by this scenario.
 ## Independently admitted processes
 
 `process_spawn` accepts a named ELF and returns the selected free slot and its
-new incarnation. `process_status` reports each slot's state, identity, I/O,
-exit and frame cleanup. Two independent tasks share a single virtual CPU;
-admission is refused if both slots are occupied or another execution mode is
-active. The experimental `a-` and `b-` namespace conventions follow the
-assigned slot. They are not a general permissions system.
+new incarnation. `process_status` retains its historical two-slot fields and
+adds `all_*` arrays for all three slots, including state, identity, I/O, exit
+and frame cleanup. Three independent tasks share one virtual CPU; admission is
+refused when all three slots are occupied or another execution mode is active.
+The experimental `a-`, `b-` and `c-` namespace conventions follow the assigned
+slot. They are not authentication or a general permissions system.
 
 ## Temporary ELF uploads
 
@@ -574,12 +575,18 @@ were not retained. A full rerun passed boot 43 and completed with the same
 pre-cleanup capture path was not exercised by that successful rerun.
 
 The single-CPU scheduler selects the next ready slot by a bounded circular
-search after timer interrupts, a blocking wait, or task exit. If neither slot is
-ready after a wait or exit, control returns to the service loop; device polling
-and MCP can continue. This refactor does not increase process capacity: the
-guest still admits exactly two process contexts, with no general SMP or
-starvation-freedom guarantee. A third page-table root (ASID 3) and a pool of
-nine user frames prepare a third context; boot checks exercise that root's
-permissions and map/unmap using a temporarily reserved frame. The integrated
-modern QEMU scenario passed with the existing two processes. This preparation
-does not admit or run a third process; the older legacy trace predates it.
+search after timer interrupts, a blocking wait, or task exit. If no slot is
+ready, control returns to the service loop; device polling and MCP can continue.
+The guest admits up to three independent fixed contexts, with a third page-table
+root (ASID 3) and a pool of nine user frames. This is not SMP, arbitrary task
+capacity, or a general starvation-freedom guarantee. Direct IPC and VirtIO
+networking remain limited to slots 0 and 1; calls from slot 2 return -38.
+
+The integrated modern QEMU scenario runs three copies of the linked Rust ELF,
+checks separate mappings, initialized private data/stacks and timer preemption,
+and exercises the three per-slot namespaces, including refused cross-reads and
+cross-writes. It stops and readmits A while B and C continue to make progress,
+then checks each task's exit and frame cleanup. A separate integrated case has
+A and B asleep on direct IPC, stops runnable C, then stops B and verifies A is
+woken and all three sets of frames are reclaimed. This validates these specific
+VM paths, not physical Apple drivers, application compatibility or SMP.
