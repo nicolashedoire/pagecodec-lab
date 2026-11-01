@@ -152,9 +152,9 @@ extern "C" fn irq_report(frame:*const Frame,family:u64)->! {
 }
 // Used by vectors and post-frame paths where SP must not be read as a Frame.
 #[no_mangle]
-extern "C" fn unexpected_vector()->! {
- let mut elr:u64;let mut spsr:u64;let mut esr:u64;unsafe{asm!("mrs {},ELR_EL1",out(reg) elr);asm!("mrs {},SPSR_EL1",out(reg) spsr);asm!("mrs {},ESR_EL1",out(reg) esr);}
- super::write("FAIL IRQ no_frame elr=");super::write_decimal(elr as usize);super::write(" spsr=");super::write_decimal(spsr as usize);super::write(" esr=");super::write_decimal(esr as usize);super::write("\n");loop{unsafe{asm!("wfe",options(nomem,nostack))}}
+extern "C" fn unexpected_vector(slot:u64)->! {
+ let mut elr:u64;let mut spsr:u64;let mut esr:u64;let mut far:u64;unsafe{asm!("mrs {},ELR_EL1",out(reg) elr);asm!("mrs {},SPSR_EL1",out(reg) spsr);asm!("mrs {},ESR_EL1",out(reg) esr);asm!("mrs {},FAR_EL1",out(reg) far);}
+ super::write("FAIL IRQ no_frame slot=");super::write_decimal(slot as usize);super::write(" elr=");super::write_decimal(elr as usize);super::write(" spsr=");super::write_decimal(spsr as usize);super::write(" esr=");super::write_decimal(esr as usize);super::write(" far=");super::write_decimal(far as usize);super::write("\n");loop{unsafe{asm!("wfe",options(nomem,nostack))}}
 }
 fn halt()->! {super::write("FAIL EL0 HALT\n");loop{unsafe{asm!("wfe",options(nomem,nostack))}}}
 fn check(ok:bool,msg:&str){if !ok{super::write("FAIL EL0 ");super::write(msg);super::write("\r\n");halt()}}
@@ -264,37 +264,51 @@ global_asm!(r#"
     .balign 2048
     .global vector_table
 vector_table:
-    b irq_fatal
+    mov x0, #0
+    b exception_fatal
     .balign 128
-    b irq_fatal
+    mov x0, #1
+    b exception_fatal
     .balign 128
-    b irq_fatal
+    mov x0, #2
+    b exception_fatal
     .balign 128
-    b irq_fatal
+    mov x0, #3
+    b exception_fatal
     .balign 128
-    b irq_fatal
+    mov x0, #4
+    b exception_fatal
     .balign 128
-    b irq_fatal
+    mov x0, #5
+    b exception_fatal
     .balign 128
-    b irq_fatal
+    mov x0, #6
+    b exception_fatal
     .balign 128
-    b irq_fatal
+    mov x0, #7
+    b exception_fatal
     .balign 128
     b lower_el_svc          // lower EL AArch64 sync
     .balign 128
     b lower_el_irq          // lower EL AArch64 IRQ
     .balign 128
-    b irq_fatal
+    mov x0, #10
+    b exception_fatal
     .balign 128
-    b irq_fatal
+    mov x0, #11
+    b exception_fatal
     .balign 128
-    b irq_fatal
+    mov x0, #12
+    b exception_fatal
     .balign 128
-    b irq_fatal
+    mov x0, #13
+    b exception_fatal
     .balign 128
-    b irq_fatal
+    mov x0, #14
+    b exception_fatal
     .balign 128
-    b irq_fatal
+    mov x0, #15
+    b exception_fatal
     .balign 128
 
     .section .text.irq, "ax"
@@ -740,6 +754,8 @@ irq_report_frame:
     mov x0, sp
     b irq_report
 irq_fatal:
+    mov x0, #16             // direct branch, not a vector entry
+exception_fatal:
     msr daifset, #0xf
     b unexpected_vector
 

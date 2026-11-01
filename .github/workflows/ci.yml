@@ -816,6 +816,13 @@ jobs:
             ${{ runner.temp }}/storage-normal-${{ matrix.id }}/
             ${{ runner.temp }}/storage-legacy-${{ matrix.id }}/
           if-no-files-found: ignore
+      - name: Preserve failing guest binary
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: storage-guest-${{ matrix.id }}
+          path: experiments/${{ matrix.directory }}/target/aarch64-unknown-none-softfloat/release/${{ matrix.binary }}
+          if-no-files-found: ignore
 
   rust-workspaces:
     name: Rust workspace core / Ubuntu VM
