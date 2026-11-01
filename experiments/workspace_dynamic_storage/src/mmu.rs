@@ -30,6 +30,19 @@ fn query(address:usize,write:bool,user:bool)->u64 {
 pub fn root(index:usize)->u64 {assert!(index<2);unsafe{read_volatile(addr_of!(ROOTS).cast::<u64>().add(index))}}
 pub fn active_root()->u64 {let v:u64;unsafe{asm!("mrs {}, TTBR0_EL1",out(reg) v)}v}
 pub fn switch_root(root:u64) {unsafe{asm!("dsb ishst","msr TTBR0_EL1, {r}","isb","tlbi vmalle1","dsb ish","isb",r=in(reg) root);}}
+/// Map an already-zeroed, exclusively owned frame for a newly admitted task.
+/// This guest uses two fixed roots and a single CPU, not a general VM mapper.
+pub fn map_task_alias(actor:usize,frame:usize) {
+ assert!(actor<2 && frame%PAGE==0 && active_root()==root(0));
+ let table=if actor==0 {addr_of_mut!(L3_ALIAS_A)}else{addr_of_mut!(L3_ALIAS_B)};
+ let entry=unsafe{table.cast::<u64>().add((ALIAS>>12)&511)};
+ assert!(unsafe{read_volatile(entry)}==0);
+ unsafe{write_volatile(entry,frame as u64|AF|SH|NORMAL|USER|PXN|UXN|NG|DESC);asm!("dsb ishst","tlbi vmalle1","dsb ish","isb");}
+ switch_root(root(actor));
+ let result=query(ALIAS,false,true);
+ assert!(result&1==0 && result&PA_MASK==frame as u64 && query(ALIAS,true,true)&1==0);
+ switch_root(root(0));
+}
 /// Remove an exited task's private-page alias before its frame is recycled.
 /// Caller must have stopped the task and masked IRQs. This fixed two-root
 /// guest has a single CPU; this is not a general SMP address-space teardown.

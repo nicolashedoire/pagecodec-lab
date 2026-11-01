@@ -430,6 +430,23 @@ fn save_snapshot<T:Transport>(disk:&mut VirtIOBlk<VmHal,T>,doc:&DocumentDemo,fil
     Ok((slot,generation))
 }
 
+// The sole EL1 service owns the catalog. Prepare changes privately and publish
+// them only after the same validated two-slot write used by workspace saves.
+fn put_file<T:Transport>(disk:&mut VirtIOBlk<VmHal,T>,doc:&DocumentDemo,files:&mut vfs::Files,name:&str,data:&[u8])->Result<(usize,u64),&'static str> {
+    let mut next=files.clone();
+    next.put(name,data)?;
+    let commit=save_snapshot(disk,doc,&next)?;
+    *files=next;
+    Ok(commit)
+}
+fn delete_file<T:Transport>(disk:&mut VirtIOBlk<VmHal,T>,doc:&DocumentDemo,files:&mut vfs::Files,name:&str)->Result<(usize,u64),&'static str> {
+    let mut next=files.clone();
+    next.remove(name)?;
+    let commit=save_snapshot(disk,doc,&next)?;
+    *files=next;
+    Ok(commit)
+}
+
 fn tool_json(id: Value, data: Value) {
     send(&json!({"jsonrpc":"2.0","id":id,"result":{"content":[{"type":"text","text":format!("{}",data)}],"isError":false}}));
 }
@@ -539,6 +556,31 @@ pub extern "C" fn graph_main() -> ! {
             // Two entries at most can have been queued before this slice ends.
             for _ in 0..2 {
                 let Some(request)=el0::pop_request() else {break};
+                if request.file_op!=0 {
+                    // Requests were copied from a private EL0 page by SVC;
+                    // authorize again at the owner boundary before disk access.
+                    let key=request.key.get(..request.key_len).and_then(|x|core::str::from_utf8(x).ok());
+                    let data=request.value.get(..request.value_len);
+                    let mut reply=[0u8;32];
+                    let mut reply_len=0usize;
+                    let success=if request.actor!=0 {false} else if let (Some(key),Some(data))=(key,data) {
+                        match request.file_op {
+                            1=>{
+                                // A restored, byte-identical committed file needs no rewrite.
+                                if files.get(key).is_ok_and(|old|old==data) {true}
+                                else if let Some(ref mut disk)=block {put_file(disk,&document,&mut files,key,data).is_ok()}
+                                else {false}
+                            }
+                            2=>match files.get(key) {
+                                Ok(bytes) if bytes.len()<=reply.len()=>{reply_len=bytes.len();reply[..reply_len].copy_from_slice(bytes);true},
+                                _=>false,
+                            },
+                            _=>false,
+                        }
+                    } else {false};
+                    if !el0::complete_file(request.actor,request.id,success,&reply[..reply_len]) {halt()}
+                    continue;
+                }
                 let success=if request.save {
                     // Recheck authority at the owner boundary. IRQ/SVC never touch the disk.
                     if request.actor!=0 {false} else if let Some(ref mut disk)=block {
@@ -701,31 +743,23 @@ pub extern "C" fn graph_main() -> ! {
                                                 let name=args.and_then(|o|o.get("name")).and_then(Value::as_str);
                                                 let data=args.and_then(|o|o.get("data")).and_then(Value::as_str);
                                                 if !args.is_some_and(|o|o.len()==2) || name.is_none() || data.is_none() {tool_error(id,"invalid file_put arguments");}
-                                                else {
-                                                    let mut next=files.clone();
-                                                    if let Err(error)=next.put(name.unwrap(),data.unwrap().as_bytes()) {tool_error(id,error);}
-                                                    else if let Some(ref mut disk)=block {
-                                                        match save_snapshot(disk,&document,&next) {
-                                                            Ok((slot,generation))=>{files=next;tool_json(id,json!({"slot":slot,"generation":generation,"readback_verified":true}));},
-                                                            Err(error)=>tool_error(id,error),
-                                                        }
-                                                    } else {tool_error(id,"storage unavailable");}
-                                                }
+                                                else if let Some(ref mut disk)=block {
+                                                    match put_file(disk,&document,&mut files,name.unwrap(),data.unwrap().as_bytes()) {
+                                                        Ok((slot,generation))=>tool_json(id,json!({"slot":slot,"generation":generation,"readback_verified":true})),
+                                                        Err(error)=>tool_error(id,error),
+                                                    }
+                                                } else {tool_error(id,"storage unavailable");}
                                             }
                                             Some("file_delete") => {
                                                 let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
                                                 let name=args.and_then(|o|o.get("name")).and_then(Value::as_str);
                                                 if !args.is_some_and(|o|o.len()==1) || name.is_none() {tool_error(id,"invalid file_delete arguments");}
-                                                else {
-                                                    let mut next=files.clone();
-                                                    if let Err(error)=next.remove(name.unwrap()) {tool_error(id,error);}
-                                                    else if let Some(ref mut disk)=block {
-                                                        match save_snapshot(disk,&document,&next) {
-                                                            Ok((slot,generation))=>{files=next;tool_json(id,json!({"slot":slot,"generation":generation,"readback_verified":true}));},
-                                                            Err(error)=>tool_error(id,error),
-                                                        }
-                                                    } else {tool_error(id,"storage unavailable");}
-                                                }
+                                                else if let Some(ref mut disk)=block {
+                                                    match delete_file(disk,&document,&mut files,name.unwrap()) {
+                                                        Ok((slot,generation))=>tool_json(id,json!({"slot":slot,"generation":generation,"readback_verified":true})),
+                                                        Err(error)=>tool_error(id,error),
+                                                    }
+                                                } else {tool_error(id,"storage unavailable");}
                                             }
                                             Some("ipc_status") => {
                                                 let args=params.and_then(|p|p.get("arguments"));

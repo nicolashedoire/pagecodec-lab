@@ -129,15 +129,16 @@ class Guest:
         before=self.last_progress
         for _ in range(8):
             current=self.call('el0_status',{})
-            if current.get('task_states')==['exited','exited']:break
+            if current.get('task_states')==['exited','exited'] and current.get('spawn_exited') is True:break
             time.sleep(.1)
         else:raise RuntimeError('tasks did not finish across '+label)
         if current.get('mode')!='service-boundary' or current.get('slice_ticks',0)<before.get('slice_ticks',0):raise RuntimeError('EL0 slices regressed across '+label)
         if current.get('private_values')!=[0xa1a1,0xb2b2] or current.get('service_asid')!=1:raise RuntimeError('private markers or service ASID changed across '+label)
         if current.get('dispatches',0)<before.get('dispatches',0) or current.get('frame_pool_assigned')!=0 or current.get('frame_scrubbed')!=[True,True] or current.get('alias_removed')!=[True,True]:raise RuntimeError('task teardown or reclamation invalid across '+label)
+        if any(current.get(k) is not True for k in ('spawn_admitted','spawn_reused_frame','spawn_executed','spawn_exited')):raise RuntimeError('new task did not reuse and release a frame across '+label)
         if len(current.get('slice_counts',[]))!=2 or any(a<b for a,b in zip(current['slice_counts'],before['slice_counts'])):raise RuntimeError('EL0 counts regressed across '+label)
         again=self.call('el0_status',{})
-        if again.get('task_states')!=['exited','exited'] or any(again.get(k)!=current.get(k) for k in ('slice_ticks','dispatches','slice_counts','frame_pool_assigned','frame_scrubbed','alias_removed')):raise RuntimeError('exited task was dispatched again across '+label)
+        if again.get('task_states')!=['exited','exited'] or any(again.get(k)!=current.get(k) for k in ('slice_ticks','dispatches','slice_counts','frame_pool_assigned','frame_scrubbed','alias_removed','spawn_admitted','spawn_reused_frame','spawn_executed','spawn_exited')):raise RuntimeError('exited task was dispatched again across '+label)
         self.last_progress=current
         return current
     def input(self,events):

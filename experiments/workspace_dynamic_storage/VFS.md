@@ -27,11 +27,23 @@ The loader also accepts the exact legacy three-key document snapshot and
 starts it with an empty file catalog. Unknown/malformed formats are rejected.
 Both types retain the same existing two-slot header, generation, checksum and
 commit marker. A subsequent successful save writes the versioned format to the
-other slot; the legacy slot is not modified by that migration save.
+other slot; the legacy slot is not modified by that migration save. A later
+write may reuse the old slot normally.
 
-The integrated QEMU scenario writes and reads `notes.txt`, creates, lists and
-deletes another file, verifies refused requests, restarts and checks that the
-deletion persists, then corrupts the newest slot while the VM is stopped and restores the older
+The third fixed EL0 task uses the same bounded IPC queue to issue file PUT and
+GET requests for the synthetic file `note`, containing `hello`. The service
+checks the caller slot again and uses the same catalog and verified save as
+MCP. PUT avoids a new write if the restored file already contains identical
+bytes. GET returns at most 32 bytes through the private task page, and the task
+checks the length and every returned byte before its fixed exit. The request
+name is limited to 16 UTF-8 bytes. This task reuses logical actor slot 0: it
+does not have independent identity or authority and does not establish a
+general file API, third user, access-control model, or process isolation.
+
+The integrated QEMU scenario includes the task's PUT and GET, writes and reads
+`notes.txt` through MCP, creates, lists and deletes another file, verifies
+refused requests, restarts and checks that the deletion persists, then corrupts
+the newest slot while the VM is stopped and restores the older
 valid copy including that file, and saves again. A further boot starts with a
 synthetic legacy snapshot and checks that migration preserves the old slot.
 All disks are freshly created host temporary files; no physical devices or

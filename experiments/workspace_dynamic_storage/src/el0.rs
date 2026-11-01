@@ -36,20 +36,27 @@ static mut PROBE_DONE:u64=0;
 static mut FRAME_SCRUBBED:[bool;2]=[false;2];
 static mut ALIAS_REMOVED:[bool;2]=[false;2];
 static mut EXIT_MARKERS:[u64;2]=[0;2];
+static mut FIRST_FRAME_A:usize=0;
+static mut SPAWN_ADMITTED:bool=false;
+static mut SPAWN_ACTIVE:bool=false;
+static mut SPAWN_EXECUTED:bool=false;
+static mut SPAWN_EXITED:bool=false;
+static mut SPAWN_REUSED:bool=false;
 #[no_mangle] static mut SLICE_COUNTS:[u64;2]=[0;2];
 #[no_mangle] static mut USER_TOPS:[u64;2]=[0;2];
 #[no_mangle] static mut SLICE_DELTA:u64=0;
 // Single CPU, EL1 service executes only between slices; IRQs are masked on
 // exception entry. The request queue and completions are fixed-size.
 #[derive(Clone,Copy,PartialEq,Eq)]
-pub struct Request {pub actor:usize,pub id:u64,pub save:bool,pub key:[u8;16],pub key_len:usize,pub value:[u8;32],pub value_len:usize}
-#[derive(Clone,Copy,PartialEq,Eq)] struct Completion {actor:usize,id:u64,popped:bool,applied:bool,success:bool,delivered:bool,consumed:bool}
-const EMPTY_COMPLETION:Completion=Completion{actor:0,id:0,popped:false,applied:false,success:false,delivered:false,consumed:false};
-struct Ipc {queue:[Option<Request>;2],head:usize,len:usize,completions:[Completion;4],accepted:[u64;4],accepted_len:usize,applied:[u64;4],applied_len:usize,consumed:[u64;4],consumed_len:usize,full:bool,full_consumed:bool,range:[bool;2],overflow:[bool;2],duplicate:[bool;2],utf8:[bool;2],spoof:[bool;2],save_denied:bool,denial_consumed:bool}
-static mut IPC:Ipc=Ipc{queue:[None;2],head:0,len:0,completions:[EMPTY_COMPLETION;4],accepted:[0;4],accepted_len:0,applied:[0;4],applied_len:0,consumed:[0;4],consumed_len:0,full:false,full_consumed:false,range:[false;2],overflow:[false;2],duplicate:[false;2],utf8:[false;2],spoof:[false;2],save_denied:false,denial_consumed:false};
+pub struct Request {pub actor:usize,pub id:u64,pub save:bool,pub file_op:u8,pub key:[u8;16],pub key_len:usize,pub value:[u8;32],pub value_len:usize}
+#[derive(Clone,Copy,PartialEq,Eq)] struct Completion {actor:usize,id:u64,popped:bool,applied:bool,success:bool,delivered:bool,consumed:bool,data:[u8;32],data_len:usize}
+const EMPTY_COMPLETION:Completion=Completion{actor:0,id:0,popped:false,applied:false,success:false,delivered:false,consumed:false,data:[0;32],data_len:0};
+struct Ipc {queue:[Option<Request>;2],head:usize,len:usize,completions:[Completion;7],accepted:[u64;7],accepted_len:usize,applied:[u64;7],applied_len:usize,consumed:[u64;7],consumed_len:usize,full:bool,full_consumed:bool,range:[bool;2],overflow:[bool;2],duplicate:[bool;2],utf8:[bool;2],spoof:[bool;2],save_denied:bool,denial_consumed:bool}
+static mut IPC:Ipc=Ipc{queue:[None;2],head:0,len:0,completions:[EMPTY_COMPLETION;7],accepted:[0;7],accepted_len:0,applied:[0;7],applied_len:0,consumed:[0;7],consumed_len:0,full:false,full_consumed:false,range:[false;2],overflow:[false;2],duplicate:[false;2],utf8:[false;2],spoof:[false;2],save_denied:false,denial_consumed:false};
 fn in_page(p:u64,n:usize)->bool {n>0 && p>=super::mmu::ALIAS as u64 && p.checked_add(n as u64).is_some_and(|end|end<=(super::mmu::ALIAS+PAGE) as u64)}
 unsafe fn read64(p:u64)->u64 {let v:u64;asm!("ldr {v}, [{p}]",p=in(reg)p,v=out(reg)v,options(nostack,preserves_flags));v}
 unsafe fn write64(p:u64,v:u64){asm!("str {v}, [{p}]",p=in(reg)p,v=in(reg)v,options(nostack,preserves_flags));}
+unsafe fn writebyte(p:u64,v:u8){asm!("strb {v:w}, [{p}]",p=in(reg)p,v=in(reg)v as u32,options(nostack,preserves_flags));}
 unsafe fn readbyte(p:u64)->u8 {let v:u32;asm!("ldrb {v:w}, [{p}]",p=in(reg)p,v=out(reg)v,options(nostack,preserves_flags));v as u8}
 fn descriptor(actor:usize,index:usize,id:u64)->Option<Request> {
  if actor>1 || index>5 {return None}
@@ -57,7 +64,7 @@ fn descriptor(actor:usize,index:usize,id:u64)->Option<Request> {
  if !in_page(h,40) || unsafe{read64(h+32)}!=id {return None}
  let (kp,kn,vp,vn)=unsafe{(read64(h),read64(h+8),read64(h+16),read64(h+24))};
  if kn==0 || kn>16 || vn>32 || !in_page(kp,kn as usize) || !in_page(vp,vn as usize) {return None}
- let mut req=Request{actor,id,save:false,key:[0;16],key_len:kn as usize,value:[0;32],value_len:vn as usize};
+ let mut req=Request{actor,id,save:false,file_op:0,key:[0;16],key_len:kn as usize,value:[0;32],value_len:vn as usize};
  for i in 0..req.key_len {req.key[i]=unsafe{readbyte(kp+i as u64)}}
  for i in 0..req.value_len {req.value[i]=unsafe{readbyte(vp+i as u64)}}
  if core::str::from_utf8(&req.key[..req.key_len]).is_err() || core::str::from_utf8(&req.value[..req.value_len]).is_err(){return None}
@@ -65,7 +72,7 @@ fn descriptor(actor:usize,index:usize,id:u64)->Option<Request> {
 }
 fn submit(state:&mut Ipc,req:Request)->bool {
  let i=(req.id-1) as usize;
- if i>=4 || state.completions[i].id!=0 || state.len==2 || state.accepted_len>=4 {return false}
+ if i>=7 || state.completions[i].id!=0 || state.len==2 || state.accepted_len>=7 {return false}
  let slot=(state.head+state.len)%2;state.queue[slot]=Some(req);state.len+=1;
  state.completions[i]=Completion{actor:req.actor,id:req.id,..EMPTY_COMPLETION};
  state.accepted[state.accepted_len]=req.id;state.accepted_len+=1;true
@@ -78,15 +85,26 @@ pub fn pop_request()->Option<Request> {
  s.completions[(r.id-1) as usize].popped=true;Some(r)
 }
 pub fn complete(actor:usize,id:u64,success:bool)->bool {
- let s=unsafe{&mut *addr_of_mut!(IPC)};if id==0 || id>4{return false}
+ let s=unsafe{&mut *addr_of_mut!(IPC)};if id==0 || id>7{return false}
  let c=&mut s.completions[(id-1) as usize];
- if c.actor!=actor || c.id!=id || !c.popped || c.applied || s.applied_len>=4{return false}
+ if c.actor!=actor || c.id!=id || !c.popped || c.applied || s.applied_len>=7{return false}
+ c.applied=true;c.success=success;s.applied[s.applied_len]=id;s.applied_len+=1;true
+}
+/// Complete the file operation in the bounded queue. Bytes are copied into
+/// kernel-owned completion storage before the caller's buffers can change.
+pub fn complete_file(actor:usize,id:u64,success:bool,data:&[u8])->bool {
+ if !(id==6 || id==7) || data.len()>32 || (id==6 && !data.is_empty()) {return false}
+ let s=unsafe{&mut *addr_of_mut!(IPC)};
+ let c=&mut s.completions[(id-1) as usize];
+ if c.actor!=actor || c.id!=id || !c.popped || c.applied || s.applied_len>=7 {return false}
+ c.data[..data.len()].copy_from_slice(data);c.data_len=data.len();
  c.applied=true;c.success=success;s.applied[s.applied_len]=id;s.applied_len+=1;true
 }
 pub fn ipc_status()->Value {
  let s=unsafe{&*addr_of!(IPC)};
- let finished=s.consumed_len==4 && s.applied_len==4 && s.full && s.full_consumed && s.range==[true;2] && s.overflow==[true;2] && s.duplicate==[true;2] && s.utf8==[true;2] && s.spoof==[true;2] && s.save_denied && s.denial_consumed && s.completions.iter().all(|c|c.success);
- json!({"finished":finished,"capacity":2,"queue_len":s.len,"accepted":&s.accepted[..s.accepted_len],"applied":&s.applied[..s.applied_len],"consumed":&s.consumed[..s.consumed_len],"full_rejected":s.full,"full_consumed":s.full_consumed,"range_rejected":s.range,"overflow_rejected":s.overflow,"duplicate_rejected":s.duplicate,"utf8_rejected":s.utf8,"spoof_rejected":s.spoof,"save_denied":s.save_denied,"denial_consumed":s.denial_consumed,"source":"synthetic descriptors and bytes constructed by EL0"})
+ let initial_finished=s.consumed_len>=4 && s.applied_len>=4 && s.full && s.full_consumed && s.range==[true;2] && s.overflow==[true;2] && s.duplicate==[true;2] && s.utf8==[true;2] && s.spoof==[true;2] && s.save_denied && s.denial_consumed && s.completions[..4].iter().all(|c|c.success);
+ let file_finished=s.completions[5].success && s.completions[5].consumed && s.completions[6].success && s.completions[6].consumed && unsafe{read_volatile(addr_of!(SPAWN_EXECUTED))};
+ json!({"finished":initial_finished && file_finished,"initial_finished":initial_finished,"file_finished":file_finished,"capacity":2,"queue_len":s.len,"accepted":&s.accepted[..s.accepted_len],"applied":&s.applied[..s.applied_len],"consumed":&s.consumed[..s.consumed_len],"full_rejected":s.full,"full_consumed":s.full_consumed,"range_rejected":s.range,"overflow_rejected":s.overflow,"duplicate_rejected":s.duplicate,"utf8_rejected":s.utf8,"spoof_rejected":s.spoof,"save_denied":s.save_denied,"denial_consumed":s.denial_consumed,"source":"synthetic descriptors and bytes constructed by EL0"})
 }
 #[no_mangle]
 extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
@@ -155,8 +173,18 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
    }
   },
   0x110 if actor==0 && s.consumed_len==3 && s.completions[3].id==0 => {
-   let r=Request{actor,id:4,save:true,key:[0;16],key_len:0,value:[0;32],value_len:0};
+   let r=Request{actor,id:4,save:true,file_op:0,key:[0;16],key_len:0,value:[0;32],value_len:0};
    if !submit(s,r) {halt()}
+  },
+  0x130 if actor==0 && unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} && s.completions[5].id==0 => {
+   let Some(mut r)=descriptor(actor,0,6) else {halt()};r.file_op=1;if !submit(s,r){halt()}
+  },
+  0x131 if actor==0 && unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} && s.completions[5].consumed && s.completions[6].id==0 => {
+   let Some(mut r)=descriptor(actor,0,7) else {halt()};r.file_op=2;if !submit(s,r){halt()}
+  },
+  0x121 if actor==0 && unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} && s.completions[6].consumed => {
+   if f.elr!=addr_of!(spawned_after_svc) as u64 || unsafe{read64((super::mmu::ALIAS+128) as u64)}!=0xa1a1 || unsafe{read64((super::mmu::ALIAS+848) as u64)}!=1 {halt()}
+   unsafe{write_volatile(addr_of_mut!(SPAWN_EXECUTED),true)};return 1;
   },
   0x120 if s.consumed_len==4 && s.denial_consumed && s.len==0 => {
    // The task asks to exit only after the integrated work has completed.
@@ -165,14 +193,18 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
   0x103 => {
     if !s.completions.iter().any(|c|c.actor==actor && c.delivered && !c.consumed) {
      if let Some(c)=s.completions.iter_mut().find(|c|c.id!=0 && c.actor==actor && c.applied && !c.delivered) {
-      unsafe{write64((super::mmu::ALIAS+80) as u64,c.id);write64((super::mmu::ALIAS+112) as u64,if c.success {1}else{2})};c.delivered=true;
+      unsafe{
+       write64((super::mmu::ALIAS+80) as u64,c.id);write64((super::mmu::ALIAS+112) as u64,if c.success {1}else{2});
+       write64((super::mmu::ALIAS+800) as u64,c.data_len as u64);
+       for i in 0..32 {writebyte((super::mmu::ALIAS+808+i) as u64,c.data[i])}
+      };c.delivered=true;
      }
     }
   },
   0x105 => {
    let observed=unsafe{read64((super::mmu::ALIAS+88) as u64)};let result=unsafe{read64((super::mmu::ALIAS+120) as u64)};
    if let Some(c)=s.completions.iter_mut().find(|c|c.id==observed && c.id!=0 && c.actor==actor && c.delivered && !c.consumed && result==if c.success {1}else{2}) {
-    if s.consumed_len>=4 {halt()} c.consumed=true;s.consumed[s.consumed_len]=observed;s.consumed_len+=1;
+    if s.consumed_len>=7 {halt()} c.consumed=true;s.consumed[s.consumed_len]=observed;s.consumed_len+=1;
     unsafe{write64((super::mmu::ALIAS+80) as u64,0);write64((super::mmu::ALIAS+88) as u64,0);write64((super::mmu::ALIAS+112) as u64,0);write64((super::mmu::ALIAS+120) as u64,0)};
    }
   },
@@ -209,6 +241,7 @@ extern "C" {
  static __stack_bottom:u8;static __stack_top:u8;static vector_table:u8;
  static task_a_loop:u8;static task_a_end:u8;static task_b_loop:u8;static task_b_end:u8;
  static task_a_cross_fault:u8;static task_b_cross_fault:u8;
+ static spawned_entry:u8;static spawned_after_svc:u8;
  static task_a_init:u8;static task_a_init_end:u8;static task_b_init:u8;static task_b_init_end:u8;
  fn start_first(frame:*const Frame)->!;fn resume_graphics()->!;fn slice_probe(frame:*const Frame)->u64;
 }
@@ -218,14 +251,18 @@ fn physical(value:usize)->usize {let out:usize;unsafe{asm!("mov {out}, {value}",
 pub fn private_stacks()->(usize,usize) {
  let bitmap=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
  check(bitmap==0,"frame pool already initialized");
- for actor in 0..2 {
-  let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
-  let slot=(0..4).find(|i|used&(1<<i)==0).unwrap_or_else(||halt());
-  let frame=unsafe{addr_of_mut!(USER_FRAMES).cast::<UserStack>().add(slot)} as *mut u8;
-  for i in 0..PAGE {unsafe{write_volatile(frame.add(i),0)}}
-  unsafe{write_volatile(addr_of_mut!(FRAME_BITMAP),used|(1<<slot));write_volatile(addr_of_mut!(TASK_FRAMES).cast::<usize>().add(actor),frame as usize)};
- }
+ for actor in 0..2 {allocate_task_frame(actor);}
  (task_frame(0),task_frame(1))
+}
+fn allocate_task_frame(actor:usize)->usize {
+ check(actor<2 && unsafe{read_volatile(addr_of!(TASK_FRAMES).cast::<usize>().add(actor))}==0,"task already owns a frame");
+ let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
+ let slot=(0..4).find(|i|used&(1<<i)==0).unwrap_or_else(||halt());
+ let frame=unsafe{addr_of_mut!(USER_FRAMES).cast::<UserStack>().add(slot)} as *mut u8;
+ for i in 0..PAGE {unsafe{write_volatile(frame.add(i),0)}}
+ for i in 0..PAGE {check(unsafe{read_volatile(frame.add(i))}==0,"frame allocation scrub")}
+ unsafe{write_volatile(addr_of_mut!(FRAME_BITMAP),used|(1<<slot));write_volatile(addr_of_mut!(TASK_FRAMES).cast::<usize>().add(actor),frame as usize)};
+ frame as usize
 }
 fn task_frame(actor:usize)->usize {
  check(actor<2,"frame actor");
@@ -291,11 +328,42 @@ fn reclaim_exited(actor:usize) {
  check(offset%PAGE==0 && offset/PAGE<4,"frame outside pool");
  let bit=1u8<<(offset/PAGE);let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
  check(used&bit!=0,"frame already free");
+ if actor==0 {
+  if unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} {
+   check(unsafe{read_volatile(addr_of!(SPAWN_EXECUTED))},"spawn did not execute");
+   unsafe{write_volatile(addr_of_mut!(SPAWN_EXITED),true);write_volatile(addr_of_mut!(SPAWN_ACTIVE),false)}
+  } else {unsafe{write_volatile(addr_of_mut!(FIRST_FRAME_A),frame)}}
+ }
  unsafe{write_volatile(addr_of_mut!(EXIT_MARKERS).cast::<u64>().add(actor),marker);write_volatile(p,0);write_volatile(addr_of_mut!(FRAME_BITMAP),used&!bit)}
 }
 fn marker(actor:usize)->u64 {
  let frame=unsafe{read_volatile(addr_of!(TASK_FRAMES).cast::<usize>().add(actor))};
  if frame==0 {unsafe{read_volatile(addr_of!(EXIT_MARKERS).cast::<u64>().add(actor))}} else {unsafe{read_volatile(frame as *const u64)}}
+}
+
+// Admit one new task from a fixed, trusted code entry after both initial
+// tasks have exited. No arbitrary binary loading or dynamic actor creation.
+fn admit_spawned_task() {
+ check(unsafe{read_volatile(addr_of!(TASK_STATE))}==[3,3] && !unsafe{read_volatile(addr_of!(SPAWN_ADMITTED))},"invalid spawn admission");
+ let frame_address=allocate_task_frame(0);
+ let previous=unsafe{read_volatile(addr_of!(FIRST_FRAME_A))};
+ check(previous!=0 && frame_address==previous,"spawn did not reuse first frame");
+ // The allocator zeroed and verified the entire reused frame first.
+ unsafe{write_volatile(frame_address as *mut u64,0xa1a1)};
+ super::mmu::map_task_alias(0,frame_address);
+ let mut child=frame(0,super::mmu::ALIAS+PAGE,addr_of!(spawned_entry) as usize);
+ child.regs[4]=1;
+ child.regs[19]=unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>())}.checked_add(1).unwrap_or_else(||halt());
+ unsafe {
+  write_volatile(addr_of_mut!(A_FRAME),child);
+  write_volatile(addr_of_mut!(FRAME_SCRUBBED).cast::<bool>(),false);
+  write_volatile(addr_of_mut!(ALIAS_REMOVED).cast::<bool>(),false);
+  write_volatile(addr_of_mut!(SPAWN_REUSED),true);
+  write_volatile(addr_of_mut!(SPAWN_ACTIVE),true);
+  write_volatile(addr_of_mut!(SPAWN_ADMITTED),true);
+  write_volatile(addr_of_mut!(CURRENT),0);
+  write_volatile(addr_of_mut!(TASK_STATE).cast::<u64>(),1);
+ }
 }
 
 /// Explicit service-boundary yielding, never arbitrary EL1 preemption.
@@ -323,8 +391,11 @@ pub fn prepare_slices() {
 pub fn run_slice() {
  let mut daif:u64;unsafe{asm!("mrs {},DAIF",out(reg) daif);}check(daif&(1<<7)!=0,"service IRQ unmasked");
  check(super::mmu::active_root()==super::mmu::root(0),"service root");
- let states_before=unsafe{read_volatile(addr_of!(TASK_STATE))};
- if states_before==[3,3] {return}
+ let mut states_before=unsafe{read_volatile(addr_of!(TASK_STATE))};
+ if states_before==[3,3] {
+  if unsafe{read_volatile(addr_of!(SPAWN_ADMITTED))} {return}
+  admit_spawned_task();states_before=unsafe{read_volatile(addr_of!(TASK_STATE))};
+ }
  check(states_before.iter().all(|v|*v==1 || *v==3),"invalid service-boundary task states");
  let current=unsafe{read_volatile(addr_of!(CURRENT))};check(current<2 && states_before[current as usize]==1,"slice actor");
  let frame=unsafe{read_volatile(addr_of!(SAVED).cast::<u64>().add(current as usize))} as *const Frame;
@@ -362,7 +433,7 @@ pub fn status()->Value {
  let slice_ticks=unsafe{read_volatile(addr_of!(SLICE_TOTAL))};
  let values=[marker(0),marker(1)];
  let states=unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|s|match s {1=>"ready",2=>"running",3=>"exited",_=>"invalid"});
- json!({"validated":done,"ticks":8,"el":"EL0","events":events,"timer":"disabled","interrupts":"masked","slice_ticks":slice_ticks,"slice_counts":counts,"mode":"service-boundary","private_values":values,"service_asid":super::mmu::active_root()>>48,"cross_code_read_denied":unsafe{read_volatile(addr_of!(CROSS_READ_DENIED))},"task_states":states,"frame_scrubbed":unsafe{read_volatile(addr_of!(FRAME_SCRUBBED))},"alias_removed":unsafe{read_volatile(addr_of!(ALIAS_REMOVED))},"dispatches":unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))},"frame_pool_capacity":4,"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()})
+ json!({"validated":done,"ticks":8,"el":"EL0","events":events,"timer":"disabled","interrupts":"masked","slice_ticks":slice_ticks,"slice_counts":counts,"mode":"service-boundary","private_values":values,"service_asid":super::mmu::active_root()>>48,"cross_code_read_denied":unsafe{read_volatile(addr_of!(CROSS_READ_DENIED))},"task_states":states,"frame_scrubbed":unsafe{read_volatile(addr_of!(FRAME_SCRUBBED))},"alias_removed":unsafe{read_volatile(addr_of!(ALIAS_REMOVED))},"dispatches":unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))},"spawn_admitted":unsafe{read_volatile(addr_of!(SPAWN_ADMITTED))},"spawn_executed":unsafe{read_volatile(addr_of!(SPAWN_EXECUTED))},"spawn_exited":unsafe{read_volatile(addr_of!(SPAWN_EXITED))},"spawn_reused_frame":unsafe{read_volatile(addr_of!(SPAWN_REUSED))},"frame_pool_capacity":4,"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()})
 }
 
 global_asm!(r#"
@@ -595,7 +666,17 @@ slice_init_range:
     cbnz x8, irq_register_fail
     b slice_after_temps
 slice_non_init:
-    ldr x8, [sp, #16]
+    cbnz x2, 23f
+    ldr x8, [sp, #256]
+    adrp x9, spawned_entry
+    add x9, x9, :lo12:spawned_entry
+    adrp x10, task_a_end
+    add x10, x10, :lo12:task_a_end
+    cmp x8, x9
+    b.lo 23f
+    cmp x8, x10
+    b.lo slice_after_temps
+23: ldr x8, [sp, #16]
     cmp x8, #5
     b.ls slice_x2_ok
     cmp x8, x7
@@ -1328,6 +1409,72 @@ task_a_init_end:
 el0_failure_a:
     svc #0x7bad
     b el0_failure_a
+    .global spawned_entry
+    .global spawned_after_svc
+spawned_entry:
+    str x1, [x0, #128]
+    movz x2, #0x6f6e
+    movk x2, #0x6574, lsl #16
+    str x2, [x0, #256]       // name: note
+    movz x2, #0x6568
+    movk x2, #0x6c6c, lsl #16
+    movk x2, #0x6f, lsl #32
+    str x2, [x0, #288]       // data: hello
+    add x2, x0, #256
+    str x2, [x0, #512]
+    mov x2, #4
+    str x2, [x0, #520]
+    add x2, x0, #288
+    str x2, [x0, #528]
+    mov x2, #5
+    str x2, [x0, #536]
+    mov x2, #6
+    str x2, [x0, #56]
+spawned_loop:
+    // The descriptor ID changes only after the PUT completion was consumed.
+    ldr x2, [x0, #56]
+    str x2, [x0, #544]
+    mov x2, x1
+    mov x3, #0
+    svc #0x130
+    svc #0x131
+    svc #0x103
+    ldr x2, [x0, #80]
+    cbz x2, 24f
+    ldr x3, [x0, #56]
+    eor x3, x3, x2
+    cbnz x3, el0_failure_a
+    ldr x3, [x0, #112]
+    eor x3, x3, #1
+    cbnz x3, el0_failure_a
+    eor x3, x2, #7
+    cbnz x3, 25f
+    ldr x3, [x0, #800]
+    mov x2, #5
+    eor x3, x3, x2
+    cbnz x3, el0_failure_a
+    ldr x3, [x0, #808]
+    movz x2, #0x6568
+    movk x2, #0x6c6c, lsl #16
+    movk x2, #0x6f, lsl #32
+    eor x3, x3, x2
+    cbnz x3, el0_failure_a
+    mov x2, #1
+    str x2, [x0, #848]       // EL0 verified length and bytes itself
+25: ldr x2, [x0, #80]
+    str x2, [x0, #88]
+    ldr x3, [x0, #112]
+    str x3, [x0, #120]
+    ldr x2, [x0, #56]
+    add x2, x2, #1
+    str x2, [x0, #56]
+24: mov x2, x1
+    mov x3, #0
+    svc #0x105
+    svc #0x121               // rejected until GET is consumed
+spawned_after_svc:
+    add x19, x19, #1
+    b spawned_loop           // never executed after accepted exit
 task_a_end:
     .section .usertext.b, "ax"
     .global task_b_loop
