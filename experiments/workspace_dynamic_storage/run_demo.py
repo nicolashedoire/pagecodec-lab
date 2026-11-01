@@ -431,8 +431,8 @@ def main():
     expected=old if cancelled[i] else new
     if g.call('file_get',{'name':name})!={'name':name,'hex':expected.hex()}:raise RuntimeError('pending-write outcome did not survive restart')
     if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('pair data cleanup failed')
-   # Independent ELFs wait on separate VFS gates. Release A, readmit its
-   # slot, and only then release B; no timing-based overlap is assumed.
+   # Independent ELFs wait on separate VFS gates. Stop A by exact token,
+   # readmit its slot, reject the old token and only then release the gates.
    for side in ('a','b'):
     if not g.call('file_put',{'name':side+'-gate','data':'0'}).get('readback_verified'):raise RuntimeError('independent gate not saved')
     code=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/('independent-'+side+'.hex')).read_text().strip())
@@ -449,7 +449,7 @@ def main():
    else:raise RuntimeError('independent startup pause did not become idle: '+str(fixture))
    if fixture.get('pause_requested') is not True or fixture.get('image_count')!=0:raise RuntimeError('independent scenario did not pause fixtures')
    task_a=g.call('process_spawn',{'name':'a-ind.elf'})
-   if task_a.get('started') is not True or task_a.get('slot')!=0 or not isinstance(task_a.get('incarnation'),int):raise RuntimeError('first independent admission failed: '+str(task_a))
+   if task_a.get('started') is not True or task_a.get('slot')!=0 or not isinstance(task_a.get('incarnation'),int) or task_a.get('incarnation_text')!=str(task_a['incarnation']):raise RuntimeError('first independent admission failed: '+str(task_a))
    state=g.wait_independent(lambda s:s.get('slot_states',[None,None])[0]=='ready' and s.get('io_completed',[0,0])[0]>0,'A live and reading')
    if state.get('incarnations',[None,None])[0]!=task_a['incarnation']:raise RuntimeError('A identity changed before B admission')
    b=g.call('process_spawn',{'name':'b-ind.elf'})
@@ -458,13 +458,19 @@ def main():
    if state.get('incarnations')!=[task_a['incarnation'],b['incarnation']] or state.get('frame_pool_assigned')!=4:raise RuntimeError('independent tasks not isolated concurrently: '+str(state))
    b_reads=state['io_completed'][1]
    reject(g,'process_spawn',{'name':'a-ind.elf'},'no free process slot')
-   if not g.call('file_put',{'name':'a-gate','data':'1'}).get('readback_verified'):raise RuntimeError('A gate release failed')
+   reject(g,'process_stop',{'slot':0,'incarnation':task_a['incarnation']},'invalid process_stop arguments')
+   reject(g,'process_stop',{'slot':0,'incarnation':'0'+task_a['incarnation_text']},'invalid process_stop arguments')
+   reject(g,'process_stop',{'slot':0,'incarnation':'18446744073709551616'},'invalid process_stop arguments')
+   reject(g,'process_stop',{'slot':2,'incarnation':task_a['incarnation_text']},'invalid process slot')
+   stopped=g.call('process_stop',{'slot':0,'incarnation':task_a['incarnation_text']})
+   if stopped!={'stopped':True,'slot':0,'incarnation':task_a['incarnation_text']}:raise RuntimeError('targeted stop failed: '+str(stopped))
    state=g.wait_independent(lambda s:s.get('slot_states')==['exited','ready'] and s.get('io_completed',[0,0])[1]>b_reads,'A exited while B continued reading')
-   if state.get('incarnations')!=[task_a['incarnation'],b['incarnation']] or state.get('exit_codes',[None,None])[0]!=0 or state.get('data_scrubbed',[False,False])[0] is not True or state.get('code_scrubbed',[False,False])[0] is not True or state.get('frame_pool_assigned')!=2:raise RuntimeError('A teardown disturbed B: '+str(state))
+   if state.get('incarnations')!=[task_a['incarnation'],b['incarnation']] or state.get('outcomes',[None,None])[0]!=4 or state.get('exit_codes',[0,0])[0] is not None or state.get('data_scrubbed',[False,False])[0] is not True or state.get('code_scrubbed',[False,False])[0] is not True or state.get('frame_pool_assigned')!=2:raise RuntimeError('A teardown disturbed B: '+str(state))
    b_reads=state['io_completed'][1]
    if not g.call('file_put',{'name':'a-gate','data':'0'}).get('readback_verified'):raise RuntimeError('A gate reset failed')
    a2=g.call('process_spawn',{'name':'a-ind.elf'})
-   if a2.get('started') is not True or a2.get('slot')!=0 or not isinstance(a2.get('incarnation'),int) or a2['incarnation']<=b['incarnation']:raise RuntimeError('A readmission invalid: '+str(a2))
+   if a2.get('started') is not True or a2.get('slot')!=0 or not isinstance(a2.get('incarnation'),int) or a2.get('incarnation_text')!=str(a2['incarnation']) or a2['incarnation']<=b['incarnation']:raise RuntimeError('A readmission invalid: '+str(a2))
+   reject(g,'process_stop',{'slot':0,'incarnation':task_a['incarnation_text']},'stale process incarnation')
    state=g.wait_independent(lambda s:s.get('slot_states')==['ready','ready'] and s.get('io_completed',[0,0])[0]>0 and s.get('io_completed',[0,0])[1]>b_reads,'A readmitted while B continued reading')
    if state.get('incarnations')!=[a2['incarnation'],b['incarnation']] or state.get('frame_pool_assigned')!=4:raise RuntimeError('A readmission disturbed B: '+str(state))
    if not g.call('file_put',{'name':'a-gate','data':'1'}).get('readback_verified'):raise RuntimeError('A second release failed')

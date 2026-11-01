@@ -476,6 +476,12 @@ fn public_fixture_status()->Value {
     status["admission_ready"]=json!(ready);
     status
 }
+// A JSON number cannot represent every u64 exactly in common clients.
+// Require a canonical, nonzero decimal string for process-control tokens.
+fn parse_incarnation(text:&str)->Option<u64> {
+    if text.is_empty() || text.len()>20 || text.as_bytes()[0]==b'0' || !text.bytes().all(|b|b.is_ascii_digit()) {return None}
+    text.parse::<u64>().ok().filter(|v|*v!=0)
+}
 fn origin_name(origin: Origin) -> &'static str {
     match origin { Origin::Base=>"base", Origin::Human=>"human", Origin::Assistant=>"assistant", Origin::Both=>"both" }
 }
@@ -768,6 +774,7 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"process_pair_status","description":"Inspect the experimental pair of guest tasks.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"process_start","description":"Admit one named bounded ELF guest task; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}},
                                         {"name":"process_spawn","description":"Admit a named ELF into a free independent task slot; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}},
+                                        {"name":"process_stop","description":"Stop one independent guest task by slot and exact decimal incarnation; no authentication.","inputSchema":{"type":"object","properties":{"slot":{"type":"integer","minimum":0,"maximum":1},"incarnation":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20}},"required":["slot","incarnation"],"additionalProperties":false}},
                                         {"name":"process_status","description":"Inspect the latest bounded guest task admission.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"fixtures_pause","description":"Pause new built-in fixture admissions after the current fixture finishes.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"fixtures_resume","description":"Resume built-in fixture admissions.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
@@ -871,12 +878,26 @@ pub extern "C" fn graph_main() -> ! {
                                                 else if let Some(name)=name {
                                                     match files.read_for_load(name,512) {
                                                         Ok(program)=>match el0::start_independent(program) {
-                                                            Ok((slot,incarnation))=>tool_json(id,json!({"started":true,"slot":slot,"incarnation":incarnation})),
+                                                            Ok((slot,incarnation))=>tool_json(id,json!({"started":true,"slot":slot,"incarnation":incarnation,"incarnation_text":format!("{}",incarnation)})),
                                                             Err(error)=>tool_error(id,error),
                                                         },
                                                         Err(_)=>tool_error(id,"program unavailable"),
                                                     }
                                                 }
+                                            }
+                                            Some("process_stop") => {
+                                                let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
+                                                let values=args.filter(|o|o.len()==2).and_then(|o| {
+                                                    let slot=usize::try_from(o.get("slot")?.as_u64()?).ok()?;
+                                                    let incarnation=parse_incarnation(o.get("incarnation")?.as_str()?)?;
+                                                    Some((slot,incarnation))
+                                                });
+                                                if let Some((slot,incarnation))=values {
+                                                    match el0::stop_independent(slot,incarnation) {
+                                                        Ok(())=>tool_json(id,json!({"stopped":true,"slot":slot,"incarnation":format!("{}",incarnation)})),
+                                                        Err(error)=>tool_error(id,error),
+                                                    }
+                                                } else {tool_error(id,"invalid process_stop arguments");}
                                             }
                                             Some("process_status") => {
                                                 let args=params.and_then(|p|p.get("arguments"));

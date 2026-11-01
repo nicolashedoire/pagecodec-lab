@@ -88,7 +88,8 @@ static mut PAIR_CODE_LEN:[u64;2]=[0;2];
 static mut PAIR_IRQS:[u64;2]=[0;2];
 static mut PAIR_BARRIER_SEEN:[bool;2]=[false;2];
 static mut PAIR_BARRIER_OPEN:bool=false;
-// 0 running, 1 explicit exit, 2 fault or unsupported SVC, 3 IRQ budget.
+// 0 running, 1 explicit exit, 2 fault or unsupported SVC, 3 IRQ budget,
+// 4 stopped by the EL1 service (not an EL0 exit).
 static mut PAIR_OUTCOMES:[u8;2]=[0;2];
 static mut PAIR_LIVE_MARKERS:[u64;2]=[0;2];
 static mut PAIR_IO_SUBMITTED:[u64;2]=[0;2];
@@ -861,6 +862,36 @@ pub fn start_independent(bytes:&[u8])->Result<(usize,u64), &'static str> {
   write_volatile(addr_of_mut!(PAIR_ACTIVE),true);
  }
  Ok((slot,incarnation_id))
+}
+/// Stop one current independent incarnation at a service boundary. This is
+/// synchronous only in this single-CPU guest: it does not roll back file
+/// effects that have already been applied by the owner service.
+pub fn stop_independent(slot:usize,expected:u64)->Result<(), &'static str> {
+ if slot>=2 {return Err("invalid process slot")}
+ let mut daif:u64;let mut timer:u64;
+ unsafe{asm!("mrs {},DAIF",out(reg) daif);asm!("mrs {},CNTV_CTL_EL0",out(reg) timer)}
+ if daif&(1<<7)==0 || timer&1!=0 || super::mmu::active_root()!=super::mmu::root(0) || unsafe{read_volatile(addr_of!(SLICE_MODE))}!=1 {return Err("process stop requires service boundary")}
+ if !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} || unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {return Err("independent process not active")}
+ let incarnation=unsafe{read_volatile(addr_of!(TASK_INCARNATIONS).cast::<u64>().add(slot))};
+ let reported=unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS).cast::<u64>().add(slot))};
+ if expected==0 || expected!=incarnation || expected!=reported {return Err("stale process incarnation")}
+ let states=unsafe{read_volatile(addr_of!(TASK_STATE))};
+ if states[slot]!=1 {return Err("process is not ready")}
+ let peer=1-slot;let current=unsafe{read_volatile(addr_of!(CURRENT))} as usize;
+ if current>=2 || states[current]!=1 || !matches!(states[peer],1|3)
+  || unsafe{read_volatile(addr_of!(TASK_FRAMES).cast::<usize>().add(slot))}==0
+  || unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES).cast::<usize>().add(slot))}==0 {return Err("process stop requires service boundary")}
+ unsafe {
+  write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(slot),4);
+  write_volatile(addr_of_mut!(PAIR_EXIT_CODES).cast::<Option<u64>>().add(slot),None);
+  write_volatile(addr_of_mut!(TASK_STATE).cast::<u64>().add(slot),3);
+  if current==slot && states[peer]==1 {write_volatile(addr_of_mut!(CURRENT),peer as u64)}
+ }
+ // Reclaim removes only this generation's still-queued request and its
+ // completion; any earlier committed file operation is intentionally kept.
+ reclaim_pair(slot);
+ unsafe {if slot==0 {write_volatile(addr_of_mut!(A_FRAME),EMPTY)}else{write_volatile(addr_of_mut!(B_FRAME),EMPTY)}};
+ Ok(())
 }
 pub fn pair_status()->Value {json!({
  "mode":match unsafe{read_volatile(addr_of!(PAIR_MODE))} {1=>"single",2=>"pair",3=>"independent",_=>"none"},"started":unsafe{read_volatile(addr_of!(PAIR_STARTED))},"done":unsafe{read_volatile(addr_of!(PAIR_DONE))},"run_id":unsafe{read_volatile(addr_of!(PAIR_RUN_ID))},"stale_completion_rejected":unsafe{read_volatile(addr_of!(PAIR_STALE_REJECTED))},"old_incarnation_same_id_rejected":unsafe{read_volatile(addr_of!(PAIR_OLD_INCARNATION_REJECTED))},

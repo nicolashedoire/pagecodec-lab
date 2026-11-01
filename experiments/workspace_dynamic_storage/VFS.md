@@ -150,15 +150,30 @@ admission is refused if both slots are occupied or another execution mode is
 active. The experimental `a-` and `b-` namespace conventions follow the
 assigned slot. They are not a general permissions system.
 
+`process_stop` accepts an exact identity such as
+`{"slot":0,"incarnation":"42"}`. The incarnation must be a canonical,
+nonzero decimal string in the u64 range. `process_spawn` retains its numeric
+field for existing clients and additionally returns `incarnation_text` for
+lossless use with `process_stop`. An old incarnation is rejected when the slot
+has been reused during the current boot. Incarnations restart at boot, so an
+old slot/incarnation can match again after reboot; a boot identifier would be
+needed to extend this guarantee across boots. An external stop has outcome 4
+and no process exit code;
+it does not undo file effects already applied, although requests still queued
+for that process are revoked. This control is not an authentication boundary.
+
 In the integrated VM scenario, A and B wait on separate VFS files. The service
-admits B while A is still running, releases A and starts a new A in its slot
-while B continues making file-read progress, then releases both. Each program
+admits B while A is still running, stops A and starts a new A in its slot,
+then rejects a stop using A's old identity while B continues reading. It
+finally releases both via their VFS gates. Each program
 checks its private marker internally before exit; the status interface does
-not disclose those private bytes. This does not establish multicore operation
-or general-purpose process management. Independent tasks currently have no
-external stop command or time budget: a task that loops can occupy its slot
-until the guest is restarted. The scenario does not force an I/O request to be
-in flight when its neighbor is reclaimed.
+not disclose those private bytes. The stopped instance cannot perform its
+own final check. This does not establish multicore operation
+or general-purpose process management. Independent tasks have no automatic
+time budget: a looping task can occupy its slot until stopped by its exact
+current-boot identity or until the guest restarts. The scenario does not force an I/O request to be
+in flight when its neighbor is reclaimed; it also does not exercise a targeted
+stop while storage writes are blocked.
 
 `init.bin`, `fault.bin`, `badsvc.bin` and `next.bin` are reserved boot-image names: `file_delete` refuses
 their removal, so a confirmed deletion cannot be silently undone by boot-time
