@@ -75,6 +75,20 @@ pub fn map_task_code(actor:usize,frame:usize) {
  } else {assert!(other_desc==0 && other_result&1!=0)}
  switch_root(root(0));
 }
+/// Verify the single loaded task owns both frames and the idle root cannot
+/// access either user alias or either physical identity mapping.
+pub fn verify_single(data:usize,code:usize)->bool {
+ if active_root()!=root(0) || data%PAGE!=0 || code%PAGE!=0 || data==code {return false}
+ let d=query(ALIAS,false,true);let w=query(ALIAS,true,true);let c=query(USER_CODE,false,true);
+ let mut ok=d&1==0 && w&1==0 && d&PA_MASK==data as u64 && w&PA_MASK==data as u64
+  && c&1==0 && c&PA_MASK==code as u64 && query(USER_CODE,true,true)&1!=0
+  && query(data,false,true)&1!=0 && query(code,false,true)&1!=0;
+ switch_root(root(1));
+ ok &= query(ALIAS,false,true)&1!=0 && query(ALIAS,true,true)&1!=0
+  && query(USER_CODE,false,true)&1!=0 && query(USER_CODE,true,true)&1!=0
+  && query(data,false,true)&1!=0 && query(code,false,true)&1!=0;
+ switch_root(root(0));ok
+}
 /// Verify both loaded roots map the same VAs to four distinct private frames.
 pub fn verify_pair(data:[usize;2],code:[usize;2])->bool {
  if active_root()!=root(0) || data.iter().chain(code.iter()).any(|p|p%PAGE!=0) {return false}

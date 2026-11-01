@@ -176,6 +176,19 @@ class Guest:
         if pair.get('barrier_seen')!=[True,True] or pair.get('live_markers')!=list(expected_markers):raise RuntimeError('pair never held both private markers at the barrier: '+str(pair))
         if pair.get('outcomes')!=[1,1] or pair.get('exit_codes')!=[0,0] or pair.get('markers')!=list(expected_markers) or pair.get('data_scrubbed')!=[True,True] or pair.get('code_scrubbed')!=[True,True] or pair.get('frame_pool_assigned')!=0:raise RuntimeError('pair exit or frame cleanup invalid: '+str(pair))
         return pair
+    def wait_single(self):
+        for _ in range(60):
+            state=self.call('process_status',{})
+            if state.get('done') is True:break
+            time.sleep(.2)
+        else:raise RuntimeError('single ELF task did not finish: '+str(state))
+        identities=state.get('incarnations')
+        if state.get('mode')!='single' or state.get('started') is not True or state.get('mappings_verified') is not True or not isinstance(identities,list) or len(identities)!=2 or not isinstance(identities[0],int) or identities[0]<=0 or identities[1]!=0:raise RuntimeError('single task identity or mapping invalid: '+str(state))
+        if state.get('outcomes')!=[1,0] or state.get('exit_codes')!=[0,None] or state.get('markers')!=[0xe3e3,0] or state.get('data_scrubbed')!=[True,False] or state.get('code_scrubbed')!=[True,False] or state.get('frame_pool_assigned')!=0:raise RuntimeError('single task outcome or cleanup invalid: '+str(state))
+        ticks=state.get('irq_counts')
+        if not isinstance(ticks,list) or len(ticks)!=2 or not isinstance(ticks[0],int) or ticks[0]<=0 or ticks[1]!=0:raise RuntimeError('single task preemption invalid: '+str(state))
+        if state.get('io_submitted')!=[4,0] or state.get('io_completed')!=[4,0]:raise RuntimeError('single task I/O invalid: '+str(state))
+        return state
     def input(self,events):
         self.qmp_command({'execute':'input-send-event','arguments':{'events':events}})
     def screenshot(self,path):

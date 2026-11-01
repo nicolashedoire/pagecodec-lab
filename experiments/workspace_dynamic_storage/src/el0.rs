@@ -68,6 +68,8 @@ static mut SPAWN_EXITED:bool=false;
 static mut SPAWN_FAILED:bool=false;
 static mut SPAWN_REUSED:bool=false;
 #[no_mangle] static mut PAIR_ACTIVE:bool=false;
+// 0 never started, 1 single-slot mode, 2 pair mode.
+static mut PAIR_MODE:u8=0;
 static mut PAIR_STARTED:bool=false;
 static mut PAIR_RUN_ID:u64=0;
 // Tokens alone are retained for a delayed-reply rejection check; never payloads.
@@ -265,7 +267,8 @@ pub fn complete_file_write_error(request:&Request,error:WriteError)->bool {
  if !apply_completion(s,request.token(),false,&[]) {return false}
  s.completions[7+request.actor].write_errno=match error {WriteError::InvalidName=>-22,WriteError::NoSpace=>-28,WriteError::Io=>-5};true
 }
-/// The owner enforces the pair's per-actor namespace after checking liveness.
+/// Historical name: the owner enforces the experimental per-actor namespace
+/// in both single and pair modes, after checking request liveness.
 pub fn is_pair_request(request:&Request)->bool {
  request.actor<2 && request.id>=8 && unsafe{read_volatile(addr_of!(PAIR_ACTIVE))}
   && unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS).cast::<u64>().add(request.actor))}==request.incarnation
@@ -417,7 +420,7 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
   let valid=esr>>26==0x15 && esr&(1<<25)!=0 && f.elr>lo && f.elr<=lo+len && f.elr&3==0;
   if !valid {unsafe{write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(actor),2)};return 1}
   match esr&0xffff {
-   0x150=>{unsafe{write_volatile(addr_of_mut!(PAIR_BARRIER_SEEN).cast::<bool>().add(actor),true)};let counts=unsafe{read_volatile(addr_of!(PAIR_IRQS))};let seen=unsafe{read_volatile(addr_of!(PAIR_BARRIER_SEEN))};let frames=unsafe{read_volatile(addr_of!(TASK_FRAMES))};let live=if frames.iter().all(|p|*p!=0) {unsafe{[read_volatile(frames[0] as *const u64),read_volatile(frames[1] as *const u64)]}} else {[0;2]};if counts[0]>0 && counts[1]>0 && seen==[true,true] && frames.iter().all(|p|*p!=0) {unsafe{write_volatile(addr_of_mut!(PAIR_LIVE_MARKERS),live);write_volatile(addr_of_mut!(PAIR_BARRIER_OPEN),true)}};f.regs[0]=if unsafe{read_volatile(addr_of!(PAIR_BARRIER_OPEN))} {0} else {(-11i64) as u64};return 0},
+   0x150=>{if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=2 {f.regs[0]=(-38i64) as u64;return 0};unsafe{write_volatile(addr_of_mut!(PAIR_BARRIER_SEEN).cast::<bool>().add(actor),true)};let counts=unsafe{read_volatile(addr_of!(PAIR_IRQS))};let seen=unsafe{read_volatile(addr_of!(PAIR_BARRIER_SEEN))};let frames=unsafe{read_volatile(addr_of!(TASK_FRAMES))};let live=if frames.iter().all(|p|*p!=0) {unsafe{[read_volatile(frames[0] as *const u64),read_volatile(frames[1] as *const u64)]}} else {[0;2]};if counts[0]>0 && counts[1]>0 && seen==[true,true] && frames.iter().all(|p|*p!=0) {unsafe{write_volatile(addr_of_mut!(PAIR_LIVE_MARKERS),live);write_volatile(addr_of_mut!(PAIR_BARRIER_OPEN),true)}};f.regs[0]=if unsafe{read_volatile(addr_of!(PAIR_BARRIER_OPEN))} {0} else {(-11i64) as u64};return 0},
    0x140=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_read(f,state,actor);return 0},
    0x141=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_write(f,state,actor);return 0},
    0x123=>{unsafe{write_volatile(addr_of_mut!(PAIR_EXIT_CODES).cast::<Option<u64>>().add(actor),Some(f.regs[0]));write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(actor),1)};return 1},
@@ -711,7 +714,9 @@ fn reclaim_code_frame() {
 // A separate bounded experiment on the existing two roots. Each process may
 // use the shared synchronous file service, subject to its fixture namespace;
 // the barrier is fixture-only and is not a general IPC primitive.
-pub fn start_pair(a:&[u8],b:&[u8])->Result<(), &'static str> {
+pub fn start_pair(a:&[u8],b:&[u8])->Result<(), &'static str> {start_programs(a,Some(b))}
+pub fn start_single(a:&[u8])->Result<(), &'static str> {start_programs(a,None)}
+fn start_programs(a:&[u8],b:Option<&[u8]>)->Result<(), &'static str> {
  if unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} {return Err("pair already started")}
  if unsafe{read_volatile(addr_of!(TASK_STATE))}!=[3,3] || unsafe{read_volatile(addr_of!(IMAGE_COUNT))}<4 || unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} || unsafe{read_volatile(addr_of!(FRAME_BITMAP))}!=0 || unsafe{read_volatile(addr_of!(TASK_FRAMES))}!=[0,0] || super::mmu::active_root()!=super::mmu::root(0) {return Err("pair requires idle slots")}
  let ipc=unsafe{&*addr_of!(IPC)};
@@ -719,26 +724,29 @@ pub fn start_pair(a:&[u8],b:&[u8])->Result<(), &'static str> {
   || unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES))}!=[0;2]
   || unsafe{read_volatile(addr_of!(GENERIC_IO))}.iter().any(Option::is_some) {return Err("pair requires idle slots")}
  let run_id=unsafe{read_volatile(addr_of!(PAIR_RUN_ID))}.checked_add(1).ok_or("pair run exhausted")?;
- let a=super::loader::parse(a).ok_or("invalid pair ELF")?;
- let b=super::loader::parse(b).ok_or("invalid pair ELF")?;
+ let count=if b.is_some() {2}else{1};
+ let error=if count==2 {"invalid pair ELF"} else {"invalid ELF"};
+ let a=super::loader::parse(a).ok_or(error)?;
+ let b=match b {Some(bytes)=>Some(super::loader::parse(bytes).ok_or(error)?),None=>None};
  let first=unsafe{read_volatile(addr_of!(NEXT_INCARNATION))};
- let next=first.checked_add(2).ok_or("incarnation exhausted")?;
- let images=[a,b];let mut data=[0usize;2];let mut code=[0usize;2];
- for i in 0..2 {
+ let next=first.checked_add(count as u64).ok_or("incarnation exhausted")?;
+ let images=[Some(a),b];let mut data=[0usize;2];let mut code=[0usize;2];
+ for i in 0..count {
+  let image=images[i].as_ref().unwrap_or_else(||halt());
   data[i]=allocate_task_frame(i);
   let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
   let slot=(0..4).find(|n|used&(1<<n)==0).unwrap_or_else(||halt());
   let ptr=unsafe{addr_of_mut!(USER_FRAMES).cast::<UserStack>().add(slot)} as *mut u8;
   for n in 0..PAGE {unsafe{write_volatile(ptr.add(n),0)}}
-  for (n,byte) in images[i].code.iter().enumerate() {unsafe{write_volatile(ptr.add(n),*byte)}}
+  for (n,byte) in image.code.iter().enumerate() {unsafe{write_volatile(ptr.add(n),*byte)}}
   code[i]=ptr as usize;
   unsafe{write_volatile(addr_of_mut!(FRAME_BITMAP),used|(1<<slot))};
   super::mmu::map_task_alias(i,data[i]);super::mmu::map_task_code(i,code[i]);
  }
- check(super::mmu::verify_pair(data,code),"pair mapping verification");
+ check(if count==2 {super::mmu::verify_pair(data,code)} else {super::mmu::verify_single(data[0],code[0])},"loaded mapping verification");
  unsafe {
-  write_volatile(addr_of_mut!(A_FRAME),frame(0,super::mmu::ALIAS+PAGE,super::mmu::USER_CODE+images[0].entry_offset));
-  write_volatile(addr_of_mut!(B_FRAME),frame(1,super::mmu::ALIAS+PAGE,super::mmu::USER_CODE+images[1].entry_offset));
+  write_volatile(addr_of_mut!(A_FRAME),frame(0,super::mmu::ALIAS+PAGE,super::mmu::USER_CODE+images[0].as_ref().unwrap_or_else(||halt()).entry_offset));
+  if let Some(image)=images[1].as_ref() {write_volatile(addr_of_mut!(B_FRAME),frame(1,super::mmu::ALIAS+PAGE,super::mmu::USER_CODE+image.entry_offset))}
   write_volatile(addr_of_mut!(PAIR_STALE_TOKENS),read_volatile(addr_of!(PAIR_LAST_TOKENS)));
   write_volatile(addr_of_mut!(PAIR_LAST_TOKENS),[None;2]);
   write_volatile(addr_of_mut!(PAIR_STALE_REJECTED),[false;2]);write_volatile(addr_of_mut!(PAIR_OLD_INCARNATION_REJECTED),[false;2]);
@@ -750,18 +758,20 @@ pub fn start_pair(a:&[u8],b:&[u8])->Result<(), &'static str> {
   write_volatile(addr_of_mut!(PAIR_DATA_SCRUBBED),[false;2]);write_volatile(addr_of_mut!(PAIR_CODE_SCRUBBED),[false;2]);
   write_volatile(addr_of_mut!(PAIR_DONE),false);write_volatile(addr_of_mut!(PAIR_RUN_ID),run_id);
   write_volatile(addr_of_mut!(PAIR_CODE_FRAMES),code);
-  write_volatile(addr_of_mut!(PAIR_CODE_LEN),[images[0].code.len() as u64,images[1].code.len() as u64]);
-  write_volatile(addr_of_mut!(PAIR_INCARNATIONS),[first,first+1]);
-  write_volatile(addr_of_mut!(TASK_INCARNATIONS),[first,first+1]);
+  write_volatile(addr_of_mut!(PAIR_CODE_LEN),[images[0].as_ref().unwrap_or_else(||halt()).code.len() as u64,images[1].as_ref().map_or(0,|image|image.code.len() as u64)]);
+  write_volatile(addr_of_mut!(PAIR_INCARNATIONS),[first,if count==2 {first+1}else{0}]);
+  let prior=read_volatile(addr_of!(TASK_INCARNATIONS));
+  write_volatile(addr_of_mut!(TASK_INCARNATIONS),[first,if count==2 {first+1}else{prior[1]}]);
   write_volatile(addr_of_mut!(NEXT_INCARNATION),next);
   write_volatile(addr_of_mut!(PAIR_MAPPINGS_VERIFIED),true);
-  write_volatile(addr_of_mut!(CURRENT),0);write_volatile(addr_of_mut!(TASK_STATE),[1,1]);
+  write_volatile(addr_of_mut!(CURRENT),0);write_volatile(addr_of_mut!(TASK_STATE),if count==2 {[1,1]}else{[1,3]});
+  write_volatile(addr_of_mut!(PAIR_MODE),count as u8);
   write_volatile(addr_of_mut!(PAIR_STARTED),true);write_volatile(addr_of_mut!(PAIR_ACTIVE),true);
  }
  Ok(())
 }
 pub fn pair_status()->Value {json!({
- "started":unsafe{read_volatile(addr_of!(PAIR_STARTED))},"done":unsafe{read_volatile(addr_of!(PAIR_DONE))},"run_id":unsafe{read_volatile(addr_of!(PAIR_RUN_ID))},"stale_completion_rejected":unsafe{read_volatile(addr_of!(PAIR_STALE_REJECTED))},"old_incarnation_same_id_rejected":unsafe{read_volatile(addr_of!(PAIR_OLD_INCARNATION_REJECTED))},
+ "mode":match unsafe{read_volatile(addr_of!(PAIR_MODE))} {1=>"single",2=>"pair",_=>"none"},"started":unsafe{read_volatile(addr_of!(PAIR_STARTED))},"done":unsafe{read_volatile(addr_of!(PAIR_DONE))},"run_id":unsafe{read_volatile(addr_of!(PAIR_RUN_ID))},"stale_completion_rejected":unsafe{read_volatile(addr_of!(PAIR_STALE_REJECTED))},"old_incarnation_same_id_rejected":unsafe{read_volatile(addr_of!(PAIR_OLD_INCARNATION_REJECTED))},
  "incarnations":unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS))},"mappings_verified":unsafe{read_volatile(addr_of!(PAIR_MAPPINGS_VERIFIED))},
  "io_submitted":unsafe{read_volatile(addr_of!(PAIR_IO_SUBMITTED))},"io_completed":unsafe{read_volatile(addr_of!(PAIR_IO_COMPLETED))},"io_cancelled_before_apply":unsafe{read_volatile(addr_of!(PAIR_IO_CANCELLED))},"irq_counts":unsafe{read_volatile(addr_of!(PAIR_IRQS))},"exit_codes":unsafe{read_volatile(addr_of!(PAIR_EXIT_CODES))},"outcomes":unsafe{read_volatile(addr_of!(PAIR_OUTCOMES))},"barrier_seen":unsafe{read_volatile(addr_of!(PAIR_BARRIER_SEEN))},"live_markers":unsafe{read_volatile(addr_of!(PAIR_LIVE_MARKERS))},
  "markers":unsafe{read_volatile(addr_of!(PAIR_MARKERS))},"data_scrubbed":unsafe{read_volatile(addr_of!(PAIR_DATA_SCRUBBED))},

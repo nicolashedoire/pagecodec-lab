@@ -382,14 +382,34 @@ def main():
    for i,(name,old,new) in enumerate((('a-doc',b'AAAA',b'CCCC'),('b-doc',b'BBBB',b'DDDD'))):
     expected=old if cancelled[i] else new
     if g.call('file_get',{'name':name})!={'name':name,'hex':expected.hex()}:raise RuntimeError('exit write did not match cancellation outcome')
-   for name in ('left.elf','right.elf'):
-    if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('pair fixture cleanup failed')
+   if g.call('process_pair_start',{'a':'left.elf','b':'right.elf'})!={'started':True}:raise RuntimeError('pair before single admission failed')
+   before_solo_pair=g.wait_pair(expected_markers=(0xc1c1,0xd2d2))
+   if not g.call('file_delete',{'name':'keep.bin'}).get('readback_verified'):raise RuntimeError('single fixture catalog preparation failed')
+   reject(g,'process_start',{},'invalid process_start arguments')
+   reject(g,'process_start',{'name':'absent.elf'},'program unavailable')
+   if not g.call('file_put_hex',{'name':'solo.elf','hex':'ff'}).get('readback_verified'):raise RuntimeError('invalid single ELF not saved')
+   before_single=g.call('process_status',{})
+   reject(g,'process_start',{'name':'solo.elf'},'invalid ELF')
+   if g.call('process_status',{})!=before_single:raise RuntimeError('invalid single ELF changed task state')
+   code=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'single.hex').read_text().strip())
+   if not g.call('file_put_hex',{'name':'solo.elf','hex':independent_elf(next_hex,code)}).get('readback_verified'):raise RuntimeError('single ELF not saved')
+   if g.call('process_start',{'name':'solo.elf'})!={'started':True}:raise RuntimeError('single task admission failed')
+   single=g.wait_single()
+   if single.get('run_id')!=before_solo_pair['run_id']+1 or single['incarnations'][0]<=max(before_solo_pair['incarnations']):raise RuntimeError('single admission did not use a fresh identity')
+   if g.call('file_get',{'name':'a-doc'})!={'name':'a-doc','hex':b'SING'.hex()}:raise RuntimeError('single task file write failed')
+   expected_b=b'BBBB' if cancelled[1] else b'DDDD'
+   if g.call('file_get',{'name':'b-doc'})!={'name':'b-doc','hex':expected_b.hex()}:raise RuntimeError('single task changed other namespace')
+   if g.call('process_pair_start',{'a':'left.elf','b':'right.elf'})!={'started':True}:raise RuntimeError('pair after single admission failed')
+   after_solo_pair=g.wait_pair(expected_markers=(0xc1c1,0xd2d2))
+   if after_solo_pair.get('run_id')!=single['run_id']+1 or min(after_solo_pair['incarnations'])<=single['incarnations'][0]:raise RuntimeError('pair after single reused an identity')
+   for name in ('left.elf','right.elf','solo.elf'):
+    if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('process fixture cleanup failed')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
   g=Guest(a.qemu,guest,disk,tmp,26,out,a.transport)
   try:
    g.progress('pending-write outcomes after restart',timeout_image=True,expected_exit_code=0)
-   for i,(name,old,new) in enumerate((('a-doc',b'AAAA',b'CCCC'),('b-doc',b'BBBB',b'DDDD'))):
+   for i,(name,old,new) in enumerate((('a-doc',b'SING',b'SING'),('b-doc',b'BBBB',b'DDDD'))):
     expected=old if cancelled[i] else new
     if g.call('file_get',{'name':name})!={'name':name,'hex':expected.hex()}:raise RuntimeError('pending-write outcome did not survive restart')
     if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('pair data cleanup failed')

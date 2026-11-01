@@ -755,6 +755,8 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"el0_status","description":"Read verified pre-graphical EL0 timer trace.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"process_pair_start","description":"Admit two named bounded ELF guest tasks (empty arguments use pair-a.bin and pair-b.bin); no authentication.","inputSchema":{"type":"object","properties":{"a":{"type":"string"},"b":{"type":"string"}},"oneOf":[{"maxProperties":0},{"required":["a","b"]}],"additionalProperties":false}},
                                         {"name":"process_pair_status","description":"Inspect the experimental pair of guest tasks.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"process_start","description":"Admit one named bounded ELF guest task; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}},
+                                        {"name":"process_status","description":"Inspect the latest bounded guest task admission.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"move_remote","description":"Move the visible pointer for a synthetic logical actor; no window or authenticated identity.","inputSchema":{"type":"object","properties":{"x":{"type":"integer","minimum":0,"maximum":799},"y":{"type":"integer","minimum":0,"maximum":599}},"required":["x","y"],"additionalProperties":false}},
                                         {"name":"remote_state","description":"Read the third synthetic actor's logical position.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"exercise_human_moves","description":"Run 1101 synthetic human moves in this VM; overwrites older bounded trace entries.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
@@ -829,6 +831,26 @@ pub extern "C" fn graph_main() -> ! {
                                             Some("process_pair_status") => {
                                                 let args=params.and_then(|p|p.get("arguments"));
                                                 if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"process_pair_status requires empty arguments");}
+                                                else {tool_json(id,el0::pair_status());}
+                                            }
+                                            Some("process_start") => {
+                                                let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
+                                                let name=args.filter(|o|o.len()==1).and_then(|o|o.get("name")).and_then(Value::as_str);
+                                                if name.is_none() {tool_error(id,"invalid process_start arguments");}
+                                                else if STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed) {tool_error(id,"storage write blocked until restart");}
+                                                else if let Some(name)=name {
+                                                    match files.read_for_load(name,512) {
+                                                        Ok(program)=>match el0::start_single(program) {
+                                                            Ok(())=>tool_json(id,json!({"started":true})),
+                                                            Err(error)=>tool_error(id,error),
+                                                        },
+                                                        Err(_)=>tool_error(id,"program unavailable"),
+                                                    }
+                                                }
+                                            }
+                                            Some("process_status") => {
+                                                let args=params.and_then(|p|p.get("arguments"));
+                                                if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"process_status requires empty arguments");}
                                                 else {tool_json(id,el0::pair_status());}
                                             }
                                             #[cfg(feature="storage-fault-test")]

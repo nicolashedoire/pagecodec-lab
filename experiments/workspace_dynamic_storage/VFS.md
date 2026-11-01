@@ -106,6 +106,23 @@ both before and after restart. It does not assume which side of that timing
 boundary occurs. A recorded run demonstrates cancellation before application
 only for actors whose `io_cancelled_before_apply` count is nonzero.
 
+## One loaded process
+
+`process_start` takes `{"name":"solo.elf"}` and admits one existing bounded
+ELF when the task slots are idle; `process_status` reports the same latest-run
+status object as `process_pair_status`, with `mode="single"` and slot 1
+unused. The single process has its own identity, data and code frames. It uses
+the existing bounded GET/PUT interfaces with the demonstration `a-` namespace.
+The two-process barrier SVC returns `-38` in single mode. Missing files and
+invalid ELF images are refused before admission.
+
+The unified VM scenario loads [`single.S`](fixtures/single.S), verifies a
+successful exit, its scoped file reads and writes, cross-namespace refusals
+and frame cleanup, running a pair before and after it in the same boot, then
+restarts the virtual disk to check its committed write. Concurrent admission
+while the single task is active has not been forced in this scenario.
+This remains a fixed two-slot experimental guest, not a general process API.
+
 `init.bin`, `fault.bin`, `badsvc.bin` and `next.bin` are reserved boot-image names: `file_delete` refuses
 their removal, so a confirmed deletion cannot be silently undone by boot-time
 seeding. A PUT can still replace their bytes. The loader validates a narrow ELF
@@ -153,10 +170,9 @@ slot and permits writes again. The runner also checks an image with two
 nonblank invalid slots leaves all disk bytes unchanged. Both images are
 temporary QEMU disks; the injection is absent from normal builds. Recorded
 synthetic traces are available for [modern](evidence/storage-fault-modern.json)
-and [legacy](evidence/storage-fault-legacy.json) VirtIO. The legacy fault trace
-predates the repeatable-pair change; the current normal guest was exercised on
-both transports. This tests a specific reported-error window, not power-loss
-durability or rollback.
+and [legacy](evidence/storage-fault-legacy.json) VirtIO. Both include the
+pair-to-single-to-pair execution on the current guest. This tests a specific
+reported-error window, not power-loss durability or rollback.
 
 The versioned payload has exactly `format`, `document`, and `files` keys. Its
 `format` is `workspace-files-v1`; file contents are lowercase hexadecimal.
