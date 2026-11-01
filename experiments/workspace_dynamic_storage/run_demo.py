@@ -840,7 +840,7 @@ def main():
    state=g.wait_independent(lambda s:s.get('slot_states')==['exited','ready'],'first IPC exchange and A exit')
    if state.get('exit_codes',[None,None])[0]!=0 or state.get('outcomes',[None,None])[0]!=1 or state.get('incarnations')!=[first['incarnation'],second['incarnation']] or state.get('frame_pool_assigned')!=3:raise RuntimeError('first IPC exchange failed: '+str(state))
    channel=g.call('ipc_direct_status',{})
-   if set(channel)!={'bound','channel_id','incarnations','queued','sent','received','dropped','scrubbed','full_rejections','peer_unbound','waiting','wait_count','wake_message','wake_close'} or channel.get('bound') is not False or channel.get('queued')!=[0,0] or channel.get('sent')!=[2,2] or channel.get('received')!=[2,2] or channel.get('scrubbed') is not True:raise RuntimeError('direct IPC closure or first exchange invalid: '+str(channel))
+   if set(channel)!={'bound','channel_id','incarnations','queued','sent','received','dropped','scrubbed','full_rejections','peer_unbound','waiting','wait_count','wake_message','wake_close','wake_timeout'} or channel.get('bound') is not False or channel.get('queued')!=[0,0] or channel.get('sent')!=[2,2] or channel.get('received')!=[2,2] or channel.get('scrubbed') is not True:raise RuntimeError('direct IPC closure or first exchange invalid: '+str(channel))
    replacement=g.call('process_spawn_staged',{'id':upload_id})
    if replacement.get('slot')!=0 or replacement.get('incarnation',0)<=second['incarnation'] or replacement.get('boot_id')!=first['boot_id']:raise RuntimeError('IPC sender readmission invalid')
    reject(g,'ipc_direct_bind',args,'stale process incarnation')
@@ -922,6 +922,72 @@ def main():
     if stopped_channel.get('bound') is not False or stopped_channel.get('waiting')!=[False,False] or stopped_channel.get('scrubbed') is not True:raise RuntimeError('wait channel cleanup invalid: '+str(stopped_channel))
    g.call('upload_reset',{'id':wait_upload})
    if not g.call('file_delete',{'name':'a-wgate'}).get('readback_verified') or g.call('file_list',{})!=files_before:raise RuntimeError('wait fixture cleanup failed')
+   if a.exercise_storage_fault:
+    # Real CNTVCT expiration first; then freeze a test-only clock to force
+    # interleavings without relying on host scheduling latency.
+    for name in ('a-tgate','b-tgate','a-tphase','b-tphase'):
+     if any(entry.get('name')==name for entry in files_before):raise RuntimeError('timeout fixture name already exists')
+     if not g.call('file_put',{'name':name,'data':'0'}).get('readback_verified'):raise RuntimeError('timeout fixture setup failed')
+    timeout_elf=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-ipc-timeout.hex').read_text().strip())
+    timeout_upload=stage_program(g,timeout_elf)
+    def gate(name,value):
+     if not g.call('file_put',{'name':name,'data':value}).get('readback_verified'):raise RuntimeError('timeout gate failed')
+    def timeout_phases(a_value,b_value):
+     for _ in range(60):
+      av=g.call('file_get',{'name':'a-tphase'}).get('hex');bv=g.call('file_get',{'name':'b-tphase'}).get('hex')
+      if av==a_value.encode().hex() and bv==b_value.encode().hex():return
+      time.sleep(.2)
+     raise RuntimeError('timeout phases not reached: '+str((a_value,b_value,av,bv)))
+    for stop_waiter in (False,True):
+     if stop_waiter:
+      for name in ('a-tgate','b-tgate','a-tphase','b-tphase'):gate(name,'0')
+     clock_before=g.call('ipc_direct_status',{})
+     ta=g.call('process_spawn_staged',{'id':timeout_upload});tb=g.call('process_spawn_staged',{'id':timeout_upload})
+     if ta.get('slot')!=0 or tb.get('slot')!=1 or ta.get('boot_id')!=tb.get('boot_id'):raise RuntimeError('timeout fixture admission failed')
+     g.wait_independent(lambda x:x.get('slot_states')==['ready','ready'],'timed wait actors ready')
+     targs={'a_slot':0,'a_incarnation':ta['incarnation_text'],'b_slot':1,'b_incarnation':tb['incarnation_text'],'boot_id':ta['boot_id']}
+     timed_id=g.call('ipc_direct_bind',targs)['channel_id']
+     timeout_phases('r','r')
+     real=g.call('ipc_direct_status',{})
+     if any(real.get('wake_timeout',[0,0])[i]<=clock_before.get('wake_timeout',[0,0])[i] for i in range(2)):raise RuntimeError('actual ARM counter did not expire both waits: '+str(real))
+     if g.call('debug_timeout_clock_freeze',{})!={'ok':True}:raise RuntimeError('timeout clock freeze failed')
+     gate('a-tgate','1');gate('b-tgate','1')
+     timed=wait_direct(lambda x:x.get('waiting')==[True,True],'both timed waits asleep')
+     reject(g,'debug_timeout_clock_unfreeze',{},'timed wait active')
+     if stop_waiter:
+      stopped=g.call('process_stop',{'slot':1,'incarnation':tb['incarnation_text'],'boot_id':tb['boot_id']})
+      if stopped.get('stopped') is not True:raise RuntimeError('timed waiter stop failed')
+      ended=g.wait_independent(lambda x:x.get('slot_states')==['exited','exited'],'timed stop and neighbor wake')
+      if ended.get('outcomes')!=[1,4] or ended.get('exit_codes')!=[0,None]:raise RuntimeError('timed stop cleanup failed: '+str(ended))
+      after=g.call('ipc_direct_status',{})
+      if after.get('wake_timeout')!=timed.get('wake_timeout') or after.get('wake_close',[0,0])[0]!=timed.get('wake_close',[0,0])[0]+1:raise RuntimeError('timed stop woke wrong waiter: '+str(after))
+     else:
+      if g.call('debug_timeout_clock_advance',{'ns':'400000000'})!={'ok':True}:raise RuntimeError('clock advance failed')
+      before_deadline=g.call('ipc_direct_status',{})
+      if before_deadline.get('waiting')!=[True,True] or before_deadline.get('wake_timeout')!=timed.get('wake_timeout'):raise RuntimeError('timed waits expired early: '+str(before_deadline))
+      if g.call('debug_timeout_clock_advance',{'ns':'600000000'})!={'ok':True}:raise RuntimeError('deadline advance failed')
+      timeout_phases('t','t')
+      expired=g.call('ipc_direct_status',{})
+      if expired.get('waiting')!=[False,False] or expired.get('wake_timeout')!=[timed['wake_timeout'][i]+1 for i in range(2)]:raise RuntimeError('timed waits did not expire exactly once: '+str(expired))
+      gate('b-tgate','2')
+      wait_direct(lambda x:x.get('waiting',[False,False])[1] is True,'timed receiver awaiting message')
+      gate('a-tgate','3')
+      message=wait_direct(lambda x:x.get('queued')==[1,0] and x.get('waiting',[False,False])[1] is True and x.get('wake_message',[0,0])[1]>expired.get('wake_message',[0,0])[1],'message before deadline and queued response')
+      if message.get('wake_timeout')!=expired.get('wake_timeout'):raise RuntimeError('expired wait woke twice: '+str(message))
+      gate('a-tgate','4')
+      both=wait_direct(lambda x:x.get('waiting')==[True,True] and x.get('received')==[1,1],'zero-duration ready and both timed waits asleep')
+      if both.get('wake_timeout')!=expired.get('wake_timeout'):raise RuntimeError('unexpected timeout after message')
+      if g.call('ipc_direct_close',{'channel_id':timed_id,'boot_id':ta['boot_id']})!={'closed':True}:raise RuntimeError('timed close failed')
+      ended=g.wait_independent(lambda x:x.get('slot_states')==['exited','exited'],'timed close wake')
+      if ended.get('outcomes')!=[1,1] or ended.get('exit_codes')!=[0,0]:raise RuntimeError('timed fixture exit failed: '+str(ended))
+      after=g.call('ipc_direct_status',{})
+      if after.get('wake_timeout')!=expired.get('wake_timeout') or after.get('wake_close')!=[both['wake_close'][i]+1 for i in range(2)]:raise RuntimeError('timed wait woke twice after close: '+str(after))
+     if ended.get('data_scrubbed')!=[True,True] or ended.get('code_scrubbed')!=[True,True] or ended.get('stack_scrubbed')!=[True,True] or ended.get('frame_pool_assigned')!=0:raise RuntimeError('timed fixture cleanup failed: '+str(ended))
+     if g.call('debug_timeout_clock_unfreeze',{})!={'ok':True}:raise RuntimeError('timeout clock restore failed')
+    g.call('upload_reset',{'id':timeout_upload})
+    for name in ('a-tgate','b-tgate','a-tphase','b-tphase'):
+     if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('timeout fixture cleanup failed')
+    if g.call('file_list',{})!=files_before:raise RuntimeError('timeout fixture left files behind')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
   # No NIC: the same Rust program must see -19 without requiring a peer.

@@ -615,6 +615,8 @@ pub extern "C" fn graph_main() -> ! {
         if let Some(ref mut source)=entropy {source.poll()}
         network.poll();
         if service_polls>=SERVICE_POLLS {
+          // Timed IPC waits must expire even when storage blocks EL0 slices.
+          el0::poll_direct_timeouts();
           // The fixed EL0 scripts assume a successful save and would halt on
           // failure. Keep them suspended when storage needs reconciliation so
           // the QEMU guest can still report its state and serve MCP reads.
@@ -815,6 +817,12 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"document_merge","description":"Merge synthetic copies and return fields, origins and conflicts.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"document_snapshot","description":"Read the synthetic base and both full copies.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                     ]}});
+                                        #[cfg(feature="storage-fault-test")]
+                                        response["result"]["tools"].as_array_mut().unwrap().push(json!({"name":"debug_timeout_clock_freeze","description":"Test-only: freeze timeout clock when no timed wait exists.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}));
+                                        #[cfg(feature="storage-fault-test")]
+                                        response["result"]["tools"].as_array_mut().unwrap().push(json!({"name":"debug_timeout_clock_advance","description":"Test-only: advance frozen clock by positive nanoseconds, rounded up to counter ticks.","inputSchema":{"type":"object","properties":{"ns":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20}},"required":["ns"],"additionalProperties":false}}));
+                                        #[cfg(feature="storage-fault-test")]
+                                        response["result"]["tools"].as_array_mut().unwrap().push(json!({"name":"debug_timeout_clock_unfreeze","description":"Test-only: restore counter when no timed wait exists.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}));
                                         #[cfg(feature="storage-fault-test")]
                                         response["result"]["tools"].as_array_mut().unwrap().push(json!({"name":"debug_network_hold_rx","description":"Test-only: hold a completed RX descriptor without reading or recycling its DMA buffer.","inputSchema":{"type":"object","properties":{"slot":{"type":"integer","minimum":0,"maximum":1},"hold":{"type":"boolean"}},"required":["slot","hold"],"additionalProperties":false}}));
                                         #[cfg(feature="storage-fault-test")]
@@ -1095,6 +1103,23 @@ pub extern "C" fn graph_main() -> ! {
                                                     }
                                                     tool_json(id,public_fixture_status());
                                                 }
+                                            }
+                                            #[cfg(feature="storage-fault-test")]
+                                            Some("debug_timeout_clock_freeze") | Some("debug_timeout_clock_unfreeze") => {
+                                                let args=params.and_then(|p|p.get("arguments"));
+                                                if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"debug clock requires empty arguments");}
+                                                else {
+                                                    let result=if name==Some("debug_timeout_clock_freeze") {el0::test_timeout_clock_freeze()}else{el0::test_timeout_clock_unfreeze()};
+                                                    match result {Ok(())=>tool_json(id,json!({"ok":true})),Err(error)=>tool_error(id,error)}
+                                                }
+                                            }
+                                            #[cfg(feature="storage-fault-test")]
+                                            Some("debug_timeout_clock_advance") => {
+                                                let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
+                                                let ns=args.filter(|o|o.len()==1).and_then(|o|parse_incarnation(o.get("ns")?.as_str()?));
+                                                if let Some(ns)=ns {
+                                                    match el0::test_timeout_clock_advance(ns) {Ok(())=>tool_json(id,json!({"ok":true})),Err(error)=>tool_error(id,error)}
+                                                } else {tool_error(id,"invalid debug clock advance arguments");}
                                             }
                                             #[cfg(feature="storage-fault-test")]
                                             Some("debug_network_hold_rx") => {

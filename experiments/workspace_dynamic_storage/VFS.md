@@ -541,3 +541,34 @@ claim of general scheduling fairness.
 The fixture additionally submits a GET before sleeping and checks its result
 after wake. The scenario does not force the exact instant of service completion,
 so it does not by itself prove that the GET completed while the task was asleep.
+
+SVC `0x164` extends the same wait with a relative nanosecond duration: it
+returns 0 for an available message, -110 for expiry, -107 for channel closure,
+-116 for an old channel and -22 when the requested duration is unrepresentable.
+A zero duration returns immediately and does not increment `wake_timeout`.
+Timeouts are scheduling deadlines rather than real-time guarantees. Values are
+converted to counter ticks with upward rounding. The guest polls deadlines even
+when storage is blocked, but a woken process cannot run until dispatch resumes.
+At a serialized send or close, an already due deadline wins for that waiter;
+stopping a waiter instead removes that wait before channel teardown.
+
+With `storage-fault-test`, the integrated test first expires real waits using
+the QEMU ARM virtual counter. It then freezes a test-only clock, checks two
+sleeping tasks before and at their deadline, advances time, verifies a message
+before a later deadline, a queued message with duration zero, closure and stop.
+Clock-source changes are refused during timed waits. The controlled advances
+are rounded upward to counter ticks; the host timing does not establish a
+real-time latency bound. A normal build does not expose test clock controls.
+
+After a harness RPC timeout, the VM is not retried. The harness attempts to
+capture the failing request, earlier RPC trace, QMP status and registers, then
+asks QMP to pause the VM and copies the disposable raw disk before cleanup. The
+record states whether QMP confirmed pause; otherwise the copy may be taken while
+the VM is still active, and it is not a crash-consistent snapshot. QMP uses a
+per-operation socket timeout; the whole diagnostic and disk copy have no global
+time bound. Capture failures are recorded and the original timeout is retained.
+A separate legacy run also timed out during a later request in boot 43 after
+its initial graphical capture had succeeded. The failing request and VM state
+were not retained. A full rerun passed boot 43 and completed with the same
+15-second socket timeout; the original cause remains unknown. The new
+pre-cleanup capture path was not exercised by that successful rerun.

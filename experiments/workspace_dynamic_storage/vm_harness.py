@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Test bounded two-slot snapshot recovery using disposable QEMU disks."""
-import argparse, hashlib, json, os, socket, subprocess, sys, tempfile, time
+import argparse, hashlib, json, os, shutil, socket, subprocess, sys, tempfile, time
 from pathlib import Path
 SIZE=1024*1024
 OFFSET=4*512
@@ -28,6 +28,7 @@ def connect(path,process):
 class Guest:
     def __init__(self,qemu,kernel,image,tmp,index,out,transport,allow_degraded=False,rng=True,network=False):
         self.trace=[];self.qmp_trace=[];self.socket=Path(tmp)/('mcp'+str(index));self.qmp=Path(tmp)/('qmp'+str(index))
+        self.disk_image=Path(image);self.output_dir=Path(out);self.run_index=index
         self.log=tempfile.TemporaryFile(mode='w+b')
         f={'driver':'file','filename':str(image),'node-name':'f0'}
         d={'driver':'raw','file':'f0','node-name':'disk0'}
@@ -43,6 +44,7 @@ class Guest:
             for i in range(2):
                 cmd+=['-netdev',f'hubport,id=internal{i},hubid=0',
                       '-device',f'virtio-net-device,netdev=internal{i},mac=52:54:00:12:34:0{i+1}']
+        self.command=cmd
         self.process=subprocess.Popen(cmd,stdout=self.log,stderr=subprocess.STDOUT)
         try:
             self.sock=connect(self.socket,self.process);self.stream=self.sock.makefile('rwb',buffering=0)
@@ -105,9 +107,55 @@ class Guest:
         self.log.flush();self.log.seek(0)
         diagnostic=self.log.read().decode('utf-8',errors='replace')
         if diagnostic:print('QEMU diagnostic: '+diagnostic,file=sys.stderr)
+    def capture_timeout(self,req,elapsed):
+        # Do not retry a timed-out RPC. Attempt to capture the live VM and
+        # pause it before copying its disposable disk. Pause may fail; the raw
+        # image is diagnostic evidence, not a crash-consistency guarantee.
+        prefix=self.output_dir/('timeout-diagnostic-'+str(self.run_index)+'-'+str(time.time_ns()))
+        metadata={'index':self.run_index,'pid':self.process.pid,'elapsed_seconds':elapsed,
+                  'rpc_method':req.get('method'),'rpc_id':req.get('id'),
+                  'tool':req.get('params',{}).get('name'),'request':req,'trace_so_far':self.trace,
+                  'command':self.command,'process_exit_code':self.process.poll(),'qmp':{},
+                  'pause_confirmed':False,'errors':[]}
+        try:
+            with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as q:
+                q.settimeout(2);q.connect(str(self.qmp))
+                with q.makefile('rwb',buffering=0) as stream:
+                    metadata['qmp']['greeting']=json.loads(stream.readline())
+                    for name,args in [('qmp_capabilities',None),('query-status',None),('human-monitor-command',{'command-line':'info registers'}),('stop',None)]:
+                        command={'execute':name}
+                        if args is not None:command['arguments']=args
+                        stream.write(json.dumps(command).encode()+b'\n')
+                        for _ in range(20):
+                            answer=json.loads(stream.readline())
+                            if 'event' not in answer:break
+                        else:raise RuntimeError('too many QMP events')
+                        metadata['qmp'][name]=answer
+                        if 'error' in answer:
+                            metadata['errors'].append('QMP '+name+': '+repr(answer['error']))
+                            if name=='qmp_capabilities':break
+                        if name=='stop' and 'return' in answer:metadata['pause_confirmed']=True
+        except Exception as error:metadata['errors'].append('QMP: '+repr(error))
+        try:
+            destination=prefix.with_suffix('.raw');shutil.copyfile(self.disk_image,destination)
+            metadata['disk_copy']=str(destination)
+        except Exception as error:metadata['errors'].append('disk copy: '+repr(error))
+        try:
+            self.log.flush();self.log.seek(0);diagnostic=self.log.read().decode('utf-8',errors='replace')
+            metadata['qemu_log']=diagnostic
+        except Exception as error:metadata['errors'].append('QEMU log: '+repr(error))
+        try:
+            destination=prefix.with_suffix('.json');destination.write_text(json.dumps(metadata,indent=2)+'\n')
+            print('QEMU timeout diagnostic: '+str(destination),file=sys.stderr)
+        except Exception as error:print('QEMU timeout diagnostic failed: '+repr(error),file=sys.stderr)
     def exchange(self,req):
-        self.stream.write(json.dumps(req,separators=(',',':')).encode()+b'\n')
-        raw=self.stream.readline()
+        started=time.monotonic()
+        try:
+            self.stream.write(json.dumps(req,separators=(',',':')).encode()+b'\n')
+            raw=self.stream.readline()
+        except TimeoutError:
+            self.capture_timeout(req,time.monotonic()-started)
+            raise
         try:reply=json.loads(raw)
         except ValueError:raise RuntimeError('unexpected guest output: '+repr(raw))
         self.trace.append({'request':req,'response':reply})

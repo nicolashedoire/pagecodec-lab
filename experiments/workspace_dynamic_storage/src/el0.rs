@@ -205,7 +205,50 @@ static mut DIRECT_WAIT_INC:[u64;2]=[0;2];
 static mut DIRECT_WAIT_COUNT:[u64;2]=[0;2];
 static mut DIRECT_WAKE_MESSAGE:[u64;2]=[0;2];
 static mut DIRECT_WAKE_CLOSE:[u64;2]=[0;2];
-fn clear_direct_wait(actor:usize) {unsafe{write_volatile(addr_of_mut!(DIRECT_WAIT_CHANNEL).cast::<u64>().add(actor),0);write_volatile(addr_of_mut!(DIRECT_WAIT_INC).cast::<u64>().add(actor),0)}}
+static mut DIRECT_WAKE_TIMEOUT:[u64;2]=[0;2];
+// The virtual counter is used modulo 2^56, with relative waits strictly below
+// half that range. A saved VM snapshot/very long unobserved pause is outside
+// the clock contract. These are scheduling deadlines, not real-time timers.
+const CLOCK_MASK:u64=(1u64<<56)-1;
+const CLOCK_HALF:u64=1u64<<55;
+static mut DIRECT_WAIT_START:[u64;2]=[0;2];
+// Zero means an indefinite wait, never a timed wait of zero duration.
+static mut DIRECT_WAIT_TICKS:[u64;2]=[0;2];
+#[cfg(feature="storage-fault-test")]
+static mut TEST_CLOCK:Option<u64>=None;
+fn clock_now()->u64 {
+ #[cfg(feature="storage-fault-test")]
+ if let Some(value)=unsafe{read_volatile(addr_of!(TEST_CLOCK))} {return value}
+ let value:u64;unsafe{asm!("mrs {},CNTVCT_EL0",out(reg) value,options(nomem,nostack,preserves_flags))};value&CLOCK_MASK
+}
+// This controlled clock exists only in explicitly feature-enabled test builds.
+// Switching sources while a timed waiter exists would invalidate its start.
+#[cfg(feature="storage-fault-test")]
+pub fn test_timeout_clock_freeze()->Result<(), &'static str> {
+ if unsafe{read_volatile(addr_of!(DIRECT_WAIT_TICKS))}!=[0,0] {return Err("timed wait active")}
+ if unsafe{read_volatile(addr_of!(TEST_CLOCK))}.is_some() {return Err("clock already frozen")}
+ let now=clock_now();unsafe{write_volatile(addr_of_mut!(TEST_CLOCK),Some(now))};Ok(())
+}
+#[cfg(feature="storage-fault-test")]
+pub fn test_timeout_clock_advance(ns:u64)->Result<(), &'static str> {
+ let current=unsafe{read_volatile(addr_of!(TEST_CLOCK))}.ok_or("clock not frozen")?;
+ let ticks=timeout_ticks(ns).ok_or("invalid duration")?;
+ unsafe{write_volatile(addr_of_mut!(TEST_CLOCK),Some(current.wrapping_add(ticks)&CLOCK_MASK))};
+ poll_direct_timeouts();Ok(())
+}
+#[cfg(feature="storage-fault-test")]
+pub fn test_timeout_clock_unfreeze()->Result<(), &'static str> {
+ if unsafe{read_volatile(addr_of!(DIRECT_WAIT_TICKS))}!=[0,0] {return Err("timed wait active")}
+ if unsafe{read_volatile(addr_of!(TEST_CLOCK))}.is_none() {return Err("clock not frozen")}
+ unsafe{write_volatile(addr_of_mut!(TEST_CLOCK),None)};Ok(())
+}
+fn timeout_ticks(ns:u64)->Option<u64> {
+ let freq:u64;unsafe{asm!("mrs {},CNTFRQ_EL0",out(reg) freq,options(nomem,nostack,preserves_flags))}
+ if freq==0 {return None}
+ let ticks=(ns as u128).checked_mul(freq as u128)?.checked_add(999_999_999)?/1_000_000_000;
+ if ticks>=CLOCK_HALF as u128 {return None} Some(ticks as u64)
+}
+fn clear_direct_wait(actor:usize) {unsafe{write_volatile(addr_of_mut!(DIRECT_WAIT_CHANNEL).cast::<u64>().add(actor),0);write_volatile(addr_of_mut!(DIRECT_WAIT_INC).cast::<u64>().add(actor),0);write_volatile(addr_of_mut!(DIRECT_WAIT_START).cast::<u64>().add(actor),0);write_volatile(addr_of_mut!(DIRECT_WAIT_TICKS).cast::<u64>().add(actor),0)}}
 // Called only at masked single-CPU exception/service boundaries. No user
 // pointer is accessed: the only modified frame is owned by this incarnation.
 fn wake_direct(actor:usize,channel:u64,inc:u64,code:i64) {
@@ -216,11 +259,27 @@ fn wake_direct(actor:usize,channel:u64,inc:u64,code:i64) {
  unsafe {
   (*saved).regs[0]=code as u64;
   clear_direct_wait(actor);
-  let counter=if code==0 {addr_of_mut!(DIRECT_WAKE_MESSAGE)}else{addr_of_mut!(DIRECT_WAKE_CLOSE)}.cast::<u64>().add(actor);
+  let counter=match code {0=>addr_of_mut!(DIRECT_WAKE_MESSAGE),-110=>addr_of_mut!(DIRECT_WAKE_TIMEOUT),_=>addr_of_mut!(DIRECT_WAKE_CLOSE)}.cast::<u64>().add(actor);
   write_volatile(counter,read_volatile(counter).saturating_add(1));
   write_volatile(addr_of_mut!(TASK_STATE).cast::<u64>().add(actor),1);
   let current=read_volatile(addr_of!(CURRENT)) as usize;
   if current>=2 || !matches!(states[current],1|2) {write_volatile(addr_of_mut!(CURRENT),actor as u64)}
+ }
+}
+/// Advance deadlines even if no EL0 task is READY. Call only with IRQ masked;
+/// the main loop also calls this outside the storage-write-blocked condition.
+pub fn poll_direct_timeouts() {
+ let ticks=unsafe{read_volatile(addr_of!(DIRECT_WAIT_TICKS))};
+ if ticks==[0,0] {return}
+ let now=clock_now();
+ for actor in 0..2 {
+  if ticks[actor]==0 {continue}
+  let start=unsafe{read_volatile(addr_of!(DIRECT_WAIT_START).cast::<u64>().add(actor))};
+  if now.wrapping_sub(start)&CLOCK_MASK >= ticks[actor] {
+   let channel=unsafe{read_volatile(addr_of!(DIRECT_WAIT_CHANNEL).cast::<u64>().add(actor))};
+   let inc=unsafe{read_volatile(addr_of!(DIRECT_WAIT_INC).cast::<u64>().add(actor))};
+   wake_direct(actor,channel,inc,-110)
+  }
  }
 }
 fn direct_result(f:&mut Frame,code:i64) {f.regs[0]=code as u64}
@@ -249,7 +308,7 @@ pub fn bind_direct(a:usize,ai:u64,b:usize,bi:u64,boot:[u8;16])->Result<u64, &'st
 /// Exposes metadata only; message bytes and virtual addresses remain private.
 pub fn direct_status()->Value {
  let c=unsafe{&*addr_of!(DIRECT)};
- json!({"bound":c.bound,"channel_id":c.channel_id,"incarnations":c.incarnations,"queued":c.len,"sent":c.sent,"received":c.received,"dropped":c.dropped,"full_rejections":c.full_rejections,"peer_unbound":c.peer_unbound,"scrubbed":c.scrubbed,"waiting":unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|s|s==4),"wait_count":unsafe{read_volatile(addr_of!(DIRECT_WAIT_COUNT))},"wake_message":unsafe{read_volatile(addr_of!(DIRECT_WAKE_MESSAGE))},"wake_close":unsafe{read_volatile(addr_of!(DIRECT_WAKE_CLOSE))}})
+ json!({"bound":c.bound,"channel_id":c.channel_id,"incarnations":c.incarnations,"queued":c.len,"sent":c.sent,"received":c.received,"dropped":c.dropped,"full_rejections":c.full_rejections,"peer_unbound":c.peer_unbound,"scrubbed":c.scrubbed,"waiting":unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|s|s==4),"wait_count":unsafe{read_volatile(addr_of!(DIRECT_WAIT_COUNT))},"wake_message":unsafe{read_volatile(addr_of!(DIRECT_WAKE_MESSAGE))},"wake_close":unsafe{read_volatile(addr_of!(DIRECT_WAKE_CLOSE))},"wake_timeout":unsafe{read_volatile(addr_of!(DIRECT_WAKE_TIMEOUT))}})
 }
 fn direct_live(c:&DirectChannel,actor:usize)->bool {
  if actor>=2 || !c.bound || c.channel_id==0 || !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} || unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {return false}
@@ -265,6 +324,8 @@ fn direct_peer(f:&mut Frame,actor:usize) {
  let peer=1-actor;f.regs[0]=peer as u64;f.regs[1]=c.incarnations[peer];f.regs[2]=c.channel_id;
 }
 fn direct_send(f:&mut Frame,actor:usize) {
+ // Serialize already-expired waits before accepting a new message.
+ poll_direct_timeouts();
  if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {direct_result(f,-38);return}
  let c=unsafe{&mut *addr_of_mut!(DIRECT)};
  if !direct_live(c,actor) {direct_result(f,-107);return}
@@ -281,14 +342,22 @@ fn direct_send(f:&mut Frame,actor:usize) {
 }
 // Return 2 to the exception stub only after atomically checking an empty
 // queue and recording a channel+incarnation. IRQs remain masked throughout.
-fn direct_wait(f:&mut Frame,actor:usize)->u64 {
+fn direct_wait(f:&mut Frame,actor:usize,timed:bool)->u64 {
  if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {direct_result(f,-38);return 0}
  let c=unsafe{&mut *addr_of_mut!(DIRECT)};
  if !direct_live(c,actor) {direct_result(f,-107);return 0}
  if f.regs[0]!=c.channel_id {direct_result(f,-116);return 0}
  if c.len[actor]!=0 {direct_result(f,0);return 0}
+ let duration=if timed {
+  if f.regs[1]==0 {direct_result(f,-110);return 0}
+  let Some(ticks)=timeout_ticks(f.regs[1]) else {direct_result(f,-22);return 0};
+  if ticks==0 {direct_result(f,-110);return 0} ticks
+ }else{0};
+ let start=if timed {clock_now()}else{0};
  if unsafe{read_volatile(addr_of!(TASK_STATE).cast::<u64>().add(actor))}!=2 {halt()}
  unsafe {
+  write_volatile(addr_of_mut!(DIRECT_WAIT_START).cast::<u64>().add(actor),start);
+  write_volatile(addr_of_mut!(DIRECT_WAIT_TICKS).cast::<u64>().add(actor),duration);
   write_volatile(addr_of_mut!(DIRECT_WAIT_CHANNEL).cast::<u64>().add(actor),c.channel_id);
   write_volatile(addr_of_mut!(DIRECT_WAIT_INC).cast::<u64>().add(actor),c.incarnations[actor]);
   let count=addr_of_mut!(DIRECT_WAIT_COUNT).cast::<u64>().add(actor);
@@ -334,6 +403,8 @@ fn close_direct_for(actor:usize) {
  retire_direct(c)
 }
 fn retire_direct(c:&mut DirectChannel) {
+ // Timeout wins if due when close is serialized, including peer exit/stop.
+ poll_direct_timeouts();
  for actor in 0..2 {wake_direct(actor,c.channel_id,c.incarnations[actor],-107)}
  for dest in 0..2 {
   c.dropped[dest]=c.dropped[dest].saturating_add(c.len[dest] as u64);
@@ -655,7 +726,8 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
    0x160=>{direct_peer(f,actor);return 0},
    0x161=>{direct_send(f,actor);return 0},
    0x162=>{direct_recv(f,actor);return 0},
-   0x163=>{return direct_wait(f,actor)},
+   0x163=>{return direct_wait(f,actor,false)},
+   0x164=>{return direct_wait(f,actor,true)},
    0x140=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_read(f,state,actor);return 0},
    0x141=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_write(f,state,actor);return 0},
    0x123=>{unsafe{write_volatile(addr_of_mut!(PAIR_EXIT_CODES).cast::<Option<u64>>().add(actor),Some(f.regs[0]));write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(actor),1)};return 1},
