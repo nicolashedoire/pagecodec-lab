@@ -629,6 +629,72 @@ pub extern "C" fn graph_main() -> ! {
                 // Do not apply an IPC operation from a previous incarnation.
                 // This check relies on the current single-CPU service model.
                 if !el0::request_is_live(&request) {continue}
+                if request.doc_op!=0 {
+                    // The caller cannot choose a workspace label. The kernel
+                    // resolves the current binding at the owner boundary.
+                    let role=el0::document_request_role(&request);
+                    let mut reply=[0u8;32];
+                    let mut reply_len=0usize;
+                    let mut errno=0i64;
+                    let key=request.key.get(..request.key_len).and_then(|x|core::str::from_utf8(x).ok());
+                    if role.is_none() {errno=-116}
+                    else if !matches!(request.doc_op,1|2) || key.is_none_or(|k|k.is_empty() || k.len()>16) {errno=-22}
+                    else {
+                        let key=key.unwrap();
+                        let role=role.unwrap();
+                        if request.doc_op==2 {
+                            let selected=match role {
+                                1=>Some((&document.human,&document.human_space)),
+                                2=>Some((&document.assistant,&document.assistant_space)),
+                                _=>None,
+                            };
+                            if let Some((actor,space))=selected {
+                                match document.bridge.view(actor,space) {
+                                    Ok(copy)=>match copy.get(key) {
+                                        None=>errno=-2,
+                                        Some(value) if value.len()>reply.len()=>errno=-34,
+                                        Some(value)=>{reply_len=value.len();reply[..reply_len].copy_from_slice(value.as_bytes());},
+                                    },
+                                    Err(_)=>errno=-5,
+                                }
+                            } else {errno=-116}
+                        } else {
+                            let value=request.value.get(..request.value_len).and_then(|x|core::str::from_utf8(x).ok());
+                            if let Some(value)=value {
+                                // Snapshot reconstruction creates a private
+                                // candidate. Publish the same edit to the
+                                // original only after verified persistence;
+                                // this preserves its in-memory event history.
+                                if let Some(mut candidate)=DocumentDemo::from_snapshot(&document.snapshot()) {
+                                    let selected=match role {
+                                        1=>Some((&candidate.human,&candidate.human_space)),
+                                        2=>Some((&candidate.assistant,&candidate.assistant_space)),
+                                        _=>None,
+                                    };
+                                    let valid=selected.is_some_and(|(actor,space)|candidate.bridge.edit(actor,space,key,Some(value)).is_ok());
+                                    if !valid {errno=-116}
+                                    else if let Some(ref mut disk)=block {
+                                        match save_snapshot(disk,&candidate,&files) {
+                                            Ok((slot,generation))=>{
+                                                let selected=match role {
+                                                    1=>Some((&document.human,&document.human_space)),
+                                                    2=>Some((&document.assistant,&document.assistant_space)),
+                                                    _=>None,
+                                                };
+                                                if !selected.is_some_and(|(actor,space)|document.bridge.edit(actor,space,key,Some(value)).is_ok()) {halt()}
+                                                storage_state["save"]=json!({"slot":slot,"generation":generation,"readback_verified":true,"snapshot":document.snapshot()});
+                                            }
+                                            Err("snapshot invalid or capacity exceeded")=>errno=-28,
+                                            Err(_)=>errno=-5,
+                                        }
+                                    } else {errno=-5}
+                                } else {errno=-5}
+                            } else {errno=-22}
+                        }
+                    }
+                    if !el0::complete_document(&request,&reply[..reply_len],errno) {halt()}
+                    continue;
+                }
                 if request.file_op!=0 {
                     // Requests were copied from a private EL0 page by SVC;
                     // authorize again at the owner boundary before disk access.
@@ -814,6 +880,9 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"file_delete","description":"Remove one synthetic file and save the workspace snapshot; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}},
                                         {"name":"ipc_status","description":"Read the bounded FIFO and task completion status.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"document_view","description":"Read a field from a synthetic document copy.","inputSchema":{"type":"object","properties":{"actor":{"type":"string","enum":["human","assistant"]},"space":{"type":"string","enum":["human-space","assistant-space"]},"key":{"type":"string","description":"Non-empty; at most 32 UTF-8 bytes."}},"required":["actor","space","key"],"additionalProperties":false}},
+                                        {"name":"document_bind","description":"Bind a live independent guest incarnation to one document copy; no controller authentication.","inputSchema":{"type":"object","properties":{"slot":{"type":"integer","minimum":0,"maximum":2},"incarnation":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20},"boot_id":{"type":"string","pattern":"^[0-9a-f]{32}$"},"role":{"type":"string","enum":["human","assistant"]}},"required":["slot","incarnation","boot_id","role"],"additionalProperties":false}},
+                                        {"name":"document_unbind","description":"Revoke one document binding by generation and boot ID; no controller authentication.","inputSchema":{"type":"object","properties":{"binding_id":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20},"boot_id":{"type":"string","pattern":"^[0-9a-f]{32}$"}},"required":["binding_id","boot_id"],"additionalProperties":false}},
+                                        {"name":"document_bindings_status","description":"Inspect guest document binding metadata, without field contents.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"document_merge","description":"Merge synthetic copies and return fields, origins and conflicts.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"document_snapshot","description":"Read the synthetic base and both full copies.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                     ]}});
@@ -1272,6 +1341,37 @@ pub extern "C" fn graph_main() -> ! {
                                                 let args=params.and_then(|p|p.get("arguments"));
                                                 if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) { tool_error(id,"remote_state requires empty arguments"); }
                                                 else { let (x,y)=cursor(&router,&remote); tool_json(id,json!({"actor":"remote","x":x,"y":y})); }
+                                            }
+                                            Some("document_bind") => {
+                                                let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
+                                                let parsed=args.filter(|o|o.len()==4).and_then(|o|Some((
+                                                    usize::try_from(o.get("slot")?.as_u64()?).ok()?,
+                                                    parse_incarnation(o.get("incarnation")?.as_str()?)?,
+                                                    parse_boot_id(o.get("boot_id")?.as_str()?)?,
+                                                    match o.get("role")?.as_str()? {"human"=>1u8,"assistant"=>2u8,_=>return None})));
+                                                if let Some((slot,incarnation,boot,role))=parsed {
+                                                    match el0::bind_document(slot,incarnation,boot,role) {
+                                                        Ok(binding_id)=>tool_json(id,json!({"bound":true,"binding_id":format!("{}",binding_id)})),
+                                                        Err(error)=>tool_error(id,error),
+                                                    }
+                                                } else {tool_error(id,"invalid document_bind arguments");}
+                                            }
+                                            Some("document_unbind") => {
+                                                let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
+                                                let parsed=args.filter(|o|o.len()==2).and_then(|o|Some((
+                                                    parse_incarnation(o.get("binding_id")?.as_str()?)?,
+                                                    parse_boot_id(o.get("boot_id")?.as_str()?)?)));
+                                                if let Some((binding_id,boot))=parsed {
+                                                    match el0::unbind_document(binding_id,boot) {
+                                                        Ok(())=>tool_json(id,json!({"unbound":true})),
+                                                        Err(error)=>tool_error(id,error),
+                                                    }
+                                                } else {tool_error(id,"invalid document_unbind arguments");}
+                                            }
+                                            Some("document_bindings_status") => {
+                                                let args=params.and_then(|p|p.get("arguments"));
+                                                if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"document_bindings_status requires empty arguments");}
+                                                else {tool_json(id,el0::document_bindings_status());}
                                             }
                                             Some("document_view") => {
                                                 let args=params.and_then(|p|p.get("arguments"));

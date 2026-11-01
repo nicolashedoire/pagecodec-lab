@@ -644,6 +644,51 @@ These channels remain bounded, in-memory, unauthenticated VM mechanisms.
 The separate ordinary-release modern evidence predates this multi-channel
 change; the current extended scenarios are recorded in the feature-enabled
 modern and legacy storage-fault evidence.
-The initial feature-enabled traces were produced before adding the explicit
-readiness handshake to the multi-channel fixture; that handshake is being
-validated separately and those initial traces do not establish its behavior.
+The recorded feature-enabled modern and legacy traces include the explicit
+readiness handshake added to the multi-channel fixture.
+
+### Explicit document bindings for independent processes
+
+The experimental `document_bind` associates one live independent process
+incarnation with the `human` or `assistant` document copy and returns a decimal
+binding ID. A process and each role have at most one active binding. The ID and
+boot ID are freshness controls, not secrets or authentication: MCP remains
+unauthenticated. `document_unbind` revokes a binding; stopping or exiting its
+incarnation also revokes it. Slot 2 can be bound to an available role; no role
+is inferred solely from a slot number.
+
+EL0 SVCs `0x190` (GET) and `0x191` (PUT) take a 1–16-byte UTF-8 key, a private
+Data/Stack value buffer of up to 32 bytes, and the exact binding ID. They share
+one outstanding generic request per actor with file operations. Results include
+-11 pending, -13 for no requested binding, -116 for a stale/foreign binding,
+-14 for a bad user range, -22 for invalid arguments/UTF-8, -2 for a missing key,
+-34 for a short GET buffer, -28 for quota and -5 for I/O failure where a reply
+can be returned. The service rechecks the actor/incarnation/binding before
+applying an operation; the process does not choose a role by supplying a label
+in its SVC. A PUT prepares and verifies the combined document/catalog snapshot
+before publishing success. A post-commit uncertainty blocks writes and can
+suspend guest tasks until restart; it does not promise an immediate -5 reply.
+
+The integrated scenario uses a disposable disk clone and two linked Rust ELFs
+bound explicitly to different copies. They exercise denied access before
+binding, GET/PUT/GET and role exclusivity. One is stopped and readmitted; the
+old binding is rejected, the other process keeps progressing, and a new binding
+updates the first copy. The scenario checks the deterministic merge's field
+origins, then reboots the same disk without a later file write after the last
+PUT and checks restored copies and provenance. This is a bounded two-copy
+experiment; conflict resolution by an AI model, user authentication, SMP and
+power-loss durability are not provided by this interface.
+The recorded integrated runs cover the feature-enabled modern transport and
+the ordinary-release legacy transport. The feature-enabled legacy trace and
+ordinary-release modern trace predate this document-process integration.
+The Bridge's in-memory event history currently grows without an eviction bound
+and can exhaust the guest heap; the full event history is not persisted across
+restart. Revoking queued requests or clearing an `Option` is a logical cleanup,
+not evidence that every old payload copy in memory or stack was physically
+wiped. The current scenario does not force revocation of an already queued
+document request, quota exhaustion or a document conflict.
+The current document-process scenario does not test two edits conflicting on
+the same field, unbind/rebind within one incarnation, cancellation while a
+document request is queued, or a document-specific post-commit failure. Merge
+is deterministic field comparison with reported origins and conflicts; an AI
+merge or conflict resolver is not implemented.

@@ -1205,6 +1205,94 @@ def main():
    if g.call('file_list',{})!=files_before:raise RuntimeError('multi-channel fixture left files behind')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
+  # Separate disposable image: document PUT persists before process ACK.
+  doc_disk=Path(tmp)/'document-process.raw';create(doc_disk,disk.read_bytes())
+  d=Guest(a.qemu,guest,doc_disk,tmp,54,out,a.transport)
+  try:
+   d.progress('before document-bound tasks',timeout_image=True,expected_exit_code=0);d.wait_boot_identity()
+   before_doc=d.call('document_snapshot',{})
+   if any(key in before_doc[copy] for copy in ('base','human','assistant') for key in ('hproof','aproof')):raise RuntimeError('document test keys already exist')
+   if any(before_doc[copy].get('title')!='base' for copy in ('human','assistant')):raise RuntimeError('unexpected initial document title')
+   for name in ('a-dgate','b-dgate'):
+    if not d.call('file_put',{'name':name,'data':'0'}).get('readback_verified'):raise RuntimeError('document gate setup failed')
+   image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-document-process.hex').read_text().strip())
+   upload=stage_program(d,image)
+   human=d.call('process_spawn_staged',{'id':upload});assistant=d.call('process_spawn_staged',{'id':upload})
+   if [human.get('slot'),assistant.get('slot')]!=[0,1] or human.get('boot_id')!=assistant.get('boot_id'):raise RuntimeError('document task admission failed')
+   def doc_phase(name,expected):
+    for _ in range(80):
+     got=d.call('file_get',{'name':name}).get('hex')
+     if got==expected.encode().hex():return
+     time.sleep(.2)
+    raise RuntimeError('document fixture phase not reached: '+str((name,expected,got)))
+   def doc_gate(name,id,stage):
+    raw=int(id).to_bytes(8,'little')+bytes([stage])
+    if not d.call('file_put_hex',{'name':name,'hex':raw.hex()}).get('readback_verified'):raise RuntimeError('document gate write failed')
+   doc_phase('a-dgate','d');doc_phase('b-dgate','d') # Each observed -13 before binding.
+   ah={'slot':0,'incarnation':human['incarnation_text'],'boot_id':human['boot_id'],'role':'human'}
+   ba={'slot':1,'incarnation':assistant['incarnation_text'],'boot_id':assistant['boot_id'],'role':'assistant'}
+   ahid=d.call('document_bind',ah)['binding_id']
+   reject(d,'document_bind',dict(ba,role='human'),'document role already bound')
+   bid=d.call('document_bind',ba)['binding_id']
+   if int(ahid)==int(bid):raise RuntimeError('document binding IDs not distinct')
+   reject(d,'document_bind',ah,'process already bound')
+   bindings=d.call('document_bindings_status',{})
+   expected_bindings=[{'slot':0,'incarnation':human['incarnation_text'],'binding_id':ahid,'role':'human'}, {'slot':1,'incarnation':assistant['incarnation_text'],'binding_id':bid,'role':'assistant'}]
+   if set(bindings)!={'bindings','submitted','completed'} or bindings.get('bindings')!=expected_bindings:raise RuntimeError('document bindings invalid: '+str(bindings))
+   doc_gate('a-dgate',ahid,1);doc_gate('b-dgate',bid,1)
+   for _ in range(80):
+    snapshot=d.call('document_snapshot',{})
+    if snapshot['human'].get('hproof')=='H' and snapshot['assistant'].get('aproof')=='A':break
+    time.sleep(.2)
+   else:raise RuntimeError('two document writes not applied: '+str(snapshot))
+   if snapshot['assistant'].get('hproof') is not None or snapshot['human'].get('aproof') is not None:raise RuntimeError('edits crossed copies')
+   state=d.call('process_status',{});b_io=state['all_io_completed'][1]
+   stopped=d.call('process_stop',{'slot':0,'incarnation':human['incarnation_text'],'boot_id':human['boot_id']})
+   if stopped.get('stopped') is not True:raise RuntimeError('document human stop failed')
+   for _ in range(80):
+    state=d.call('process_status',{})
+    if state.get('all_slot_states',[None]*3)[:2]==['exited','ready'] and state.get('all_io_completed',[0]*3)[1]>b_io:break
+    time.sleep(.2)
+   else:raise RuntimeError('assistant did not progress after human stop: '+str(state))
+   bindings=d.call('document_bindings_status',{})
+   if bindings.get('bindings')!=expected_bindings[1:]:raise RuntimeError('stopped actor binding not revoked: '+str(bindings))
+   if not d.call('file_put',{'name':'a-dgate','data':'0'}).get('readback_verified'):raise RuntimeError('document gate reset failed')
+   replacement=d.call('process_spawn_staged',{'id':upload})
+   if replacement.get('slot')!=0 or replacement.get('incarnation',0)<=human['incarnation']:raise RuntimeError('document human readmission failed')
+   doc_phase('a-dgate','d');doc_gate('a-dgate',ahid,2);doc_phase('a-dgate','s') # Re-admitted ELF observed -116.
+   reject(d,'document_unbind',{'binding_id':ahid,'boot_id':human['boot_id']},'stale document binding')
+   fresh=d.call('document_bind',dict(ah,incarnation=replacement['incarnation_text']))['binding_id']
+   if int(fresh)<=int(ahid):raise RuntimeError('document binding ID did not advance')
+   bindings=d.call('document_bindings_status',{})
+   expected_fresh=[{'slot':0,'incarnation':replacement['incarnation_text'],'binding_id':fresh,'role':'human'},expected_bindings[1]]
+   if bindings.get('bindings')!=expected_fresh:raise RuntimeError('document re-binding invalid: '+str(bindings))
+   # Capture the neighbor immediately before the final human write; earlier
+   # progress while re-admitting A does not prove progress after this point.
+   b_io=d.call('process_status',{})['all_io_completed'][1]
+   doc_gate('a-dgate',fresh,3)
+   state=d.wait_independent(lambda x:x.get('slot_states',[None,None])[0]=='exited' and x.get('io_completed',[0,0])[1]>b_io,'rebound document writer exited while assistant progresses')
+   if state.get('outcomes',[None,None])[0]!=1 or state.get('exit_codes',[None,None])[0]!=0:raise RuntimeError('rebound document writer failed: '+str(state))
+   snapshot=d.call('document_snapshot',{})
+   expected=json.loads(json.dumps(before_doc));expected['human']['hproof']='H2';expected['assistant']['aproof']='A'
+   if snapshot!=expected:raise RuntimeError('document copies not as expected: '+str(snapshot))
+   merged=d.call('document_merge',{});fields={field['key']:field for field in merged['fields']}
+   if fields.get('hproof',{}).get('value')!='H2' or fields['hproof'].get('origin')!='human' or fields.get('aproof',{}).get('value')!='A' or fields['aproof'].get('origin')!='assistant':raise RuntimeError('document provenance invalid: '+str(merged))
+   stopped=d.call('process_stop',{'slot':1,'incarnation':assistant['incarnation_text'],'boot_id':assistant['boot_id']})
+   if stopped.get('stopped') is not True:raise RuntimeError('assistant stop failed')
+   d.wait_independent(lambda x:x.get('slot_states')==['exited','exited'],'document tasks stopped')
+   if d.call('document_bindings_status',{}).get('bindings')!=[]:raise RuntimeError('document bindings survived task exit')
+   d.call('upload_reset',{'id':upload})
+   traces.append(d.trace);states.append(d.call('storage_status',{}))
+  finally:d.close()
+  # No file changes after last document PUT: same disk must restore the result.
+  d=Guest(a.qemu,guest,doc_disk,tmp,55,out,a.transport)
+  try:
+   d.progress('after document process restart',timeout_image=True,expected_exit_code=0)
+   if d.call('document_snapshot',{})!=expected:raise RuntimeError('document edits did not restore')
+   merged=d.call('document_merge',{});fields={field['key']:field for field in merged['fields']}
+   if fields.get('hproof',{}).get('origin')!='human' or fields.get('aproof',{}).get('origin')!='assistant':raise RuntimeError('document origins not restored')
+   traces.append(d.trace);states.append(d.call('storage_status',{}))
+  finally:d.close()
   # No NIC: the same Rust program must see -19 without requiring a peer.
   network_elf=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-net-roundtrip.hex').read_text().strip())
   g=Guest(a.qemu,guest,disk,tmp,52,out,a.transport)
