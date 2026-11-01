@@ -797,6 +797,7 @@ fn start_programs(a:&[u8],b:Option<&[u8]>)->Result<(), &'static str> {
 /// Admit one independent ELF into an actually free slot at an EL1 service
 /// boundary. The other slot's frame, registers, scheduling and IPC are intact.
 pub fn start_independent(bytes:&[u8])->Result<(usize,u64), &'static str> {
+ if super::boot_identity::identifier().is_none() {return Err("boot identity unavailable")}
  let active=unsafe{read_volatile(addr_of!(PAIR_ACTIVE))};
  if active && unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {return Err("incompatible active mode")}
  if unsafe{read_volatile(addr_of!(IMAGE_COUNT))}<4 && !unsafe{read_volatile(addr_of!(FIXTURE_PAUSE_REQUESTED))} {return Err("fixture admission not paused")}
@@ -866,7 +867,9 @@ pub fn start_independent(bytes:&[u8])->Result<(usize,u64), &'static str> {
 /// Stop one current independent incarnation at a service boundary. This is
 /// synchronous only in this single-CPU guest: it does not roll back file
 /// effects that have already been applied by the owner service.
-pub fn stop_independent(slot:usize,expected:u64)->Result<(), &'static str> {
+pub fn stop_independent(slot:usize,expected:u64,boot_id:[u8;16])->Result<(), &'static str> {
+ let current_boot=super::boot_identity::identifier().ok_or("boot identity unavailable")?;
+ if boot_id!=current_boot {return Err("stale boot identity")}
  if slot>=2 {return Err("invalid process slot")}
  let mut daif:u64;let mut timer:u64;
  unsafe{asm!("mrs {},DAIF",out(reg) daif);asm!("mrs {},CNTV_CTL_EL0",out(reg) timer)}
@@ -894,7 +897,7 @@ pub fn stop_independent(slot:usize,expected:u64)->Result<(), &'static str> {
  Ok(())
 }
 pub fn pair_status()->Value {json!({
- "mode":match unsafe{read_volatile(addr_of!(PAIR_MODE))} {1=>"single",2=>"pair",3=>"independent",_=>"none"},"started":unsafe{read_volatile(addr_of!(PAIR_STARTED))},"done":unsafe{read_volatile(addr_of!(PAIR_DONE))},"run_id":unsafe{read_volatile(addr_of!(PAIR_RUN_ID))},"stale_completion_rejected":unsafe{read_volatile(addr_of!(PAIR_STALE_REJECTED))},"old_incarnation_same_id_rejected":unsafe{read_volatile(addr_of!(PAIR_OLD_INCARNATION_REJECTED))},
+ "boot_identity_ready":super::boot_identity::identifier().is_some(),"mode":match unsafe{read_volatile(addr_of!(PAIR_MODE))} {1=>"single",2=>"pair",3=>"independent",_=>"none"},"started":unsafe{read_volatile(addr_of!(PAIR_STARTED))},"done":unsafe{read_volatile(addr_of!(PAIR_DONE))},"run_id":unsafe{read_volatile(addr_of!(PAIR_RUN_ID))},"stale_completion_rejected":unsafe{read_volatile(addr_of!(PAIR_STALE_REJECTED))},"old_incarnation_same_id_rejected":unsafe{read_volatile(addr_of!(PAIR_OLD_INCARNATION_REJECTED))},
  "incarnations":unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS))},"mappings_verified":unsafe{read_volatile(addr_of!(PAIR_MAPPINGS_VERIFIED))},
  "slot_mappings_verified":unsafe{read_volatile(addr_of!(SLOT_MAPPINGS_VERIFIED))},
  "slot_states":unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|v|match v {1=>"ready",2=>"running",3=>"exited",_=>"invalid"}),

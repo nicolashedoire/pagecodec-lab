@@ -5,6 +5,7 @@ mod mmu;
 mod el0;
 mod loader;
 mod vfs;
+mod boot_identity;
 extern crate alloc;
 use alloc::format;
 use alloc::string::String;
@@ -482,6 +483,17 @@ fn parse_incarnation(text:&str)->Option<u64> {
     if text.is_empty() || text.len()>20 || text.as_bytes()[0]==b'0' || !text.bytes().all(|b|b.is_ascii_digit()) {return None}
     text.parse::<u64>().ok().filter(|v|*v!=0)
 }
+fn boot_id_text(id:[u8;16])->String {
+    const HEX:&[u8;16]=b"0123456789abcdef";
+    let mut out=String::with_capacity(32);
+    for byte in id {out.push(HEX[(byte>>4) as usize] as char);out.push(HEX[(byte&15) as usize] as char)}
+    out
+}
+fn parse_boot_id(text:&str)->Option<[u8;16]> {
+    let b=text.as_bytes();if b.len()!=32 {return None}
+    fn nibble(b:u8)->Option<u8> {match b {b'0'..=b'9'=>Some(b-b'0'),b'a'..=b'f'=>Some(b-b'a'+10),_=>None}}
+    let mut out=[0u8;16];for i in 0..16 {out[i]=nibble(b[i*2])?<<4|nibble(b[i*2+1])?}Some(out)
+}
 fn origin_name(origin: Origin) -> &'static str {
     match origin { Origin::Base=>"base", Origin::Human=>"human", Origin::Assistant=>"assistant", Origin::Both=>"both" }
 }
@@ -506,6 +518,7 @@ pub extern "C" fn graph_main() -> ! {
     let mut gpu = None;
     let mut input = None;
     let mut block = None;
+    let mut entropy = None;
     for slot in 0..MMIO_SLOTS {
         let ptr = NonNull::new((MMIO_BASE + slot * MMIO_STRIDE) as *mut VirtIOHeader).unwrap();
         // SAFETY: the specified QEMU virt machine maps each MMIO window; one CPU.
@@ -514,6 +527,7 @@ pub extern "C" fn graph_main() -> ! {
             DeviceType::Block if block.is_none() => { block = VirtIOBlk::<VmHal, _>::new(transport).ok(); }
             DeviceType::GPU if gpu.is_none() => { gpu = VirtIOGpu::<VmHal, _>::new(transport).ok(); }
             DeviceType::Input if input.is_none() => { input = VirtIOInput::<VmHal, _>::new(transport).ok(); }
+            DeviceType::EntropySource if entropy.is_none() => { entropy=boot_identity::BootEntropy::begin(transport).ok(); }
             _ => {}
         }
     }
@@ -605,6 +619,7 @@ pub extern "C" fn graph_main() -> ! {
     const SERVICE_POLLS: u32 = 20_000;
     let mut service_polls=SERVICE_POLLS;
     loop {
+        if let Some(ref mut source)=entropy {source.poll()}
         if service_polls>=SERVICE_POLLS {
           // The fixed EL0 scripts assume a successful save and would halt on
           // failure. Keep them suspended when storage needs reconciliation so
@@ -774,7 +789,7 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"process_pair_status","description":"Inspect the experimental pair of guest tasks.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"process_start","description":"Admit one named bounded ELF guest task; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}},
                                         {"name":"process_spawn","description":"Admit a named ELF into a free independent task slot; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}},
-                                        {"name":"process_stop","description":"Stop one independent guest task by slot and exact decimal incarnation; no authentication.","inputSchema":{"type":"object","properties":{"slot":{"type":"integer","minimum":0,"maximum":1},"incarnation":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20}},"required":["slot","incarnation"],"additionalProperties":false}},
+                                        {"name":"process_stop","description":"Stop one independent guest task by slot, exact decimal incarnation and boot ID; no authentication.","inputSchema":{"type":"object","properties":{"slot":{"type":"integer","minimum":0,"maximum":1},"incarnation":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20},"boot_id":{"type":"string","pattern":"^[0-9a-f]{32}$"}},"required":["slot","incarnation","boot_id"],"additionalProperties":false}},
                                         {"name":"process_status","description":"Inspect the latest bounded guest task admission.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"fixtures_pause","description":"Pause new built-in fixture admissions after the current fixture finishes.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"fixtures_resume","description":"Resume built-in fixture admissions.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
@@ -878,7 +893,10 @@ pub extern "C" fn graph_main() -> ! {
                                                 else if let Some(name)=name {
                                                     match files.read_for_load(name,512) {
                                                         Ok(program)=>match el0::start_independent(program) {
-                                                            Ok((slot,incarnation))=>tool_json(id,json!({"started":true,"slot":slot,"incarnation":incarnation,"incarnation_text":format!("{}",incarnation)})),
+                                                            Ok((slot,incarnation))=>match boot_identity::identifier() {
+                                                                Some(boot_id)=>tool_json(id,json!({"started":true,"slot":slot,"incarnation":incarnation,"incarnation_text":format!("{}",incarnation),"boot_id":boot_id_text(boot_id)})),
+                                                                None=>halt(), // start_independent requires identity readiness
+                                                            },
                                                             Err(error)=>tool_error(id,error),
                                                         },
                                                         Err(_)=>tool_error(id,"program unavailable"),
@@ -887,14 +905,15 @@ pub extern "C" fn graph_main() -> ! {
                                             }
                                             Some("process_stop") => {
                                                 let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
-                                                let values=args.filter(|o|o.len()==2).and_then(|o| {
+                                                let values=args.filter(|o|o.len()==3).and_then(|o| {
                                                     let slot=usize::try_from(o.get("slot")?.as_u64()?).ok()?;
                                                     let incarnation=parse_incarnation(o.get("incarnation")?.as_str()?)?;
-                                                    Some((slot,incarnation))
+                                                    let boot_id=parse_boot_id(o.get("boot_id")?.as_str()?)?;
+                                                    Some((slot,incarnation,boot_id))
                                                 });
-                                                if let Some((slot,incarnation))=values {
-                                                    match el0::stop_independent(slot,incarnation) {
-                                                        Ok(())=>tool_json(id,json!({"stopped":true,"slot":slot,"incarnation":format!("{}",incarnation)})),
+                                                if let Some((slot,incarnation,boot_id))=values {
+                                                    match el0::stop_independent(slot,incarnation,boot_id) {
+                                                        Ok(())=>tool_json(id,json!({"stopped":true,"slot":slot,"incarnation":format!("{}",incarnation),"boot_id":boot_id_text(boot_id)})),
                                                         Err(error)=>tool_error(id,error),
                                                     }
                                                 } else {tool_error(id,"invalid process_stop arguments");}

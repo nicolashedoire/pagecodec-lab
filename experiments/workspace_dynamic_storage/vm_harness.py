@@ -26,7 +26,7 @@ def connect(path,process):
     raise TimeoutError('socket timeout')
 
 class Guest:
-    def __init__(self,qemu,kernel,image,tmp,index,out,transport,allow_degraded=False):
+    def __init__(self,qemu,kernel,image,tmp,index,out,transport,allow_degraded=False,rng=True):
         self.trace=[];self.qmp_trace=[];self.socket=Path(tmp)/('mcp'+str(index));self.qmp=Path(tmp)/('qmp'+str(index))
         self.log=tempfile.TemporaryFile(mode='w+b')
         f={'driver':'file','filename':str(image),'node-name':'f0'}
@@ -36,6 +36,7 @@ class Guest:
              '-chardev',f'socket,id=mcp,path={self.socket},server=on,wait=off','-serial','chardev:mcp',
              '-monitor','none','-qmp',f'unix:{self.qmp},server=on,wait=off','-no-reboot','-kernel',str(kernel),'-global','virtio-mmio.force-legacy='+('true' if transport=='legacy' else 'false'),
              '-blockdev',json.dumps(f),'-blockdev',json.dumps(d),'-device','virtio-blk-device,drive=disk0']
+        if rng:cmd+=['-device','virtio-rng-device']
         self.process=subprocess.Popen(cmd,stdout=self.log,stderr=subprocess.STDOUT)
         try:
             self.sock=connect(self.socket,self.process);self.stream=self.sock.makefile('rwb',buffering=0)
@@ -195,6 +196,12 @@ class Guest:
             if state.get('mode')=='independent' and predicate(state):return state
             time.sleep(.1)
         raise RuntimeError('independent tasks did not reach '+label+': '+str(state))
+    def wait_boot_identity(self):
+        for _ in range(60):
+            status=self.call('process_status',{})
+            if status.get('boot_identity_ready') is True:return
+            time.sleep(.1)
+        raise RuntimeError('boot entropy did not become available')
     def input(self,events):
         self.qmp_command({'execute':'input-send-event','arguments':{'events':events}})
     def screenshot(self,path):

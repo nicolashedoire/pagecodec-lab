@@ -151,13 +151,22 @@ active. The experimental `a-` and `b-` namespace conventions follow the
 assigned slot. They are not a general permissions system.
 
 `process_stop` accepts an exact identity such as
-`{"slot":0,"incarnation":"42"}`. The incarnation must be a canonical,
+`{"slot":0,"incarnation":"42","boot_id":"0123456789abcdef0123456789abcdef"}`.
+The incarnation must be a canonical,
 nonzero decimal string in the u64 range. `process_spawn` retains its numeric
-field for existing clients and additionally returns `incarnation_text` for
-lossless use with `process_stop`. An old incarnation is rejected when the slot
-has been reused during the current boot. Incarnations restart at boot, so an
-old slot/incarnation can match again after reboot; a boot identifier would be
-needed to extend this guarantee across boots. An external stop has outcome 4
+field for existing clients and additionally returns `incarnation_text` and a
+32-character lowercase hexadecimal `boot_id` for lossless use with
+`process_stop`. The ID is a public 128-bit random value obtained asynchronously
+from the guest's VirtIO RNG. If no ID is available, the service stays responsive
+and rejects independent-process spawn and stop. The DMA buffer and device stay
+alive if the request remains pending; there is no claimed timeout or fallback.
+An old incarnation is rejected after slot reuse in the current boot, while a
+different boot ID rejects the old identity even when slot and incarnation are
+reused. Uniqueness depends on the host entropy source and a fresh boot; a VM
+RAM snapshot or clone can reproduce the ID. This is not authentication and
+the tests do not establish entropy quality. The integrated runner provisions
+`virtio-rng-device` by default and also tests an absent device; a silent device
+is not exercised. An external stop has outcome 4
 and no process exit code;
 it does not undo file effects already applied, although requests still queued
 for that process are revoked. This control is not an authentication boundary.
