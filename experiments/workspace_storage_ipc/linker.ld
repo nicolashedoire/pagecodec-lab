@@ -31,7 +31,11 @@ SECTIONS
     *(.bss .bss.* COMMON)
     . = ALIGN(16);
     __bss_end = .;
-    . += 0x10000;
+    . = ALIGN(4096);
+    __stack_guard_start = .;
+    . += 0x1000;
+    __stack_bottom = .;
+    . += 0x40000;
     __stack_top = .;
     . = ALIGN(4096);
   }

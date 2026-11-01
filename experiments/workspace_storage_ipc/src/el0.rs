@@ -132,7 +132,7 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64) {
 extern "C" {
  static __image_start:u8;static __image_end:u8;static __text_end:u8;
  static __usertext_start:u8;static __usertext_end:u8;static __userstack_start:u8;static __userstack_end:u8;
- static __bss_end:u8;static __stack_top:u8;static vector_table:u8;
+ static __bss_end:u8;static __stack_bottom:u8;static __stack_top:u8;static vector_table:u8;
  static task_a_loop:u8;static task_a_end:u8;static task_b_loop:u8;static task_b_end:u8;
  fn start_first(frame:*const Frame)->!;fn resume_graphics()->!;fn slice_probe(frame:*const Frame)->u64;
 }
@@ -172,7 +172,7 @@ pub fn start()->! {
  let text_end=physical(addr_of!(__text_end) as usize);let ut0=physical(addr_of!(__usertext_start) as usize);let ut1=physical(addr_of!(__usertext_end) as usize);
  let us0=physical(addr_of!(__userstack_start) as usize);let us1=physical(addr_of!(__userstack_end) as usize);
  let a=physical(addr_of_mut!(A_STACK) as usize);let b=physical(addr_of_mut!(B_STACK) as usize);
- let kb=physical(addr_of!(__bss_end) as usize);let kt=physical(addr_of!(__stack_top) as usize);
+ let kb=physical(addr_of!(__stack_bottom) as usize);let kt=physical(addr_of!(__stack_top) as usize);
  let vector=physical(addr_of!(vector_table) as usize);
  let apc=physical(addr_of!(task_a_loop) as usize);let aend=physical(addr_of!(task_a_end) as usize);
  let bpc=physical(addr_of!(task_b_loop) as usize);let bend=physical(addr_of!(task_b_end) as usize);
@@ -234,7 +234,7 @@ pub fn run_slice() {
  let counts_before=[unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>())},unsafe{read_volatile(addr_of!(SLICE_COUNTS).cast::<u64>().add(1))}];
  let allocations_before=super::HEAP_NEXT.load(Ordering::Relaxed);
  let mut sentinel=[0u64;2];let p=sentinel.as_mut_ptr();let ptr=physical(p as usize);
- let bottom=physical(addr_of!(__bss_end) as usize);let top=physical(addr_of!(__stack_top) as usize);
+ let bottom=physical(addr_of!(__stack_bottom) as usize);let top=physical(addr_of!(__stack_top) as usize);
  check(ptr>=bottom && ptr.checked_add(16).is_some_and(|v|v<=top),"service sentinel stack");
  unsafe{p.write_volatile(0x1122_3344_5566_7788);p.add(1).write_volatile(0x0102_0304_0506_0708);}
  unsafe {
