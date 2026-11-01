@@ -486,14 +486,18 @@ into one such buffer and reports the source slot and incarnation. Buffers,
 lengths, live process identities and the boot identity are checked. A send
 queues a message in the guest; it does not itself promise delivery. The guest
 encapsulates it in a private EtherType Ethernet frame and the receiver checks
-the embedded boot and incarnation values. These identifiers prevent accidental
-cross-incarnation delivery; they are not authentication against a hostile host
-or peer. `network_status` exposes ports and counters, not packet contents.
+the embedded boot, incarnation and grant-generation values. These identifiers
+reject stale frames, but are not authentication against a hostile host or peer.
+`network_status` exposes ports and counters, not packet contents.
 
 The runner includes a boot with no NIC (the ELF must observe -19), followed by
-a boot with two NICs where Rust processes exchange a checked ping and pong. The
-runner verifies each side's VirtIO submission, completion, reception and
-application delivery counters, and process cleanup. Frame buffers and DMA
+a boot with two NICs where Rust processes observe access denial before a grant,
+exchange checked ping and pong, observe closure, then exchange again after a
+new grant. It checks both NICs' VirtIO counters and process cleanup. Small VFS
+files synchronize the harness and are not used to carry network messages.
+With the `storage-fault-test` feature, a test-only RX hold leaves a real completed
+DMA buffer unread across close and reopen; releasing it checks rejection by the
+new grant generation. Ordinary builds do not expose this test-only control. Frame buffers and DMA
 requests have explicit lifetime requirements; this prototype does not claim
 bounded response from every failed or malicious VirtIO device, including
 internal driver initialization paths. It has not been tested against real
@@ -504,6 +508,9 @@ duplication protection is claimed.
 In particular, `VirtIONetRaw::new` may loop while reading a continually changing
 device configuration, so initialization is not guaranteed nonblocking for a
 faulty device.
-The current network channel opens implicitly whenever both independent slots
-are active; there is no explicit bind or capability authorization. A task's
-incarnation is a freshness check, not an access-control credential.
+The MCP controller explicitly opens a grant for the two live slot/incarnation
+identities and the current boot ID, then can close it using its decimal
+generation. A peer exit also revokes the grant. These values are public freshness
+checks; MCP itself is unauthenticated, so this is not protection against a
+hostile client. The numeric generation in status is informational; use the
+exact decimal string returned by open for close.

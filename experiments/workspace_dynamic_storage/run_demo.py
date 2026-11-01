@@ -875,18 +875,64 @@ def main():
    network_status=g.call('network_status',{})
    if network_status.get('available') is not True or network_status.get('ports')!=[True,True]:raise RuntimeError('two VirtIO network ports unavailable: '+str(network_status))
    files_before=g.call('file_list',{})
+   for name in ('a-nphase','b-nphase','a-ntrig'):
+    if any(entry.get('name')==name for entry in files_before):raise RuntimeError('network fixture name already exists')
+    if not g.call('file_put',{'name':name,'data':'0'}).get('readback_verified'):raise RuntimeError('network fixture setup failed')
    upload_id=stage_program(g,network_elf)
    task_a=g.call('process_spawn_staged',{'id':upload_id})
    state=g.wait_independent(lambda s:s.get('slot_states',[None,None])[0]=='ready','network sender waits for peer')
    if task_a.get('slot')!=0 or state.get('frame_pool_assigned')!=3 or g.call('network_status',{}).get('tx_submitted')!=[0,0]:raise RuntimeError('network sender ran without peer')
    task_b=g.call('process_spawn_staged',{'id':upload_id})
    if task_b.get('slot')!=1 or task_a.get('incarnation')==task_b.get('incarnation') or task_a.get('boot_id')!=task_b.get('boot_id'):raise RuntimeError('network process admission invalid')
-   state=g.wait_independent(lambda s:s.get('slot_states')==['exited','exited'],'VirtIO network round trip')
-   if state.get('incarnations')!=[task_a['incarnation'],task_b['incarnation']] or state.get('outcomes')!=[1,1] or state.get('exit_codes')!=[0,0] or state.get('data_scrubbed')!=[True,True] or state.get('code_scrubbed')!=[True,True] or state.get('stack_scrubbed')!=[True,True] or state.get('frame_pool_assigned')!=0:raise RuntimeError('network round trip or process cleanup failed: '+str(state))
+   def wait_phases(a_value,b_value):
+    for _ in range(60):
+     one=g.call('file_get',{'name':'a-nphase'}).get('hex');two=g.call('file_get',{'name':'b-nphase'}).get('hex')
+     if one==a_value.encode().hex() and two==b_value.encode().hex():return
+     time.sleep(.2)
+    raise RuntimeError('network tasks did not reach phases '+repr((a_value,b_value,one,two)))
+   def wait_network(predicate,label):
+    for _ in range(60):
+     snapshot=g.call('network_status',{})
+     if predicate(snapshot):return snapshot
+     time.sleep(.2)
+    raise RuntimeError('network did not reach '+label+': '+str(snapshot))
+   wait_phases('p','p')  # Both guests observed -13 before a grant.
+   args={'a_slot':0,'a_incarnation':task_a['incarnation_text'],'b_slot':1,'b_incarnation':task_b['incarnation_text'],'boot_id':task_a['boot_id']}
+   reject(g,'network_grant_open',dict(args,b_slot=0),'invalid network slots')
+   reject(g,'network_grant_open',dict(args,a_incarnation=str(task_a['incarnation']+1)),'stale process incarnation')
+   wrong_boot=('0' if args['boot_id'][0]!='0' else '1')+args['boot_id'][1:]
+   reject(g,'network_grant_open',dict(args,boot_id=wrong_boot),'stale boot identity')
+   generation=g.call('network_grant_open',args)['generation']
+   wait_phases('1','p')
+   wait_network(lambda x:x.get('rx_delivered')==[1,1],'first exchange')
+   if a.exercise_storage_fault:
+    if g.call('debug_network_hold_rx',{'slot':1,'hold':True})!={'held':True}:raise RuntimeError('failed to hold RX for stale-frame proof')
+   if not g.call('file_put',{'name':'a-ntrig','data':'1'}).get('readback_verified'):raise RuntimeError('network trigger failed')
+   if a.exercise_storage_fault:
+    wait_network(lambda x:x.get('rx_held_ready',[False,False])[1] is True,'old frame in completed DMA')
+   else:
+    wait_network(lambda x:x.get('rx_queued',[False,False])[1] is True,'old frame queued')
+   if g.call('network_grant_close',{'generation':generation,'boot_id':args['boot_id']})!={'closed':True}:raise RuntimeError('network grant close failed')
+   wait_phases('c','c')  # Both guests observed -13 on closure.
+   closed=g.call('network_status',{})
+   if closed.get('grant_active') is not False or closed.get('tx_queued')!=[False,False] or closed.get('rx_queued')!=[False,False]:raise RuntimeError('network closure did not clear queues: '+str(closed))
+   generation2=g.call('network_grant_open',args)['generation']
+   if int(generation2)<=int(generation):raise RuntimeError('network grant generation did not advance')
+   reject(g,'network_grant_close',{'generation':generation,'boot_id':args['boot_id']},'stale network grant')
+   if a.exercise_storage_fault:
+    if g.call('debug_network_hold_rx',{'slot':1,'hold':False})!={'held':False}:raise RuntimeError('failed to release held RX')
+   wait_network(lambda x:x.get('dropped',[0,0])[1]>=1,'old grant packet dropped')
+   if not g.call('file_put',{'name':'a-ntrig','data':'2'}).get('readback_verified'):raise RuntimeError('network second trigger failed')
+   state=g.wait_independent(lambda s:s.get('slot_states')==['exited','exited'],'VirtIO network round trips')
+   if state.get('incarnations')!=[task_a['incarnation'],task_b['incarnation']] or state.get('outcomes')!=[1,1] or state.get('exit_codes')!=[0,0] or state.get('data_scrubbed')!=[True,True] or state.get('code_scrubbed')!=[True,True] or state.get('stack_scrubbed')!=[True,True] or state.get('frame_pool_assigned')!=0:raise RuntimeError('network exchange or process cleanup failed: '+str(state))
    network_status=g.call('network_status',{})
-   keys={'available','ports','tx_queued','rx_queued','tx_submitted','tx_completed','rx_accepted','rx_delivered','dropped'}
-   if set(network_status)!=keys or network_status.get('tx_queued')!=[False,False] or network_status.get('rx_queued')!=[False,False] or any(network_status.get(k)!=[1,1] for k in ('tx_submitted','tx_completed','rx_accepted','rx_delivered')):raise RuntimeError('VirtIO queues did not carry the round trip: '+str(network_status))
-   if g.call('file_list',{})!=files_before:raise RuntimeError('network round trip changed file catalogue')
+   keys={'available','ports','grant_active','grant_generation','grant_incarnations','tx_queued','rx_queued','tx_submitted','tx_completed','rx_accepted','rx_delivered','dropped'}
+   if a.exercise_storage_fault:keys.add('rx_held_ready')
+   expected_accepted=[2,2] if a.exercise_storage_fault else [2,3]
+   if set(network_status)!=keys or network_status.get('grant_active') is not False or network_status.get('tx_queued')!=[False,False] or network_status.get('rx_queued')!=[False,False] or network_status.get('tx_submitted')!=[3,2] or network_status.get('tx_completed')!=[3,2] or network_status.get('rx_accepted')!=expected_accepted or network_status.get('rx_delivered')!=[2,2] or network_status.get('dropped',[0,0])[1]<1:raise RuntimeError('VirtIO queues or grant cleanup invalid: '+str(network_status))
+   for name in ('a-nphase','b-nphase','a-ntrig'):
+    if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('network fixture cleanup failed')
+   if g.call('file_list',{})!=files_before:raise RuntimeError('network fixture did not restore file catalogue')
    g.call('upload_reset',{'id':upload_id})
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()

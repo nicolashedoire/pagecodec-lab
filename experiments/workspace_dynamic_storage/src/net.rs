@@ -7,14 +7,28 @@ use crate::VmHal;
 
 const BUF:usize=1536;const MAX:usize=64;
 const MAC:[[u8;6];2]=[[0x52,0x54,0,0x12,0x34,1],[0x52,0x54,0,0x12,0x34,2]];
-const ETH:usize=14;const META:usize=4+16+8+8+1;
+const ETH:usize=14;const META:usize=4+16+8+8+8+1;
 static mut TX_BYTES:[[u8;BUF];2]=[[0;BUF];2];
 static mut RX_BYTES:[[u8;BUF];2]=[[0;BUF];2];
 #[derive(Clone,Copy)]
-pub struct Packet {pub source:u64,pub destination:u64,pub len:usize,pub bytes:[u8;MAX]}
+pub struct Packet {pub source:u64,pub destination:u64,pub grant:u64,pub len:usize,pub bytes:[u8;MAX]}
 static mut TX:[Option<Packet>;2]=[None;2];
 static mut RX:[Option<Packet>;2]=[None;2];
 static mut AVAILABLE:[bool;2]=[false;2];
+static mut GRANT_ACTIVE:bool=false;
+static mut GRANT_ID:u64=0;
+static mut GRANT_NEXT:u64=1;
+static mut GRANT_IDENTITIES:[u64;2]=[0;2];
+#[cfg(feature="storage-fault-test")] static mut RX_HOLD:[bool;2]=[false;2];
+#[cfg(feature="storage-fault-test")] static mut RX_HELD_READY:[bool;2]=[false;2];
+/// Test only: retain the device-owned RX buffer; never inspect it while held.
+#[cfg(feature="storage-fault-test")]
+pub fn debug_hold_rx(actor:usize,hold:bool)->Result<(), &'static str> {
+ if actor>=2 {return Err("invalid network slot")}
+ if !available() {return Err("network unavailable")}
+ unsafe{write_volatile(addr_of_mut!(RX_HOLD).cast::<bool>().add(actor),hold);write_volatile(addr_of_mut!(RX_HELD_READY).cast::<bool>().add(actor),false)};
+ Ok(())
+}
 static mut TX_SUBMITTED:[u64;2]=[0;2];
 static mut TX_COMPLETED:[u64;2]=[0;2];
 static mut RX_ACCEPTED:[u64;2]=[0;2];
@@ -27,10 +41,35 @@ fn take_slot(base:*mut [Option<Packet>;2],actor:usize)->Option<Packet> {
  // Scrub the persistent queue payload while its variant is still Some;
  // copies held temporarily by the kernel stack are not covered.
  if let Some(mut old)=value {
-  old.source=0;old.destination=0;old.len=0;old.bytes=[0;MAX];
+  old.source=0;old.destination=0;old.grant=0;old.len=0;old.bytes=[0;MAX];
   unsafe{write_volatile(p,Some(old))};
  }
  unsafe{write_volatile(p,None)};value
+}
+/// Open and close are called only by the EL1 service after validating the
+/// current boot ID and both live task incarnations. A grant is not a secret.
+pub fn open_grant(ids:[u64;2])->Result<u64,&'static str> {
+ if unsafe{read_volatile(addr_of!(GRANT_ACTIVE))} {return Err("network grant already active")}
+ if !available() {return Err("network unavailable")}
+ let id=unsafe{read_volatile(addr_of!(GRANT_NEXT))};
+ let next=id.checked_add(1).ok_or("network grant ids exhausted")?;
+ for i in 0..2 {if unsafe{read_volatile(addr_of!(TX).cast::<Option<Packet>>().add(i))}.is_some() || unsafe{read_volatile(addr_of!(RX).cast::<Option<Packet>>().add(i))}.is_some() {return Err("network queues not clean")}}
+ unsafe{write_volatile(addr_of_mut!(GRANT_IDENTITIES),ids);write_volatile(addr_of_mut!(GRANT_ID),id);write_volatile(addr_of_mut!(GRANT_NEXT),next);write_volatile(addr_of_mut!(GRANT_ACTIVE),true)};Ok(id)
+}
+pub fn grant_for(ids:[u64;2])->Option<u64> {
+ if !unsafe{read_volatile(addr_of!(GRANT_ACTIVE))} || unsafe{read_volatile(addr_of!(GRANT_IDENTITIES))}!=ids {None}
+ else {Some(unsafe{read_volatile(addr_of!(GRANT_ID))})}
+}
+fn purge_queues() {
+ for actor in 0..2 {for base in [addr_of_mut!(TX),addr_of_mut!(RX)] {
+  if take_slot(base,actor).is_some() {inc(addr_of_mut!(DROPPED),actor)}
+ }}
+}
+pub fn close_grant(id:u64)->Result<(),&'static str> {
+ if !unsafe{read_volatile(addr_of!(GRANT_ACTIVE))} {return Err("network grant not active")}
+ if id==0 || unsafe{read_volatile(addr_of!(GRANT_ID))}!=id {return Err("stale network grant")}
+ unsafe{write_volatile(addr_of_mut!(GRANT_ACTIVE),false);write_volatile(addr_of_mut!(GRANT_IDENTITIES),[0;2])};
+ purge_queues();Ok(())
 }
 pub fn available()->bool {(unsafe{read_volatile(addr_of!(AVAILABLE))})==[true,true]}
 pub fn enqueue(actor:usize,packet:Packet)->bool {
@@ -46,6 +85,9 @@ pub fn discard(actor:usize) {if actor<2 && take_slot(addr_of_mut!(RX),actor).is_
 /// not cancelled; any resulting late frame fails boot/incarnation validation.
 pub fn revoke(actor:usize,incarnation:u64) {
  if actor>=2{return}
+ if unsafe{read_volatile(addr_of!(GRANT_ACTIVE))} && unsafe{read_volatile(addr_of!(GRANT_IDENTITIES).cast::<u64>().add(actor))}==incarnation {
+  unsafe{write_volatile(addr_of_mut!(GRANT_ACTIVE),false);write_volatile(addr_of_mut!(GRANT_IDENTITIES),[0;2])};purge_queues();
+ }
  for index in 0..2 {
   for tx in [true,false] {
    let base=if tx {addr_of_mut!(TX)}else{addr_of_mut!(RX)};
@@ -58,7 +100,12 @@ pub fn revoke(actor:usize,incarnation:u64) {
   }
  }
 }
-pub fn status()->Value {let tx=unsafe{&*addr_of!(TX)}.each_ref().map(Option::is_some);let rx=unsafe{&*addr_of!(RX)}.each_ref().map(Option::is_some);json!({"available":available(),"ports":unsafe{read_volatile(addr_of!(AVAILABLE))},"tx_queued":tx,"rx_queued":rx,"tx_submitted":unsafe{read_volatile(addr_of!(TX_SUBMITTED))},"tx_completed":unsafe{read_volatile(addr_of!(TX_COMPLETED))},"rx_accepted":unsafe{read_volatile(addr_of!(RX_ACCEPTED))},"rx_delivered":unsafe{read_volatile(addr_of!(RX_DELIVERED))},"dropped":unsafe{read_volatile(addr_of!(DROPPED))}})}
+pub fn status()->Value {
+ let tx=unsafe{&*addr_of!(TX)}.each_ref().map(Option::is_some);let rx=unsafe{&*addr_of!(RX)}.each_ref().map(Option::is_some);
+ #[allow(unused_mut)] let mut out=json!({"available":available(),"grant_active":unsafe{read_volatile(addr_of!(GRANT_ACTIVE))},"grant_generation":unsafe{read_volatile(addr_of!(GRANT_ID))},"grant_incarnations":unsafe{read_volatile(addr_of!(GRANT_IDENTITIES))},"ports":unsafe{read_volatile(addr_of!(AVAILABLE))},"tx_queued":tx,"rx_queued":rx,"tx_submitted":unsafe{read_volatile(addr_of!(TX_SUBMITTED))},"tx_completed":unsafe{read_volatile(addr_of!(TX_COMPLETED))},"rx_accepted":unsafe{read_volatile(addr_of!(RX_ACCEPTED))},"rx_delivered":unsafe{read_volatile(addr_of!(RX_DELIVERED))},"dropped":unsafe{read_volatile(addr_of!(DROPPED))}});
+ #[cfg(feature="storage-fault-test")] {out["rx_held_ready"]=json!(unsafe{read_volatile(addr_of!(RX_HELD_READY))});}
+ out
+}
 
 type Driver<'a>=VirtIONetRaw<VmHal,MmioTransport<'a>,8>;
 struct Port<'a> {driver:Driver<'a>,rx:Option<u16>,tx:Option<(u16,usize)>,failed:bool}
@@ -99,6 +146,12 @@ impl<'a> Network<'a> {
     if let Some(expected)=port.rx {
      if let Some(token)=port.driver.poll_receive() {
       if token!=expected {port.failed=true}
+      else if {
+       #[cfg(feature="storage-fault-test")] {unsafe{read_volatile(addr_of!(RX_HOLD).cast::<bool>().add(actor))}}
+       #[cfg(not(feature="storage-fault-test"))] {false}
+      } {
+       #[cfg(feature="storage-fault-test")] unsafe{write_volatile(addr_of_mut!(RX_HELD_READY).cast::<bool>().add(actor),true)};
+      }
       else {
        let ptr=unsafe{addr_of_mut!(RX_BYTES).cast::<[u8;BUF]>().add(actor).cast::<u8>()};
        let bytes=unsafe{core::slice::from_raw_parts_mut(ptr,BUF)};
@@ -120,7 +173,7 @@ impl<'a> Network<'a> {
     let queued=unsafe{read_volatile(addr_of!(TX).cast::<Option<Packet>>().add(actor))};
     if let Some(packet)=queued {
      let live=crate::el0::network_identities();let boot=crate::boot_identity::identifier();
-     if live.is_none_or(|ids|ids[actor]!=packet.source || ids[1-actor]!=packet.destination) || boot.is_none() {
+     if live.is_none_or(|ids|ids[actor]!=packet.source || ids[1-actor]!=packet.destination || grant_for(ids)!=Some(packet.grant)) || boot.is_none() {
       take_slot(addr_of_mut!(TX),actor);inc(addr_of_mut!(DROPPED),actor);
      } else {
       let ptr=unsafe{addr_of_mut!(TX_BYTES).cast::<[u8;BUF]>().add(actor).cast::<u8>()};
@@ -131,7 +184,7 @@ impl<'a> Network<'a> {
       frame[..6].copy_from_slice(&MAC[1-actor]);frame[6..12].copy_from_slice(&MAC[actor]);frame[12..14].copy_from_slice(&[0x88,0xb5]);
       frame[14..18].copy_from_slice(b"CNET");frame[18..34].copy_from_slice(&boot.unwrap());
       frame[34..42].copy_from_slice(&packet.source.to_le_bytes());frame[42..50].copy_from_slice(&packet.destination.to_le_bytes());
-      frame[50]=packet.len as u8;frame[51..51+packet.len].copy_from_slice(&packet.bytes[..packet.len]);
+      frame[50..58].copy_from_slice(&packet.grant.to_le_bytes());frame[58]=packet.len as u8;frame[59..59+packet.len].copy_from_slice(&packet.bytes[..packet.len]);
       match unsafe{port.driver.transmit_begin(&bytes[..end])} {
        Ok(token)=>{take_slot(addr_of_mut!(TX),actor);port.tx=Some((token,end));inc(addr_of_mut!(TX_SUBMITTED),actor)}
        Err(_)=>port.failed=true,
@@ -147,10 +200,10 @@ fn accept_frame(actor:usize,frame:&[u8]) {
  let Some(boot)=crate::boot_identity::identifier() else{inc(addr_of_mut!(DROPPED),actor);return};
  let Some(ids)=crate::el0::network_identities() else{inc(addr_of_mut!(DROPPED),actor);return};
  if frame.len()<ETH+META || frame[..6]!=MAC[actor] || frame[6..12]!=MAC[1-actor] || frame[12..14]!=[0x88,0xb5] || &frame[14..18]!=b"CNET" || frame[18..34]!=boot {inc(addr_of_mut!(DROPPED),actor);return}
- let src=u64::from_le_bytes(frame[34..42].try_into().unwrap());let dst=u64::from_le_bytes(frame[42..50].try_into().unwrap());let len=usize::from(frame[50]);
- if src!=ids[1-actor] || dst!=ids[actor] || len==0 || len>MAX || 51+len>frame.len() {inc(addr_of_mut!(DROPPED),actor);return}
+ let src=u64::from_le_bytes(frame[34..42].try_into().unwrap());let dst=u64::from_le_bytes(frame[42..50].try_into().unwrap());let grant=u64::from_le_bytes(frame[50..58].try_into().unwrap());let len=usize::from(frame[58]);
+ if src!=ids[1-actor] || dst!=ids[actor] || grant_for(ids)!=Some(grant) || len==0 || len>MAX || 59+len>frame.len() {inc(addr_of_mut!(DROPPED),actor);return}
  let p=unsafe{addr_of_mut!(RX).cast::<Option<Packet>>().add(actor)};
  if unsafe{read_volatile(p)}.is_some() {inc(addr_of_mut!(DROPPED),actor);return}
- let mut packet=Packet{source:src,destination:dst,len,bytes:[0;MAX]};packet.bytes[..len].copy_from_slice(&frame[51..51+len]);
+ let mut packet=Packet{source:src,destination:dst,grant,len,bytes:[0;MAX]};packet.bytes[..len].copy_from_slice(&frame[59..59+len]);
  unsafe{write_volatile(p,Some(packet))};inc(addr_of_mut!(RX_ACCEPTED),actor);
 }

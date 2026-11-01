@@ -291,21 +291,43 @@ pub fn network_identities()->Option<[u64;2]> {
  let ids=unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS))};
  if ids[0]==0 || ids[1]==0 || ids[0]!=incarnation(0) || ids[1]!=incarnation(1) {return None}Some(ids)
 }
+/// Grant both current independent processes access to the isolated VM link.
+/// The public boot identity is freshness information, not authentication.
+pub fn network_grant_open(a:usize,ai:u64,b:usize,bi:u64,boot:[u8;16])->Result<u64,&'static str> {
+ let current=super::boot_identity::identifier().ok_or("boot identity unavailable")?;
+ if boot!=current {return Err("stale boot identity")}
+ if a>=2 || b>=2 || a==b {return Err("invalid network slots")}
+ let mut daif:u64;let mut timer:u64;unsafe{asm!("mrs {},DAIF",out(reg) daif);asm!("mrs {},CNTV_CTL_EL0",out(reg) timer)}
+ if daif&(1<<7)==0 || timer&1!=0 || super::mmu::active_root()!=super::mmu::root(0) {return Err("network grant requires service boundary")}
+ let ids=network_identities().ok_or("independent processes not active")?;
+ if unsafe{read_volatile(addr_of!(TASK_STATE))}!=[1,1] {return Err("process is not ready")}
+ if ai==0 || bi==0 || ids[a]!=ai || ids[b]!=bi {return Err("stale process incarnation")}
+ super::net::open_grant(ids)
+}
+pub fn network_grant_close(id:u64,boot:[u8;16])->Result<(), &'static str> {
+ let current=super::boot_identity::identifier().ok_or("boot identity unavailable")?;
+ if boot!=current {return Err("stale boot identity")}
+ let mut daif:u64;let mut timer:u64;unsafe{asm!("mrs {},DAIF",out(reg) daif);asm!("mrs {},CNTV_CTL_EL0",out(reg) timer)}
+ if daif&(1<<7)==0 || timer&1!=0 || super::mmu::active_root()!=super::mmu::root(0) {return Err("network grant requires service boundary")}
+ super::net::close_grant(id)
+}
 fn network_send(f:&mut Frame,actor:usize) {
  if !super::net::available() {direct_result(f,-19);return}
  let Some(ids)=network_identities() else{direct_result(f,-107);return};
+ let Some(grant)=super::net::grant_for(ids) else{direct_result(f,-13);return};
  let address=f.regs[0];let len=f.regs[1];if len==0 || len>64 {direct_result(f,-22);return}
  let len=len as usize;if user_location(actor,address,len,false,false).is_none() {direct_result(f,-14);return}
- let mut packet=super::net::Packet{source:ids[actor],destination:ids[1-actor],len,bytes:[0;64]};
+ let mut packet=super::net::Packet{source:ids[actor],destination:ids[1-actor],grant,len,bytes:[0;64]};
  for i in 0..len {packet.bytes[i]=unsafe{readbyte(address+i as u64)}}
  if super::net::enqueue(actor,packet) {direct_result(f,0)}else{direct_result(f,-11)}
 }
 fn network_recv(f:&mut Frame,actor:usize) {
  if !super::net::available() {direct_result(f,-19);return}
  let Some(ids)=network_identities() else{direct_result(f,-107);return};
+ let Some(grant)=super::net::grant_for(ids) else{direct_result(f,-13);return};
  let cap=f.regs[1];if cap==0 || cap>64 {direct_result(f,-22);return}
  let Some(packet)=super::net::peek(actor) else{direct_result(f,-11);return};
- if packet.source!=ids[1-actor] || packet.destination!=ids[actor] {super::net::discard(actor);direct_result(f,-11);return}
+ if packet.source!=ids[1-actor] || packet.destination!=ids[actor] || packet.grant!=grant {super::net::discard(actor);direct_result(f,-11);return}
  if packet.len>cap as usize {direct_result(f,-34);return}
  let address=f.regs[0];if user_location(actor,address,cap as usize,true,false).is_none() {direct_result(f,-14);return}
  for i in 0..packet.len {unsafe{writebyte(address+i as u64,packet.bytes[i])}}
