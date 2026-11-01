@@ -46,7 +46,7 @@ def main():
     parser.add_argument("--write",action="store_true")
     args=parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="guest-fixtures-") as tmp:
-        for stem in ("generic-read","generic-oversize","generic-write","pair-a","pair-b"):
+        for stem in ("generic-read","generic-oversize","generic-write","pair-a","pair-b","pair-cancel-a","pair-cancel-b"):
             obj=Path(tmp)/(stem+".o")
             subprocess.run([args.clang,"-target","aarch64-none-elf","-c",str(ROOT/(stem+".S")),"-o",str(obj)],check=True)
             encoded=text_from_elf(obj)

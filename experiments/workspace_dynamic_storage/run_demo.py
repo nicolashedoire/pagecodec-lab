@@ -124,12 +124,9 @@ def main():
     images={'init.bin':program_hex,'next.bin':next_hex,**extra_images}
     if index==9:images['badsvc.bin']=loop_hex
     if loop_hex is None:
-     loop=bytearray.fromhex(extra_images['badsvc.bin'])
-     if len(loop)<128 or loop[:4]!=b'\x7fELF':raise RuntimeError('bad timeout fixture ELF')
      # User controls x19.  A timer preempts the infinite loop after this
      # instruction; the next program must still be admitted after timeout.
-     loop[120:128]=bytes.fromhex('1300809200000014') # movn x19,#0; b .
-     loop_hex=loop.hex()
+     loop_hex=independent_elf(extra_images['badsvc.bin'],bytes.fromhex('1300809200000014')) # movn x19,#0; b .
     if index in (7,8) and g.call('file_get',{'name':'keep.bin'})!={'name':'keep.bin','hex':'00ff'}:raise RuntimeError('migration changed unrelated legacy file')
     if index==6 and g.call('file_list',{})!=expected_list({**images,'note':b'hello'.hex()}):raise RuntimeError('unexpected files after document-only migration')
     if index in (7,8) and g.call('file_list',{})!=expected_list({**images,'note':b'hello'.hex(),'keep.bin':'00ff'}):raise RuntimeError('unexpected files after snapshot migration')
@@ -292,11 +289,13 @@ def main():
    if g.call('file_get',{'name':'actor.txt'})!={'name':'actor.txt','hex':b'world'.hex()} or g.call('file_get',{'name':'empty'})!={'name':'empty','hex':''}:raise RuntimeError('ELF bytes did not survive VM restart')
    g.progress('generic writer after restart',timeout_image=True,expected_exit_code=0)
    reject(g,'file_get',{'name':'full'},'file not found')
-   for name in ('fill','actor.txt','empty'):
+   for name in ('fill','actor.txt','empty','big'):
     if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('quota fixture cleanup failed')
    # Stop the writer from re-creating files on later boot scenarios.
    if not g.call('file_put_hex',{'name':'next.bin','hex':independent_exit_elf(next_hex,0)}).get('readback_verified'):raise RuntimeError('writer reset failed')
    reject(g,'process_pair_start',{},'pair program unavailable')
+   for name,value in (('a-doc','aaaa'),('b-doc','bbbb')):
+    if not g.call('file_put',{'name':name,'data':value}).get('readback_verified'):raise RuntimeError('pair input file was not committed')
    pair_hex=[]
    for name in ('pair-a','pair-b'):
     code=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/(name+'.hex')).read_text().strip())
@@ -320,11 +319,43 @@ def main():
    if not g.call('file_put_hex',{'name':'pair-b.bin','hex':pair_hex[1]}).get('readback_verified'):raise RuntimeError('pair fixture repair failed')
    if g.call('process_pair_start',{})!={'started':True}:raise RuntimeError('pair admission failed')
    pair=g.wait_pair()
+   if pair.get('io_submitted')!=[4,4] or pair.get('io_completed')!=[4,4]:raise RuntimeError('pair file operations were not completed independently: '+str(pair))
+   for name,value in (('a-doc',b'AAAA'),('b-doc',b'BBBB')):
+    if g.call('file_get',{'name':name})!={'name':name,'hex':value.hex()}:raise RuntimeError('pair file value incorrect after cross-access attempts')
    reject(g,'process_pair_start',{},'pair already started')
    if g.call('process_pair_status',{})!=pair:raise RuntimeError('second pair admission changed finished state')
    if g.call('document_snapshot',{})!=final:raise RuntimeError('paired tasks changed workspace')
+   for side in ('a','b'):
+    code=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/('pair-cancel-'+side+'.hex')).read_text().strip())
+    image=independent_elf(next_hex,code)
+    if not g.call('file_put_hex',{'name':'pair-'+side+'.bin','hex':image}).get('readback_verified'):raise RuntimeError('pending-write exit fixture was not committed')
+   traces.append(g.trace);states.append(g.call('storage_status',{}))
+  finally:g.close()
+  g=Guest(a.qemu,guest,disk,tmp,25,out,a.transport)
+  try:
+   g.progress('pair writes after restart',timeout_image=True,expected_exit_code=0)
+   for name,value in (('a-doc',b'AAAA'),('b-doc',b'BBBB')):
+    if g.call('file_get',{'name':name})!={'name':name,'hex':value.hex()}:raise RuntimeError('paired file write did not survive restart')
+   if g.call('process_pair_start',{})!={'started':True}:raise RuntimeError('pending-write exit pair admission failed')
+   exit_pair=g.wait_pair()
+   cancelled=exit_pair.get('io_cancelled_before_apply')
+   if exit_pair.get('io_submitted')!=[1,1] or exit_pair.get('io_completed')!=[0,0] or not isinstance(cancelled,list) or len(cancelled)!=2 or any(n not in (0,1) for n in cancelled):raise RuntimeError('pending-write exit accounting invalid: '+str(exit_pair))
+   # A timer can let the service apply before exit. Only the still-queued
+   # requests must be cancelled; already committed writes remain committed.
+   for i,(name,old,new) in enumerate((('a-doc',b'AAAA',b'CCCC'),('b-doc',b'BBBB',b'DDDD'))):
+    expected=old if cancelled[i] else new
+    if g.call('file_get',{'name':name})!={'name':name,'hex':expected.hex()}:raise RuntimeError('exit write did not match cancellation outcome')
    for name in ('pair-a.bin','pair-b.bin'):
     if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('pair fixture cleanup failed')
+   traces.append(g.trace);states.append(g.call('storage_status',{}))
+  finally:g.close()
+  g=Guest(a.qemu,guest,disk,tmp,26,out,a.transport)
+  try:
+   g.progress('pending-write outcomes after restart',timeout_image=True,expected_exit_code=0)
+   for i,(name,old,new) in enumerate((('a-doc',b'AAAA',b'CCCC'),('b-doc',b'BBBB',b'DDDD'))):
+    expected=old if cancelled[i] else new
+    if g.call('file_get',{'name':name})!={'name':name,'hex':expected.hex()}:raise RuntimeError('pending-write outcome did not survive restart')
+    if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('pair data cleanup failed')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
   if a.exercise_storage_fault:

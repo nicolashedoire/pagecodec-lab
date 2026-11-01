@@ -5,7 +5,7 @@ of named files. `file_put`, `file_put_hex`, `file_get`, `file_list` and `file_de
 existing unauthenticated local guest serial interface. File names are 1–32
 ASCII letters, digits, `.`, `_`, or `-`, excluding `.` and `..`; slashes and
 directories are not supported. There are at most 10 files, at most 512 bytes
-each, and at most 1,400 bytes in total. `file_put` accepts UTF-8 strings;
+each, and at most 1,650 bytes in total. `file_put` accepts UTF-8 strings;
 `file_put_hex` accepts even-length lowercase hexadecimal so arbitrary binary
 bytes can be stored; reads return hexadecimal bytes. These limits are not a full filesystem
 and requests can also fail if the shared 3,584-byte snapshot payload is full.
@@ -78,6 +78,23 @@ second launch after cleanup. This demonstrates
 two time-sliced tasks on one virtual CPU; it does not provide a general-purpose
 process manager, syscall API or multicore execution. The MCP endpoint remains
 unauthenticated and is intended only for an isolated QEMU VM.
+
+In pair mode each process can use the bounded `0x140` GET and `0x141` PUT
+interfaces, with an independent outstanding request and completion. The
+service checks a live actor/incarnation and permits actor A only `a-` names
+and actor B only `b-` names; cross-namespace requests return `-13` without
+reading or changing the catalog. This is a fixed demonstration convention,
+not authentication or a general access-control model. Explicit sharing
+between spaces is future work. The original single-process mode retains its
+previous name rules. The integrated scenario checks both reads and writes,
+denied cross-reads and cross-writes, and the committed bytes after a restart.
+It also starts another pair that submits a PUT and exits without polling. A
+request still queued at exit is revoked without reaching the file service;
+if the service has already applied it, exit does not undo the write. The
+scenario checks the outcome reported for each actor against the file contents
+both before and after restart. It does not assume which side of that timing
+boundary occurs. A recorded run demonstrates cancellation before application
+only for actors whose `io_cancelled_before_apply` count is nonzero.
 
 `init.bin`, `fault.bin`, `badsvc.bin` and `next.bin` are reserved boot-image names: `file_delete` refuses
 their removal, so a confirmed deletion cannot be silently undone by boot-time

@@ -610,8 +610,14 @@ pub extern "C" fn graph_main() -> ! {
                     let mut reply_len=0usize;
                     let mut reply_too_large=false;
                     let mut reply_invalid_name=false;
+                    let mut reply_denied=false;
                     let mut write_error=None;
-                    let success=if request.actor!=0 {false} else if let (Some(key),Some(data))=(key,data) {
+                    let pair_request=el0::is_pair_request(&request);
+                    let success=if request.actor!=0 && !pair_request {false} else if let (Some(key),Some(data))=(key,data) {
+                        if pair_request && !match request.actor {0=>key.starts_with("a-"),1=>key.starts_with("b-"),_=>false} {
+                            reply_denied=true;
+                            false
+                        } else {
                         match request.file_op {
                             1=>{
                                 // A restored, byte-identical committed file needs no rewrite.
@@ -642,8 +648,9 @@ pub extern "C" fn graph_main() -> ! {
                             },
                             _=>false,
                         }
+                        }
                     } else {false};
-                    let completed=if let Some(error)=write_error {el0::complete_file_write_error(&request,error)} else if reply_too_large {el0::complete_file_oversize(&request)} else if reply_invalid_name {el0::complete_file_invalid_name(&request)} else {el0::complete_file(&request,success,&reply[..reply_len])};
+                    let completed=if reply_denied {el0::complete_file_access_denied(&request)} else if let Some(error)=write_error {el0::complete_file_write_error(&request,error)} else if reply_too_large {el0::complete_file_oversize(&request)} else if reply_invalid_name {el0::complete_file_invalid_name(&request)} else {el0::complete_file(&request,success,&reply[..reply_len])};
                     if !completed {halt()}
                     continue;
                 }

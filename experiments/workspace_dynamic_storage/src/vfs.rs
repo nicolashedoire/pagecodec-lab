@@ -9,7 +9,7 @@ const MAX_NAME: usize = 32;
 const MAX_FILE: usize = 512;
 // The shared snapshot encoding is independently bounded by its 3,584-byte
 // payload; some catalogs below this limit may still not fit after encoding.
-const MAX_TOTAL: usize = 1400;
+const MAX_TOTAL: usize = 1650;
 
 #[derive(Clone, Default)]
 pub struct Files {

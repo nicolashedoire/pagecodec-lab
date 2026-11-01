@@ -79,6 +79,9 @@ static mut PAIR_BARRIER_OPEN:bool=false;
 // 0 running, 1 explicit exit, 2 fault or unsupported SVC, 3 IRQ budget.
 static mut PAIR_OUTCOMES:[u8;2]=[0;2];
 static mut PAIR_LIVE_MARKERS:[u64;2]=[0;2];
+static mut PAIR_IO_SUBMITTED:[u64;2]=[0;2];
+static mut PAIR_IO_COMPLETED:[u64;2]=[0;2];
+static mut PAIR_IO_CANCELLED:[u64;2]=[0;2];
 static mut PAIR_EXIT_CODES:[Option<u64>;2]=[None;2];
 static mut PAIR_MARKERS:[u64;2]=[0;2];
 static mut PAIR_DATA_SCRUBBED:[bool;2]=[false;2];
@@ -104,26 +107,27 @@ pub struct Request {pub actor:usize,pub incarnation:u64,pub id:u64,pub save:bool
 // from an exited task must not be retained in this fixture.
 #[derive(Clone,Copy)] struct CompletionToken {actor:usize,incarnation:u64,id:u64}
 impl Request {fn token(&self)->CompletionToken {CompletionToken{actor:self.actor,incarnation:self.incarnation,id:self.id}}}
-#[derive(Clone,Copy,PartialEq,Eq)] struct Completion {actor:usize,incarnation:u64,id:u64,popped:bool,applied:bool,success:bool,oversize:bool,invalid_name:bool,write_errno:i64,delivered:bool,consumed:bool,data:[u8;32],data_len:usize}
-const EMPTY_COMPLETION:Completion=Completion{actor:0,incarnation:0,id:0,popped:false,applied:false,success:false,oversize:false,invalid_name:false,write_errno:0,delivered:false,consumed:false,data:[0;32],data_len:0};
-struct Ipc {queue:[Option<Request>;2],head:usize,len:usize,completions:[Completion;8],accepted:[u64;8],accepted_len:usize,applied:[u64;8],applied_len:usize,consumed:[u64;8],consumed_len:usize,full:bool,full_consumed:bool,range:[bool;2],overflow:[bool;2],duplicate:[bool;2],utf8:[bool;2],spoof:[bool;2],save_denied:bool,denial_consumed:bool}
-static mut IPC:Ipc=Ipc{queue:[None;2],head:0,len:0,completions:[EMPTY_COMPLETION;8],accepted:[0;8],accepted_len:0,applied:[0;8],applied_len:0,consumed:[0;8],consumed_len:0,full:false,full_consumed:false,range:[false;2],overflow:[false;2],duplicate:[false;2],utf8:[false;2],spoof:[false;2],save_denied:false,denial_consumed:false};
+#[derive(Clone,Copy,PartialEq,Eq)] struct Completion {actor:usize,incarnation:u64,id:u64,popped:bool,applied:bool,success:bool,oversize:bool,invalid_name:bool,access_denied:bool,write_errno:i64,delivered:bool,consumed:bool,data:[u8;32],data_len:usize}
+const EMPTY_COMPLETION:Completion=Completion{actor:0,incarnation:0,id:0,popped:false,applied:false,success:false,oversize:false,invalid_name:false,access_denied:false,write_errno:0,delivered:false,consumed:false,data:[0;32],data_len:0};
+struct Ipc {queue:[Option<Request>;2],head:usize,len:usize,completions:[Completion;9],accepted:[u64;8],accepted_len:usize,applied:[u64;8],applied_len:usize,consumed:[u64;8],consumed_len:usize,full:bool,full_consumed:bool,range:[bool;2],overflow:[bool;2],duplicate:[bool;2],utf8:[bool;2],spoof:[bool;2],save_denied:bool,denial_consumed:bool}
+static mut IPC:Ipc=Ipc{queue:[None;2],head:0,len:0,completions:[EMPTY_COMPLETION;9],accepted:[0;8],accepted_len:0,applied:[0;8],applied_len:0,consumed:[0;8],consumed_len:0,full:false,full_consumed:false,range:[false;2],overflow:[false;2],duplicate:[false;2],utf8:[false;2],spoof:[false;2],save_denied:false,denial_consumed:false};
 // A loaded process can have one generic file operation in flight. Only copied
 // bytes and offsets within its private page are retained, never Rust borrows.
 #[derive(Clone,Copy)]
 struct GenericIo {token:CompletionToken,file_op:u8,name:[u8;16],name_len:usize,name_offset:usize,dest_offset:usize,capacity:usize}
-static mut GENERIC_IO:Option<GenericIo>=None;
+static mut GENERIC_IO:[Option<GenericIo>;2]=[None;2];
 static mut NEXT_GENERIC_ID:u64=8;
 // Aggregate only; never expose filenames, user addresses or file contents.
 static mut GENERIC_READ_SUBMITTED:u64=0;
 static mut GENERIC_READ_COMPLETED:u64=0;
 static mut GENERIC_WRITE_SUBMITTED:u64=0;
 static mut GENERIC_WRITE_COMPLETED:u64=0;
-fn clear_generic_io() {
+fn clear_generic_io(actor:usize) {
+ assert!(actor<2);
  // Writing `None` alone may leave the old Option payload bytes in memory.
  // Volatile-zero the copied name, offsets and token while the variant is
  // still Some, then clear the discriminant. Single CPU, SVC/service only.
- let p=addr_of_mut!(GENERIC_IO);
+ let p=unsafe{addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor)};
  if let Some(mut old)=unsafe{read_volatile(p)} {
   old.file_op=0;old.name=[0;16];old.name_len=0;old.name_offset=0;old.dest_offset=0;old.capacity=0;
   old.token=CompletionToken{actor:0,incarnation:0,id:0};
@@ -131,8 +135,9 @@ fn clear_generic_io() {
  }
  unsafe{write_volatile(p,None)};
 }
-fn completion_slot(id:u64)->Option<usize> {
- match id {1..=7=>Some((id-1) as usize),8.. =>Some(7),_=>None}
+fn completion_slot(actor:usize,id:u64)->Option<usize> {
+ if actor>=2 {return None}
+ match id {1..=7=>Some((id-1) as usize),8.. =>Some(7+actor),_=>None}
 }
 fn incarnation(actor:usize)->u64 {
  assert!(actor<2);
@@ -157,7 +162,7 @@ fn descriptor(actor:usize,index:usize,id:u64)->Option<Request> {
  Some(req)
 }
 fn submit(state:&mut Ipc,req:Request)->bool {
- let Some(i)=completion_slot(req.id) else{return false};
+ let Some(i)=completion_slot(req.actor,req.id) else{return false};
  if req.actor>=2 || req.incarnation!=incarnation(req.actor) || state.completions[i].id!=0 || state.len==2 || (req.id<=7 && state.accepted_len>=state.accepted.len()) {return false}
  let slot=(state.head+state.len)%2;state.queue[slot]=Some(req);state.len+=1;
  state.completions[i]=Completion{actor:req.actor,incarnation:req.incarnation,id:req.id,..EMPTY_COMPLETION};
@@ -168,7 +173,7 @@ pub fn pop_request()->Option<Request> {
  // Keep both requests in the queue until the guest has actually seen it full.
  if !s.full_consumed || s.len==0 {return None}
  let r=s.queue[s.head].take()?;s.head=(s.head+1)%2;s.len-=1;
- let c=&mut s.completions[completion_slot(r.id).unwrap_or_else(||halt())];
+ let c=&mut s.completions[completion_slot(r.actor,r.id).unwrap_or_else(||halt())];
  if c.actor!=r.actor || c.incarnation!=r.incarnation || c.id!=r.id || r.incarnation!=incarnation(r.actor) {halt()}
  c.popped=true;Some(r)
 }
@@ -179,12 +184,12 @@ pub fn request_is_live(request:&Request)->bool {
  let state=unsafe{read_volatile(addr_of!(TASK_STATE).cast::<u64>().add(request.actor))};
  if state!=1 && state!=2 {return false}
  let s=unsafe{&*addr_of!(IPC)};
- let Some(i)=completion_slot(request.id) else{return false};let c=&s.completions[i];
+ let Some(i)=completion_slot(request.actor,request.id) else{return false};let c=&s.completions[i];
  c.actor==request.actor && c.incarnation==request.incarnation && c.id==request.id && c.popped && !c.applied
 }
 fn apply_completion(s:&mut Ipc,token:CompletionToken,success:bool,data:&[u8])->bool {
  if token.actor>=2 || token.incarnation!=incarnation(token.actor) || data.len()>32 {return false}
- let Some(i)=completion_slot(token.id) else{return false};let c=&mut s.completions[i];
+ let Some(i)=completion_slot(token.actor,token.id) else{return false};let c=&mut s.completions[i];
  if c.actor!=token.actor || c.incarnation!=token.incarnation || c.id!=token.id || !c.popped || c.applied || (token.id<=7 && s.applied_len>=s.applied.len()) {return false}
  c.data[..data.len()].copy_from_slice(data);c.data_len=data.len();
  c.applied=true;c.success=success;if token.id<=7 {s.applied[s.applied_len]=token.id;s.applied_len+=1;}true
@@ -214,14 +219,14 @@ pub fn complete_file_oversize(request:&Request)->bool {
  if request.id<8 || request.file_op!=2 {return false}
  let s=unsafe{&mut *addr_of_mut!(IPC)};
  if !apply_completion(s,request.token(),false,&[]) {return false}
- s.completions[7].oversize=true;true
+ s.completions[7+request.actor].oversize=true;true
 }
 /// Report an invalid generic filename separately from a missing file.
 pub fn complete_file_invalid_name(request:&Request)->bool {
  if request.id<8 || request.file_op!=2 {return false}
  let s=unsafe{&mut *addr_of_mut!(IPC)};
  if !apply_completion(s,request.token(),false,&[]) {return false}
- s.completions[7].invalid_name=true;true
+ s.completions[7+request.actor].invalid_name=true;true
 }
 #[derive(Clone,Copy)]
 pub enum WriteError {InvalidName,NoSpace,Io}
@@ -230,7 +235,24 @@ pub fn complete_file_write_error(request:&Request,error:WriteError)->bool {
  if request.id<8 || request.file_op!=1 {return false}
  let s=unsafe{&mut *addr_of_mut!(IPC)};
  if !apply_completion(s,request.token(),false,&[]) {return false}
- s.completions[7].write_errno=match error {WriteError::InvalidName=>-22,WriteError::NoSpace=>-28,WriteError::Io=>-5};true
+ s.completions[7+request.actor].write_errno=match error {WriteError::InvalidName=>-22,WriteError::NoSpace=>-28,WriteError::Io=>-5};true
+}
+/// The owner enforces the pair's per-actor namespace after checking liveness.
+pub fn is_pair_request(request:&Request)->bool {
+ request.actor<2 && request.id>=8 && unsafe{read_volatile(addr_of!(PAIR_ACTIVE))}
+  && unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS).cast::<u64>().add(request.actor))}==request.incarnation
+}
+pub fn complete_file_access_denied(request:&Request)->bool {
+ if !is_pair_request(request) || !matches!(request.file_op,1|2) {return false}
+ let s=unsafe{&mut *addr_of_mut!(IPC)};
+ if !apply_completion(s,request.token(),false,&[]) {return false}
+ s.completions[7+request.actor].access_denied=true;true
+}
+unsafe fn pair_io_count(actor:usize,submitted:bool) {
+ if read_volatile(addr_of!(PAIR_ACTIVE)) {
+  let base=if submitted {addr_of_mut!(PAIR_IO_SUBMITTED)} else {addr_of_mut!(PAIR_IO_COMPLETED)};
+  let p=base.cast::<u64>().add(actor);write_volatile(p,read_volatile(p).saturating_add(1));
+ }
 }
 pub fn ipc_status()->Value {
  let s=unsafe{&*addr_of!(IPC)};
@@ -282,14 +304,14 @@ fn generic_read(f:&mut Frame,s:&mut Ipc,actor:usize) {
  if core::str::from_utf8(&name[..name_len]).is_err() {result(f,-22);return}
  let name_offset=(name_va-super::mmu::ALIAS as u64) as usize;
  let dest_offset=(dest_va-super::mmu::ALIAS as u64) as usize;
- if let Some(pending)=unsafe{read_volatile(addr_of!(GENERIC_IO))} {
+ if let Some(pending)=unsafe{read_volatile(addr_of!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor))} {
   if pending.file_op!=2 || pending.token.actor!=actor || pending.token.incarnation!=incarnation(actor)
    || pending.name!=name || pending.name_len!=name_len || pending.name_offset!=name_offset
    || pending.dest_offset!=dest_offset || pending.capacity!=capacity {result(f,-22);return}
-  let c=&mut s.completions[7];
+  let c=&mut s.completions[7+actor];
   if c.id!=pending.token.id || c.actor!=actor || c.incarnation!=pending.token.incarnation {halt()}
   if !c.applied {result(f,-11);return}
-  let code=if c.invalid_name {-22} else if c.oversize {-34} else if !c.success {-2} else if c.data_len>capacity {-34} else {
+  let code=if c.access_denied {-13} else if c.invalid_name {-22} else if c.oversize {-34} else if !c.success {-2} else if c.data_len>capacity {-34} else {
    // Revalidate the current mapping and incarnation immediately before the
    // copy, since only guest offsets were retained while the service ran.
    let dest=super::mmu::ALIAS.checked_add(pending.dest_offset).unwrap_or_else(||halt()) as u64;
@@ -297,13 +319,13 @@ fn generic_read(f:&mut Frame,s:&mut Ipc,actor:usize) {
    for i in 0..c.data_len {unsafe{writebyte(dest+i as u64,c.data[i])}}
    c.data_len as i64
   };
-  *c=EMPTY_COMPLETION;clear_generic_io();unsafe{let p=addr_of_mut!(GENERIC_READ_COMPLETED);write_volatile(p,read_volatile(p).saturating_add(1))};result(f,code);return
+  *c=EMPTY_COMPLETION;clear_generic_io(actor);unsafe{let p=addr_of_mut!(GENERIC_READ_COMPLETED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,false)};result(f,code);return
  }
  let id=unsafe{read_volatile(addr_of!(NEXT_GENERIC_ID))};
  let Some(next)=id.checked_add(1) else{result(f,-75);return};
  let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:2,key:name,key_len:name_len,value:[0;32],value_len:0};
  if !submit(s,request) {result(f,-11);return}
- unsafe{write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);write_volatile(addr_of_mut!(GENERIC_IO),Some(GenericIo{token:request.token(),file_op:2,name,name_len,name_offset,dest_offset,capacity}));let p=addr_of_mut!(GENERIC_READ_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1))};
+ unsafe{write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:2,name,name_len,name_offset,dest_offset,capacity}));let p=addr_of_mut!(GENERIC_READ_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true)};
  result(f,-11);
 }
 // SVC 0x141: poll one bounded write. x0=name VA, x1=name length,
@@ -328,15 +350,15 @@ fn generic_write(f:&mut Frame,s:&mut Ipc,actor:usize) {
  if core::str::from_utf8(&name[..name_len]).is_err() {result(f,-22);return}
  let name_offset=(name_va-super::mmu::ALIAS as u64) as usize;
  let src_offset=(src_va-super::mmu::ALIAS as u64) as usize;
- if let Some(pending)=unsafe{read_volatile(addr_of!(GENERIC_IO))} {
+ if let Some(pending)=unsafe{read_volatile(addr_of!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor))} {
   if pending.file_op!=1 || pending.token.actor!=actor || pending.token.incarnation!=incarnation(actor)
    || pending.name!=name || pending.name_len!=name_len || pending.name_offset!=name_offset
    || pending.dest_offset!=src_offset || pending.capacity!=len {result(f,-22);return}
-  let c=&mut s.completions[7];
+  let c=&mut s.completions[7+actor];
   if c.id!=pending.token.id || c.actor!=actor || c.incarnation!=pending.token.incarnation {halt()}
   if !c.applied {result(f,-11);return}
-  let code=if c.success {len as i64} else if c.write_errno!=0 {c.write_errno} else {-5};
-  *c=EMPTY_COMPLETION;clear_generic_io();unsafe{let p=addr_of_mut!(GENERIC_WRITE_COMPLETED);write_volatile(p,read_volatile(p).saturating_add(1))};result(f,code);return
+  let code=if c.access_denied {-13} else if c.success {len as i64} else if c.write_errno!=0 {c.write_errno} else {-5};
+  *c=EMPTY_COMPLETION;clear_generic_io(actor);unsafe{let p=addr_of_mut!(GENERIC_WRITE_COMPLETED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,false)};result(f,code);return
  }
  let mut value=[0u8;32];
  for (i,byte) in value[..len].iter_mut().enumerate() {*byte=unsafe{readbyte(src_va+i as u64)}}
@@ -344,7 +366,7 @@ fn generic_write(f:&mut Frame,s:&mut Ipc,actor:usize) {
  let Some(next)=id.checked_add(1) else{result(f,-75);return};
  let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:1,key:name,key_len:name_len,value,value_len:len};
  if !submit(s,request) {result(f,-11);return}
- unsafe{write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);write_volatile(addr_of_mut!(GENERIC_IO),Some(GenericIo{token:request.token(),file_op:1,name,name_len,name_offset,dest_offset:src_offset,capacity:len}));let p=addr_of_mut!(GENERIC_WRITE_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1))};
+ unsafe{write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:1,name,name_len,name_offset,dest_offset:src_offset,capacity:len}));let p=addr_of_mut!(GENERIC_WRITE_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true)};
  result(f,-11);
 }
 #[no_mangle]
@@ -366,6 +388,8 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
   if !valid {unsafe{write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(actor),2)};return 1}
   match esr&0xffff {
    0x150=>{unsafe{write_volatile(addr_of_mut!(PAIR_BARRIER_SEEN).cast::<bool>().add(actor),true)};let counts=unsafe{read_volatile(addr_of!(PAIR_IRQS))};let seen=unsafe{read_volatile(addr_of!(PAIR_BARRIER_SEEN))};let frames=unsafe{read_volatile(addr_of!(TASK_FRAMES))};let live=if frames.iter().all(|p|*p!=0) {unsafe{[read_volatile(frames[0] as *const u64),read_volatile(frames[1] as *const u64)]}} else {[0;2]};if counts[0]>0 && counts[1]>0 && seen==[true,true] && live==[0xa1a1,0xb2b2] {unsafe{write_volatile(addr_of_mut!(PAIR_LIVE_MARKERS),live);write_volatile(addr_of_mut!(PAIR_BARRIER_OPEN),true)}};f.regs[0]=if unsafe{read_volatile(addr_of!(PAIR_BARRIER_OPEN))} {0} else {(-11i64) as u64};return 0},
+   0x140=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_read(f,state,actor);return 0},
+   0x141=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_write(f,state,actor);return 0},
    0x123=>{unsafe{write_volatile(addr_of_mut!(PAIR_EXIT_CODES).cast::<Option<u64>>().add(actor),Some(f.regs[0]));write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(actor),1)};return 1},
    _=>{unsafe{write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(actor),2)};return 1},
   }
@@ -654,8 +678,9 @@ fn reclaim_code_frame() {
  unsafe{write_volatile(addr_of_mut!(CODE_FRAME),0);write_volatile(addr_of_mut!(FRAME_BITMAP),used&!bit);write_volatile(addr_of_mut!(CODE_FRAME_SCRUBBED),true)}
 }
 
-// A separate bounded experiment on the existing two roots. It has no file IPC:
-// only the test barrier and exit SVCs are available to these ELF processes.
+// A separate bounded experiment on the existing two roots. Each process may
+// use the shared synchronous file service, subject to its fixture namespace;
+// the barrier is fixture-only and is not a general IPC primitive.
 pub fn start_pair(a:&[u8],b:&[u8])->Result<(), &'static str> {
  if unsafe{read_volatile(addr_of!(PAIR_STARTED))} {return Err("pair already started")}
  if unsafe{read_volatile(addr_of!(TASK_STATE))}!=[3,3] || unsafe{read_volatile(addr_of!(IMAGE_COUNT))}<4 || unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} || unsafe{read_volatile(addr_of!(FRAME_BITMAP))}!=0 || unsafe{read_volatile(addr_of!(TASK_FRAMES))}!=[0,0] || super::mmu::active_root()!=super::mmu::root(0) {return Err("pair requires idle slots")}
@@ -693,7 +718,7 @@ pub fn start_pair(a:&[u8],b:&[u8])->Result<(), &'static str> {
 pub fn pair_status()->Value {json!({
  "started":unsafe{read_volatile(addr_of!(PAIR_STARTED))},"done":unsafe{read_volatile(addr_of!(PAIR_DONE))},
  "incarnations":unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS))},"mappings_verified":unsafe{read_volatile(addr_of!(PAIR_MAPPINGS_VERIFIED))},
- "irq_counts":unsafe{read_volatile(addr_of!(PAIR_IRQS))},"exit_codes":unsafe{read_volatile(addr_of!(PAIR_EXIT_CODES))},"outcomes":unsafe{read_volatile(addr_of!(PAIR_OUTCOMES))},"barrier_seen":unsafe{read_volatile(addr_of!(PAIR_BARRIER_SEEN))},"live_markers":unsafe{read_volatile(addr_of!(PAIR_LIVE_MARKERS))},
+ "io_submitted":unsafe{read_volatile(addr_of!(PAIR_IO_SUBMITTED))},"io_completed":unsafe{read_volatile(addr_of!(PAIR_IO_COMPLETED))},"io_cancelled_before_apply":unsafe{read_volatile(addr_of!(PAIR_IO_CANCELLED))},"irq_counts":unsafe{read_volatile(addr_of!(PAIR_IRQS))},"exit_codes":unsafe{read_volatile(addr_of!(PAIR_EXIT_CODES))},"outcomes":unsafe{read_volatile(addr_of!(PAIR_OUTCOMES))},"barrier_seen":unsafe{read_volatile(addr_of!(PAIR_BARRIER_SEEN))},"live_markers":unsafe{read_volatile(addr_of!(PAIR_LIVE_MARKERS))},
  "markers":unsafe{read_volatile(addr_of!(PAIR_MARKERS))},"data_scrubbed":unsafe{read_volatile(addr_of!(PAIR_DATA_SCRUBBED))},
  "code_scrubbed":unsafe{read_volatile(addr_of!(PAIR_CODE_SCRUBBED))},"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()
 })}
@@ -712,6 +737,19 @@ extern "C" fn pair_irq_check(f:*const Frame)->u64 {
  0
 }
 fn reclaim_pair(actor:usize) {
+ // Revoke this incarnation's queued or completed generic operation before
+ // returning the private frames. Another actor's request is untouched.
+ let state=unsafe{&mut *addr_of_mut!(IPC)};let generation=incarnation(actor);
+ let old=state.queue;let head=state.head;let len=state.len;
+ state.queue=[None;2];state.head=0;state.len=0;
+ for i in 0..len {if let Some(r)=old[(head+i)%2] {
+  if r.actor==actor && r.incarnation==generation && r.id>=8 {
+   unsafe {let p=addr_of_mut!(PAIR_IO_CANCELLED).cast::<u64>().add(actor);write_volatile(p,read_volatile(p).saturating_add(1))}
+  } else {state.queue[state.len]=Some(r);state.len+=1}
+ }}
+ let c=&mut state.completions[7+actor];
+ check(c.id==0 || (c.actor==actor && c.incarnation==generation),"pair completion ownership");
+ *c=EMPTY_COMPLETION;clear_generic_io(actor);
  let data=task_frame(actor);let code=unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES).cast::<usize>().add(actor))};
  check(code!=0,"pair missing code");let marker=unsafe{read_volatile(data as *const u64)};
  super::mmu::unmap_task_code(actor,code);super::mmu::unmap_task_alias(actor,data);
@@ -764,7 +802,7 @@ fn reclaim_exited(actor:usize) {
     check(ipc.completions[i]==EMPTY_COMPLETION,"completion revoke");
    }
    // Do not retain a prior incarnation's guest offsets or filename.
-   clear_generic_io();
+   clear_generic_io(actor);
    reclaim_code_frame();
    if !unsafe{read_volatile(addr_of!(SPAWN_FAILED))} {
     let count=unsafe{read_volatile(addr_of!(IMAGE_COUNT))};
