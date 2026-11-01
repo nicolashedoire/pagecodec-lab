@@ -67,6 +67,23 @@ static mut SPAWN_EXECUTED:bool=false;
 static mut SPAWN_EXITED:bool=false;
 static mut SPAWN_FAILED:bool=false;
 static mut SPAWN_REUSED:bool=false;
+#[no_mangle] static mut PAIR_ACTIVE:bool=false;
+static mut PAIR_STARTED:bool=false;
+static mut PAIR_DONE:bool=false;
+static mut PAIR_INCARNATIONS:[u64;2]=[0;2];
+static mut PAIR_CODE_FRAMES:[usize;2]=[0;2];
+static mut PAIR_CODE_LEN:[u64;2]=[0;2];
+static mut PAIR_IRQS:[u64;2]=[0;2];
+static mut PAIR_BARRIER_SEEN:[bool;2]=[false;2];
+static mut PAIR_BARRIER_OPEN:bool=false;
+// 0 running, 1 explicit exit, 2 fault or unsupported SVC, 3 IRQ budget.
+static mut PAIR_OUTCOMES:[u8;2]=[0;2];
+static mut PAIR_LIVE_MARKERS:[u64;2]=[0;2];
+static mut PAIR_EXIT_CODES:[Option<u64>;2]=[None;2];
+static mut PAIR_MARKERS:[u64;2]=[0;2];
+static mut PAIR_DATA_SCRUBBED:[bool;2]=[false;2];
+static mut PAIR_CODE_SCRUBBED:[bool;2]=[false;2];
+static mut PAIR_MAPPINGS_VERIFIED:bool=false;
 static mut CODE_FRAME:usize=0;
 static mut CODE_ALIAS_REMOVED:bool=false;
 static mut CODE_FRAME_SCRUBBED:bool=false;
@@ -342,6 +359,17 @@ extern "C" fn user_bad_pc() {
 extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
  let f=unsafe{&mut *frame};let actor=unsafe{read_volatile(addr_of!(CURRENT))} as usize;
  if actor>=2 || super::mmu::active_root()!=super::mmu::root(actor) || f.spsr&0xf!=0 {halt()}
+ if unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} {
+  let len=unsafe{read_volatile(addr_of!(PAIR_CODE_LEN).cast::<u64>().add(actor))};
+  let lo=super::mmu::USER_CODE as u64;
+  let valid=esr>>26==0x15 && esr&(1<<25)!=0 && f.elr>lo && f.elr<=lo+len && f.elr&3==0;
+  if !valid {unsafe{write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(actor),2)};return 1}
+  match esr&0xffff {
+   0x150=>{unsafe{write_volatile(addr_of_mut!(PAIR_BARRIER_SEEN).cast::<bool>().add(actor),true)};let counts=unsafe{read_volatile(addr_of!(PAIR_IRQS))};let seen=unsafe{read_volatile(addr_of!(PAIR_BARRIER_SEEN))};let frames=unsafe{read_volatile(addr_of!(TASK_FRAMES))};let live=if frames.iter().all(|p|*p!=0) {unsafe{[read_volatile(frames[0] as *const u64),read_volatile(frames[1] as *const u64)]}} else {[0;2]};if counts[0]>0 && counts[1]>0 && seen==[true,true] && live==[0xa1a1,0xb2b2] {unsafe{write_volatile(addr_of_mut!(PAIR_LIVE_MARKERS),live);write_volatile(addr_of_mut!(PAIR_BARRIER_OPEN),true)}};f.regs[0]=if unsafe{read_volatile(addr_of!(PAIR_BARRIER_OPEN))} {0} else {(-11i64) as u64};return 0},
+   0x123=>{unsafe{write_volatile(addr_of_mut!(PAIR_EXIT_CODES).cast::<Option<u64>>().add(actor),Some(f.regs[0]));write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(actor),1)};return 1},
+   _=>{unsafe{write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(actor),2)};return 1},
+  }
+ }
  let loaded=actor==0 && unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))};
  if loaded && (esr>>26!=0x15 || esr&(1<<25)==0) {
   let s=unsafe{&mut *addr_of_mut!(IPC)};return stop_loaded_task(s,2)
@@ -626,9 +654,89 @@ fn reclaim_code_frame() {
  unsafe{write_volatile(addr_of_mut!(CODE_FRAME),0);write_volatile(addr_of_mut!(FRAME_BITMAP),used&!bit);write_volatile(addr_of_mut!(CODE_FRAME_SCRUBBED),true)}
 }
 
+// A separate bounded experiment on the existing two roots. It has no file IPC:
+// only the test barrier and exit SVCs are available to these ELF processes.
+pub fn start_pair(a:&[u8],b:&[u8])->Result<(), &'static str> {
+ if unsafe{read_volatile(addr_of!(PAIR_STARTED))} {return Err("pair already started")}
+ if unsafe{read_volatile(addr_of!(TASK_STATE))}!=[3,3] || unsafe{read_volatile(addr_of!(IMAGE_COUNT))}<4 || unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} || unsafe{read_volatile(addr_of!(FRAME_BITMAP))}!=0 || unsafe{read_volatile(addr_of!(TASK_FRAMES))}!=[0,0] || super::mmu::active_root()!=super::mmu::root(0) {return Err("pair requires idle slots")}
+ let a=super::loader::parse(a).ok_or("invalid pair ELF")?;
+ let b=super::loader::parse(b).ok_or("invalid pair ELF")?;
+ let first=unsafe{read_volatile(addr_of!(NEXT_INCARNATION))};
+ let next=first.checked_add(2).ok_or("incarnation exhausted")?;
+ let images=[a,b];let mut data=[0usize;2];let mut code=[0usize;2];
+ for i in 0..2 {
+  data[i]=allocate_task_frame(i);
+  let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
+  let slot=(0..4).find(|n|used&(1<<n)==0).unwrap_or_else(||halt());
+  let ptr=unsafe{addr_of_mut!(USER_FRAMES).cast::<UserStack>().add(slot)} as *mut u8;
+  for n in 0..PAGE {unsafe{write_volatile(ptr.add(n),0)}}
+  for (n,byte) in images[i].code.iter().enumerate() {unsafe{write_volatile(ptr.add(n),*byte)}}
+  code[i]=ptr as usize;
+  unsafe{write_volatile(addr_of_mut!(FRAME_BITMAP),used|(1<<slot))};
+  super::mmu::map_task_alias(i,data[i]);super::mmu::map_task_code(i,code[i]);
+ }
+ check(super::mmu::verify_pair(data,code),"pair mapping verification");
+ unsafe {
+  write_volatile(addr_of_mut!(A_FRAME),frame(0,super::mmu::ALIAS+PAGE,super::mmu::USER_CODE+images[0].entry_offset));
+  write_volatile(addr_of_mut!(B_FRAME),frame(1,super::mmu::ALIAS+PAGE,super::mmu::USER_CODE+images[1].entry_offset));
+  write_volatile(addr_of_mut!(PAIR_CODE_FRAMES),code);
+  write_volatile(addr_of_mut!(PAIR_CODE_LEN),[images[0].code.len() as u64,images[1].code.len() as u64]);
+  write_volatile(addr_of_mut!(PAIR_INCARNATIONS),[first,first+1]);
+  write_volatile(addr_of_mut!(TASK_INCARNATIONS),[first,first+1]);
+  write_volatile(addr_of_mut!(NEXT_INCARNATION),next);
+  write_volatile(addr_of_mut!(PAIR_MAPPINGS_VERIFIED),true);
+  write_volatile(addr_of_mut!(CURRENT),0);write_volatile(addr_of_mut!(TASK_STATE),[1,1]);
+  write_volatile(addr_of_mut!(PAIR_STARTED),true);write_volatile(addr_of_mut!(PAIR_ACTIVE),true);
+ }
+ Ok(())
+}
+pub fn pair_status()->Value {json!({
+ "started":unsafe{read_volatile(addr_of!(PAIR_STARTED))},"done":unsafe{read_volatile(addr_of!(PAIR_DONE))},
+ "incarnations":unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS))},"mappings_verified":unsafe{read_volatile(addr_of!(PAIR_MAPPINGS_VERIFIED))},
+ "irq_counts":unsafe{read_volatile(addr_of!(PAIR_IRQS))},"exit_codes":unsafe{read_volatile(addr_of!(PAIR_EXIT_CODES))},"outcomes":unsafe{read_volatile(addr_of!(PAIR_OUTCOMES))},"barrier_seen":unsafe{read_volatile(addr_of!(PAIR_BARRIER_SEEN))},"live_markers":unsafe{read_volatile(addr_of!(PAIR_LIVE_MARKERS))},
+ "markers":unsafe{read_volatile(addr_of!(PAIR_MARKERS))},"data_scrubbed":unsafe{read_volatile(addr_of!(PAIR_DATA_SCRUBBED))},
+ "code_scrubbed":unsafe{read_volatile(addr_of!(PAIR_CODE_SCRUBBED))},"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()
+})}
+#[no_mangle]
+extern "C" fn pair_irq_check(f:*const Frame)->u64 {
+ let actor=unsafe{read_volatile(addr_of!(CURRENT))} as usize;
+ if actor>=2 {halt()}
+ let frame=unsafe{&*f};let lo=super::mmu::USER_CODE as u64;
+ let len=unsafe{read_volatile(addr_of!(PAIR_CODE_LEN).cast::<u64>().add(actor))};
+ let p=unsafe{addr_of_mut!(PAIR_IRQS).cast::<u64>().add(actor)};
+ let count=unsafe{read_volatile(p)}.checked_add(1).unwrap_or_else(||halt());
+ unsafe{write_volatile(p,count)};
+ if frame.spsr&0xf!=0 || frame.elr<lo || frame.elr>=lo+len || frame.sp<super::mmu::ALIAS as u64 || frame.sp>(super::mmu::ALIAS+PAGE) as u64 || count>256 {
+  unsafe{write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(actor),if count>256 {3}else{2})};return 1
+ }
+ 0
+}
+fn reclaim_pair(actor:usize) {
+ let data=task_frame(actor);let code=unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES).cast::<usize>().add(actor))};
+ check(code!=0,"pair missing code");let marker=unsafe{read_volatile(data as *const u64)};
+ super::mmu::unmap_task_code(actor,code);super::mmu::unmap_task_alias(actor,data);
+ for ptr in [data,code] {
+  for n in 0..PAGE {unsafe{write_volatile((ptr as *mut u8).add(n),0)}}
+  for n in 0..PAGE {check(unsafe{read_volatile((ptr as *const u8).add(n))}==0,"pair frame scrub")}
+  let offset=ptr.checked_sub(addr_of_mut!(USER_FRAMES) as usize).unwrap_or_else(||halt());
+  check(offset%PAGE==0 && offset/PAGE<4,"pair frame outside pool");
+  let bit=1u8<<(offset/PAGE);let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};check(used&bit!=0,"pair frame already free");
+  unsafe{write_volatile(addr_of_mut!(FRAME_BITMAP),used&!bit)};
+ }
+ unsafe {
+  write_volatile(addr_of_mut!(TASK_FRAMES).cast::<usize>().add(actor),0);
+  write_volatile(addr_of_mut!(PAIR_CODE_FRAMES).cast::<usize>().add(actor),0);
+  write_volatile(addr_of_mut!(PAIR_MARKERS).cast::<u64>().add(actor),marker);
+  write_volatile(addr_of_mut!(PAIR_DATA_SCRUBBED).cast::<bool>().add(actor),true);
+  write_volatile(addr_of_mut!(PAIR_CODE_SCRUBBED).cast::<bool>().add(actor),true);
+  if read_volatile(addr_of!(TASK_FRAMES))==[0,0] {write_volatile(addr_of_mut!(PAIR_ACTIVE),false);write_volatile(addr_of_mut!(PAIR_DONE),true)}
+ }
+}
+
 // The service runs with IRQs masked. Revoke the alias and invalidate the TLB
 // before zeroing and returning the frame to this bounded boot pool.
 fn reclaim_exited(actor:usize) {
+ if unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} {if unsafe{read_volatile(addr_of!(TASK_FRAMES).cast::<usize>().add(actor))}!=0 {reclaim_pair(actor)};return}
  let p=unsafe{addr_of_mut!(TASK_FRAMES).cast::<usize>().add(actor)};
  let frame=unsafe{read_volatile(p)};if frame==0{return}
  let image_number=if actor==0 && unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} {unsafe{read_volatile(addr_of!(IMAGE_COUNT))}} else {0};
@@ -758,7 +866,8 @@ pub fn run_slice(programs:[Option<&[u8]>;4]) {
  }
  check(states_before.iter().all(|v|*v==1 || *v==3),"invalid service-boundary task states");
  let current=unsafe{read_volatile(addr_of!(CURRENT))};check(current<2 && states_before[current as usize]==1,"slice actor");
- let loaded_before=unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))};
+ let pair_before=unsafe{read_volatile(addr_of!(PAIR_ACTIVE))};
+ let loaded_before=unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} || pair_before;
  let frame=unsafe{read_volatile(addr_of!(SAVED).cast::<u64>().add(current as usize))} as *const Frame;
  let before=unsafe{read_volatile(addr_of!(SLICE_TOTAL))};let dispatches=unsafe{read_volatile(addr_of!(SLICE_DISPATCHES))};let exits=unsafe{read_volatile(addr_of!(SLICE_EXITS))};let delta=unsafe{read_volatile(addr_of!(SLICE_DELTA))};check(delta!=0,"slice not initialized");
 
@@ -785,7 +894,7 @@ pub fn run_slice(programs:[Option<&[u8]>;4]) {
  let mut timer:u64;unsafe{asm!("mrs {},CNTV_CTL_EL0",out(reg) timer);asm!("mrs {},DAIF",out(reg) daif);}
  check(timer&1==0 && daif&(1<<7)!=0 && super::mmu::active_root()==super::mmu::root(0),"slice timer, IRQ mask or service root");
  if !loaded_before {check(marker(0)==0xa1a1,"private task A data")}
- check(marker(1)==0xb2b2,"private task B data");
+ if !pair_before {check(marker(1)==0xb2b2,"private task B data");}
  for actor in 0..2 {if states_after[actor]==3 {reclaim_exited(actor)}}
 }
 pub fn status()->Value {
@@ -994,6 +1103,18 @@ lower_el_irq:
     add sp, sp, #272       // release kernel IRQ frame before returning to EL0
     b restore_user_frame
 slice_interrupt:
+    adrp x7, PAIR_ACTIVE
+    add x7, x7, :lo12:PAIR_ACTIVE
+    ldrb w7, [x7]
+    cbz w7, slice_not_pair
+    mov x0, sp
+    bl pair_irq_check
+    cbnz x0, svc_exit
+    adrp x0, CURRENT
+    add x0, x0, :lo12:CURRENT
+    ldr x2, [x0]
+    b slice_count_update
+slice_not_pair:
     // A loaded task has arbitrary integer registers and flags. Keep the
     // kernel/TTBR checks above; enforce a bounded execution budget and its
     // code mapping without treating user registers as kernel invariants.

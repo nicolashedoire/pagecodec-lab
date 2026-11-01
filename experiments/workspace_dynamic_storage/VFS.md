@@ -64,6 +64,21 @@ reboot on the same virtual disk. The existing injected post-commit error
 scenario verifies the shared storage path's `write_blocked` and recovery;
 it does not inject failure into the EL0 write itself.
 
+## Two loaded processes
+
+The integrated guest also accepts a request to start the separately stored
+`pair-a.bin` and `pair-b.bin` ELF files together. Each runs with a distinct
+process incarnation and a private data and code mapping. The sample programs
+write different values at the same virtual address, wait until both have been
+preempted, and check their own value before exiting. The harness checks the
+kernel's mapping, execution and frame-reclamation status. The scenario stores
+the two ELFs through the VFS, restarts the virtual disk, rejects a malformed
+ELF without partial admission, launches the corrected pair and refuses a
+second launch after cleanup. This demonstrates
+two time-sliced tasks on one virtual CPU; it does not provide a general-purpose
+process manager, syscall API or multicore execution. The MCP endpoint remains
+unauthenticated and is intended only for an isolated QEMU VM.
+
 `init.bin`, `fault.bin`, `badsvc.bin` and `next.bin` are reserved boot-image names: `file_delete` refuses
 their removal, so a confirmed deletion cannot be silently undone by boot-time
 seeding. A PUT can still replace their bytes. The loader validates a narrow ELF

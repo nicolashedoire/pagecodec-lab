@@ -296,6 +296,35 @@ def main():
     if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('quota fixture cleanup failed')
    # Stop the writer from re-creating files on later boot scenarios.
    if not g.call('file_put_hex',{'name':'next.bin','hex':independent_exit_elf(next_hex,0)}).get('readback_verified'):raise RuntimeError('writer reset failed')
+   reject(g,'process_pair_start',{},'pair program unavailable')
+   pair_hex=[]
+   for name in ('pair-a','pair-b'):
+    code=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/(name+'.hex')).read_text().strip())
+    image=independent_elf(next_hex,code);pair_hex.append(image)
+    if not g.call('file_put_hex',{'name':name+'.bin','hex':image}).get('readback_verified'):raise RuntimeError('pair ELF was not committed')
+   if pair_hex[0]==pair_hex[1]:raise RuntimeError('pair programs must differ')
+   traces.append(g.trace);states.append(g.call('storage_status',{}))
+  finally:g.close()
+  # Restore and launch two externally stored, distinct ELF images together.
+  # The kernel checks private mappings and the programs synchronize at an IRQ
+  # barrier before checking different markers at their common virtual address.
+  g=Guest(a.qemu,guest,disk,tmp,24,out,a.transport)
+  try:
+   g.progress('before two ELF admission',timeout_image=True,expected_exit_code=0)
+   for i,name in enumerate(('pair-a','pair-b')):
+    if g.call('file_get',{'name':name+'.bin'})!={'name':name+'.bin','hex':pair_hex[i]}:raise RuntimeError('pair ELF bytes were not restored')
+   if not g.call('file_put_hex',{'name':'pair-b.bin','hex':'ff'}).get('readback_verified'):raise RuntimeError('invalid pair fixture not saved')
+   reject(g,'process_pair_start',{},'invalid pair ELF')
+   refused=g.call('process_pair_status',{})
+   if refused.get('started') is not False or refused.get('frame_pool_assigned')!=0:raise RuntimeError('invalid pair left partial admission: '+str(refused))
+   if not g.call('file_put_hex',{'name':'pair-b.bin','hex':pair_hex[1]}).get('readback_verified'):raise RuntimeError('pair fixture repair failed')
+   if g.call('process_pair_start',{})!={'started':True}:raise RuntimeError('pair admission failed')
+   pair=g.wait_pair()
+   reject(g,'process_pair_start',{},'pair already started')
+   if g.call('process_pair_status',{})!=pair:raise RuntimeError('second pair admission changed finished state')
+   if g.call('document_snapshot',{})!=final:raise RuntimeError('paired tasks changed workspace')
+   for name in ('pair-a.bin','pair-b.bin'):
+    if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('pair fixture cleanup failed')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
   if a.exercise_storage_fault:

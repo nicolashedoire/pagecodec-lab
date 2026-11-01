@@ -66,8 +66,29 @@ pub fn map_task_code(actor:usize,frame:usize) {
  assert!(result&1==0 && result&PA_MASK==frame as u64 && query(USER_CODE,true,true)&1!=0);
  let descriptor=unsafe{read_volatile(entry)};
  assert!(descriptor&(RO|USER|PXN|UXN|NG)==RO|USER|PXN|NG);
- switch_root(root(1-actor));assert!(query(USER_CODE,false,true)&1!=0);
+ let other=if actor==0 {addr_of_mut!(L3_ALIAS_B)}else{addr_of_mut!(L3_ALIAS_A)};
+ let other_desc=unsafe{read_volatile(other.cast::<u64>().add((USER_CODE>>12)&511))};
+ switch_root(root(1-actor));let other_result=query(USER_CODE,false,true);
+ if other_desc&3==DESC {
+  // Both roots may contain code at this VA, but never the same frame.
+  assert!(other_desc&PA_MASK!=(frame as u64&PA_MASK) && other_result&1==0 && other_result&PA_MASK==other_desc&PA_MASK);
+ } else {assert!(other_desc==0 && other_result&1!=0)}
  switch_root(root(0));
+}
+/// Verify both loaded roots map the same VAs to four distinct private frames.
+pub fn verify_pair(data:[usize;2],code:[usize;2])->bool {
+ if active_root()!=root(0) || data.iter().chain(code.iter()).any(|p|p%PAGE!=0) {return false}
+ let all=[data[0],data[1],code[0],code[1]];
+ for i in 0..4 {for j in 0..i {if all[i]==all[j] {return false}}}
+ let mut ok=true;
+ for i in 0..2 {
+  switch_root(root(i));
+  let d=query(ALIAS,false,true);let w=query(ALIAS,true,true);let c=query(USER_CODE,false,true);let cw=query(USER_CODE,true,true);
+  ok &= d&1==0 && w&1==0 && d&PA_MASK==data[i] as u64 && w&PA_MASK==data[i] as u64
+   && c&1==0 && c&PA_MASK==code[i] as u64 && cw&1!=0;
+  ok &= query(data[1-i],false,true)&1!=0 && query(code[1-i],false,true)&1!=0;
+ }
+ switch_root(root(0));ok
 }
 pub fn unmap_task_code(actor:usize,frame:usize) {
  assert!(actor<2 && active_root()==root(0));
