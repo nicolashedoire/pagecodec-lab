@@ -442,8 +442,9 @@ does not guarantee a diagnostic or recovery.
 
 `ipc_direct_bind` establishes one volatile, bidirectional kernel channel between
 any two distinct slots among 0, 1 and 2 using their exact decimal incarnation
-strings and the current 32-character boot ID. At most one channel exists at a
-time. It returns a monotone channel ID as a decimal string;
+strings and the current 32-character boot ID. At most two distinct channels
+exist simultaneously, and each still has exactly two members. Binding requires
+both actors to be READY, not asleep. It returns a monotone channel ID as a decimal string;
 `ipc_direct_close` requires that ID and the same boot ID. `ipc_direct_status` returns only binding state, identities,
 queue lengths and counters, never message bytes or addresses. A client can observe
 or bind this endpoint without authentication; boot IDs provide freshness, not
@@ -452,7 +453,10 @@ fixed FIFO queues; the explicit close operation also purges those queues.
 The `scrubbed` flag describes those queue entries only, not all temporary kernel
 stack copies. `slots` lists the bound members in sorted order; two-element traffic
 arrays use that endpoint order, while `all_waiting` and other `all_*` wait
-counters use real slot indices. A nonmember receives -107 on IPC calls. This implementation assumes one CPU and does not claim SMP safety.
+counters use real slot indices. `channels` reports each active channel. With two
+active channels, the historical single-channel ID/slot view is null. An actor
+with no live channel receives -107; an actor using a foreign or stale ID while
+it belongs to another channel receives -116. This assumes one CPU, not SMP.
 
 EL0 services `0x160`, `0x161`, and `0x162` query the peer, send, and receive.
 Each destination queue holds two messages of 1–32 bytes; user buffers may be in
@@ -590,8 +594,9 @@ search after timer interrupts, a blocking wait, or task exit. If no slot is
 ready, control returns to the service loop; device polling and MCP can continue.
 The guest admits up to three independent fixed contexts, with a third page-table
 root (ASID 3) and a pool of nine user frames. This is not SMP, arbitrary task
-capacity, or a general starvation-freedom guarantee. The single direct IPC channel and the single two-port network grant can each
-bind any two slots; neither permits arbitrary simultaneous channels or grants.
+capacity, or a general starvation-freedom guarantee. Up to two direct IPC channels can each bind any two slots; the single two-port
+network grant can also bind any two slots. These are fixed limits, not arbitrary
+simultaneous channels or grants.
 
 The integrated modern QEMU scenario runs three copies of the linked Rust ELF,
 checks separate mappings, initialized private data/stacks and timer preemption,
@@ -607,8 +612,8 @@ In feature-enabled integrated QEMU runs, an additional three-task scenario binds
 fills and drains the FIFO, exercises message wake and timeout, then stops and
 readmits slot 2. It rejects the old incarnation and channel ID before binding
 0↔2, checks actual peer slot numbers, wakes and closes the new channel. Earlier
-0↔1 scenarios remain in the same run. An existing channel is always a single
-two-member object; this does not create several simultaneous channels.
+0↔1 scenarios remain in the same run. Each channel remains a bounded
+two-member object.
 The same feature-enabled test verifies the slot 1 outsider on the 0↔2 channel.
 It does not force stopping a nonmember while a channel remains active, nor a
 timed expiration with all three actors asleep. Ordinary builds do not expose
@@ -627,3 +632,18 @@ runner's expected-document variable with a network-status object. The runner
 now uses a distinct name. The failed run's temporary disk was removed and was
 not available for inspection; this failure alone did not establish storage
 corruption.
+
+With two channels live, `0x165` resolves the peer for an explicit channel ID.
+The legacy `0x160` resolves only an unambiguous membership and returns -76 for
+an actor belonging to both; an actor can wait on only one channel at a time.
+The feature-enabled integrated three-task scenario exchanges distinct messages on A↔B and
+A↔C, closes and recreates A↔B while A↔C continues, rejects stale and foreign
+IDs, and checks that stopping the common member closes both. Another case
+verifies that an unrelated A↔C message and close cannot wake A waiting on A↔B.
+These channels remain bounded, in-memory, unauthenticated VM mechanisms.
+The separate ordinary-release modern evidence predates this multi-channel
+change; the current extended scenarios are recorded in the feature-enabled
+modern and legacy storage-fault evidence.
+The initial feature-enabled traces were produced before adding the explicit
+readiness handshake to the multi-channel fixture; that handshake is being
+validated separately and those initial traces do not establish its behavior.

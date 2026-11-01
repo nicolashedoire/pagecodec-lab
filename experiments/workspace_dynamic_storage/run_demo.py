@@ -839,7 +839,7 @@ def main():
    state=g.wait_independent(lambda s:s.get('slot_states')==['exited','ready'],'first IPC exchange and A exit')
    if state.get('exit_codes',[None,None])[0]!=0 or state.get('outcomes',[None,None])[0]!=1 or state.get('incarnations')!=[first['incarnation'],second['incarnation']] or state.get('frame_pool_assigned')!=3:raise RuntimeError('first IPC exchange failed: '+str(state))
    channel=g.call('ipc_direct_status',{})
-   if set(channel)!={'bound','channel_id','slots','incarnations','queued','sent','received','dropped','scrubbed','full_rejections','peer_unbound','all_peer_unbound','waiting','wait_count','wake_message','wake_close','wake_timeout','all_waiting','all_wait_count','all_wake_message','all_wake_close','all_wake_timeout'} or channel.get('bound') is not False or channel.get('queued')!=[0,0] or channel.get('sent')!=[2,2] or channel.get('received')!=[2,2] or channel.get('scrubbed') is not True:raise RuntimeError('direct IPC closure or first exchange invalid: '+str(channel))
+   if set(channel)!={'channels','bound','channel_id','slots','incarnations','queued','sent','received','dropped','scrubbed','full_rejections','peer_unbound','all_peer_unbound','waiting','wait_count','wake_message','wake_close','wake_timeout','all_waiting','all_wait_count','all_wake_message','all_wake_close','all_wake_timeout'} or channel.get('bound') is not False or channel.get('queued')!=[0,0] or channel.get('sent')!=[2,2] or channel.get('received')!=[2,2] or channel.get('scrubbed') is not True:raise RuntimeError('direct IPC closure or first exchange invalid: '+str(channel))
    replacement=g.call('process_spawn_staged',{'id':upload_id})
    if replacement.get('slot')!=0 or replacement.get('incarnation',0)<=second['incarnation'] or replacement.get('boot_id')!=first['boot_id']:raise RuntimeError('IPC sender readmission invalid')
    reject(g,'ipc_direct_bind',args,'stale process incarnation')
@@ -1112,6 +1112,97 @@ def main():
     for name in ('a-igate','b-igate','c-igate'):
      if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('IPC-three gate cleanup failed')
     if g.call('file_list',{})!=files_before:raise RuntimeError('IPC-three fixture left files behind')
+   # Two distinct channels may now remain live at the same time.
+   for name in ('a-mgate','b-mgate','c-mgate'):
+    if any(entry.get('name')==name for entry in files_before):raise RuntimeError('multi-channel gate already exists')
+    if not g.call('file_put',{'name':name,'data':'0'}).get('readback_verified'):raise RuntimeError('multi-channel gate setup failed')
+   multi=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-ipc-multi.hex').read_text().strip())
+   multi_upload=stage_program(g,multi)
+   def multi_tasks(predicate,label):
+    for _ in range(80):
+     snapshot=g.call('process_status',{})
+     if predicate(snapshot):return snapshot
+     time.sleep(.2)
+    raise RuntimeError('multi-channel tasks did not reach '+label+': '+str(snapshot))
+   def multi_channel(snapshot,id):
+    return next((channel for channel in snapshot.get('channels',[]) if channel.get('channel_id')==int(id)),None)
+   def multi_status(predicate,label):
+    for _ in range(80):
+     snapshot=g.call('ipc_direct_status',{})
+     if predicate(snapshot):return snapshot
+     time.sleep(.2)
+    raise RuntimeError('multi-channel status not reached '+label+': '+str(snapshot))
+   def put_multi(name,ab,ac,stage):
+    data=(int(ab).to_bytes(8,'little')+int(ac).to_bytes(8,'little')+bytes([stage])).hex()
+    if not g.call('file_put_hex',{'name':name,'hex':data}).get('readback_verified'):raise RuntimeError('multi-channel gate write failed')
+   def spawn_multi():
+    tasks=[g.call('process_spawn_staged',{'id':multi_upload}) for _ in range(3)]
+    if [t.get('slot') for t in tasks]!=[0,1,2] or len({t.get('boot_id') for t in tasks})!=1:raise RuntimeError('multi-channel admission failed')
+    multi_tasks(lambda x:x.get('all_slot_states')==['ready']*3 and min(x.get('all_io_completed',[0]*3))>0,'all actors ready')
+    return tasks
+   def bind_multi(tasks,a_slot,b_slot):
+    return g.call('ipc_direct_bind',{'a_slot':a_slot,'a_incarnation':tasks[a_slot]['incarnation_text'],'b_slot':b_slot,'b_incarnation':tasks[b_slot]['incarnation_text'],'boot_id':tasks[0]['boot_id']})['channel_id']
+   def close_multi(tasks,id):
+    if g.call('ipc_direct_close',{'channel_id':id,'boot_id':tasks[0]['boot_id']})!={'closed':True}:raise RuntimeError('multi-channel close failed')
+   def reset_multi():
+    for name in ('a-mgate','b-mgate','c-mgate'):
+     if not g.call('file_put',{'name':name,'data':'0'}).get('readback_verified'):raise RuntimeError('multi-channel gate reset failed')
+   def finished_multi(expected_outcomes,expected_exits,label):
+    state=multi_tasks(lambda x:x.get('all_slot_states')==['exited']*3,label)
+    if state.get('all_outcomes')!=expected_outcomes or state.get('all_exit_codes')!=expected_exits or state.get('all_data_scrubbed')!=[True]*3 or state.get('all_code_scrubbed')!=[True]*3 or state.get('all_stack_scrubbed')!=[True]*3 or state.get('frame_pool_assigned')!=0:raise RuntimeError('multi-channel cleanup invalid: '+str(state))
+    status=g.call('ipc_direct_status',{})
+    if status.get('channels')!=[] or status.get('scrubbed') is not True:raise RuntimeError('multi-channel queues remain: '+str(status))
+   tasks=spawn_multi();ab=bind_multi(tasks,0,1);ac=bind_multi(tasks,0,2)
+   both=g.call('ipc_direct_status',{})
+   if len(both.get('channels',[]))!=2 or both.get('channel_id') is not None or both.get('slots') is not None:raise RuntimeError('ambiguous channel view invalid: '+str(both))
+   reject(g,'ipc_direct_bind',{'a_slot':0,'a_incarnation':tasks[0]['incarnation_text'],'b_slot':1,'b_incarnation':tasks[1]['incarnation_text'],'boot_id':tasks[0]['boot_id']},'direct channel already bound')
+   reject(g,'ipc_direct_bind',{'a_slot':1,'a_incarnation':tasks[1]['incarnation_text'],'b_slot':2,'b_incarnation':tasks[2]['incarnation_text'],'boot_id':tasks[0]['boot_id']},'direct channel capacity reached')
+   for name in ('a-mgate','b-mgate','c-mgate'):put_multi(name,ab,ac,1)
+   multi_status(lambda x:all((c:=multi_channel(x,id)) is not None and c.get('sent')==[1,1] and c.get('received')==[1,1] for id in (ab,ac)),'both channels exchanged distinct messages')
+   close_multi(tasks,ab)
+   survivor=multi_status(lambda x:(c:=multi_channel(x,ac)) is not None and c.get('sent')==[2,2] and c.get('received')==[2,2] and multi_channel(x,ab) is None,'surviving channel progresses after other close')
+   stopped=g.call('process_stop',{'slot':1,'incarnation':tasks[1]['incarnation_text'],'boot_id':tasks[1]['boot_id']})
+   if stopped.get('stopped') is not True:raise RuntimeError('multi-channel member stop failed')
+   if not g.call('file_put',{'name':'b-mgate','data':'0'}).get('readback_verified'):raise RuntimeError('multi-channel B reset failed')
+   old_b=tasks[1];replacement=g.call('process_spawn_staged',{'id':multi_upload})
+   if replacement.get('slot')!=1 or replacement.get('incarnation',0)<=old_b['incarnation']:raise RuntimeError('multi-channel B readmission failed')
+   reject(g,'ipc_direct_bind',{'a_slot':0,'a_incarnation':tasks[0]['incarnation_text'],'b_slot':1,'b_incarnation':old_b['incarnation_text'],'boot_id':tasks[0]['boot_id']},'stale process incarnation')
+   tasks[1]=replacement;ab2=bind_multi(tasks,0,1)
+   reject(g,'ipc_direct_close',{'channel_id':ab,'boot_id':tasks[0]['boot_id']},'stale direct channel')
+   put_multi('a-mgate',ab2,ac,2);put_multi('b-mgate',ab2,ac,2)
+   multi_status(lambda x:(c:=multi_channel(x,ac)) is not None and c.get('sent')==[3,3] and c.get('received')==[3,3] and (b:=multi_channel(x,ab2)) is not None and b.get('sent')==[1,1] and b.get('received')==[1,1],'readmitted channel and survivor progress')
+   close_multi(tasks,ab2);close_multi(tasks,ac);finished_multi([1,1,1],[0,0,0],'multi-channel re-admission teardown')
+   # Stopping the common member must revoke both channels.
+   reset_multi();tasks=spawn_multi();ab=bind_multi(tasks,0,1);ac=bind_multi(tasks,0,2)
+   for name in ('a-mgate','b-mgate','c-mgate'):put_multi(name,ab,ac,3)
+   multi_status(lambda x:all((c:=multi_channel(x,id)) is not None and c.get('sent')==[1,1] and c.get('received')==[1,1] for id in (ab,ac)) and x.get('all_waiting',[False]*3)[0] is True,'shared member waiting on first channel')
+   if g.call('process_stop',{'slot':0,'incarnation':tasks[0]['incarnation_text'],'boot_id':tasks[0]['boot_id']}).get('stopped') is not True:raise RuntimeError('shared member stop failed')
+   finished_multi([4,1,1],[None,0,0],'shared member stop cleanup')
+   # A waits on AB. A message and closure on AC must not wake that wait.
+   reset_multi();tasks=spawn_multi();ab=bind_multi(tasks,0,1);ac=bind_multi(tasks,0,2)
+   for name in ('a-mgate','b-mgate','c-mgate'):put_multi(name,ab,ac,4)
+   waiting=multi_status(lambda x:x.get('all_waiting',[False]*3)[0] is True,'A sleeping on AB')
+   before_message=waiting['all_wake_message'][0];before_close=waiting['all_wake_close'][0]
+   # Both senders acknowledge that they read stage 4 before either gate can
+   # be overwritten with stage 5, independent of host or IRQ timing.
+   for _ in range(80):
+    b_ready=g.call('file_get',{'name':'b-mgate'}).get('hex');c_ready=g.call('file_get',{'name':'c-mgate'}).get('hex')
+    if b_ready=='72' and c_ready=='72':break
+    time.sleep(.2)
+   else:raise RuntimeError('multi-channel stage 4 readiness missing: '+str((b_ready,c_ready)))
+   put_multi('c-mgate',ab,ac,5)
+   unrelated=multi_status(lambda x:(c:=multi_channel(x,ac)) is not None and c.get('queued')==[1,0],'unrelated channel queued')
+   if unrelated.get('all_waiting',[False]*3)[0] is not True or unrelated.get('all_wake_message',[0]*3)[0]!=before_message:raise RuntimeError('unrelated message woke A: '+str(unrelated))
+   close_multi(tasks,ac)
+   closed=g.call('ipc_direct_status',{})
+   if closed.get('all_waiting',[False]*3)[0] is not True or closed.get('all_wake_close',[0]*3)[0]!=before_close:raise RuntimeError('unrelated close woke A: '+str(closed))
+   put_multi('b-mgate',ab,ac,5)
+   multi_status(lambda x:(c:=multi_channel(x,ab)) is not None and c.get('received')==[1,0] and x.get('all_wake_message',[0]*3)[0]==before_message+1,'matching channel woke A')
+   close_multi(tasks,ab);finished_multi([1,1,1],[0,0,0],'unrelated-channel wake isolation')
+   g.call('upload_reset',{'id':multi_upload})
+   for name in ('a-mgate','b-mgate','c-mgate'):
+    if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('multi-channel gate cleanup failed')
+   if g.call('file_list',{})!=files_before:raise RuntimeError('multi-channel fixture left files behind')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
   # No NIC: the same Rust program must see -19 without requiring a peer.
