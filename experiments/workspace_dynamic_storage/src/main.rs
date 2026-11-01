@@ -10,6 +10,7 @@ mod boot_identity;
 mod staging;
 mod program_store;
 mod program_store_v2;
+mod net;
 extern crate alloc;
 use alloc::format;
 use alloc::string::String;
@@ -509,6 +510,7 @@ pub extern "C" fn graph_main() -> ! {
     let mut input = None;
     let mut block = None;
     let mut entropy = None;
+    let mut network = net::Network::new();
     for slot in 0..MMIO_SLOTS {
         let ptr = NonNull::new((MMIO_BASE + slot * MMIO_STRIDE) as *mut VirtIOHeader).unwrap();
         // SAFETY: the specified QEMU virt machine maps each MMIO window; one CPU.
@@ -518,6 +520,7 @@ pub extern "C" fn graph_main() -> ! {
             DeviceType::GPU if gpu.is_none() => { gpu = VirtIOGpu::<VmHal, _>::new(transport).ok(); }
             DeviceType::Input if input.is_none() => { input = VirtIOInput::<VmHal, _>::new(transport).ok(); }
             DeviceType::EntropySource if entropy.is_none() => { entropy=boot_identity::BootEntropy::begin(transport).ok(); }
+            DeviceType::Network => { network.add(transport); }
             _ => {}
         }
     }
@@ -610,6 +613,7 @@ pub extern "C" fn graph_main() -> ! {
     let mut service_polls=SERVICE_POLLS;
     loop {
         if let Some(ref mut source)=entropy {source.poll()}
+        network.poll();
         if service_polls>=SERVICE_POLLS {
           // The fixed EL0 scripts assume a successful save and would halt on
           // failure. Keep them suspended when storage needs reconciliation so
@@ -790,6 +794,7 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"process_status","description":"Inspect the latest bounded guest task admission.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"ipc_direct_bind","description":"Bind two independent guest tasks by slot, exact incarnation and current boot ID; no authentication.","inputSchema":{"type":"object","properties":{"a_slot":{"type":"integer","minimum":0,"maximum":1},"a_incarnation":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20},"b_slot":{"type":"integer","minimum":0,"maximum":1},"b_incarnation":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20},"boot_id":{"type":"string","pattern":"^[0-9a-f]{32}$"}},"required":["a_slot","a_incarnation","b_slot","b_incarnation","boot_id"],"additionalProperties":false}},
                                         {"name":"ipc_direct_status","description":"Read direct-channel state and counters without message contents.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"network_status","description":"Read virtual network device state and counters without frame contents.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"fixtures_pause","description":"Pause new built-in fixture admissions after the current fixture finishes.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"fixtures_resume","description":"Resume built-in fixture admissions.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"fixtures_status","description":"Inspect fixture admission and pause state.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
@@ -1039,6 +1044,11 @@ pub extern "C" fn graph_main() -> ! {
                                                 if let Some((a_slot,a_inc,b_slot,b_inc,boot_id))=parsed {
                                                     match el0::bind_direct(a_slot,a_inc,b_slot,b_inc,boot_id) {Ok(())=>tool_json(id,json!({"bound":true})),Err(error)=>tool_error(id,error)}
                                                 } else {tool_error(id,"invalid ipc_direct_bind arguments");}
+                                            }
+                                            Some("network_status") => {
+                                                let args=params.and_then(|p|p.get("arguments"));
+                                                if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"network_status requires empty arguments");}
+                                                else {tool_json(id,net::status());}
                                             }
                                             Some("ipc_direct_status") => {
                                                 let args=params.and_then(|p|p.get("arguments"));

@@ -31,7 +31,7 @@ def validate(data):
  return data.hex()+'\n'
 
 def main():
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('--rustc',default='rustc');p.add_argument('--write',action='store_true');p.add_argument('--fixture',choices=('rust-two-segment','rust-direct-ipc'),default='rust-two-segment');a=p.parse_args()
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('--rustc',default='rustc');p.add_argument('--write',action='store_true');p.add_argument('--fixture',choices=('rust-two-segment','rust-direct-ipc','rust-net-roundtrip'),default='rust-two-segment');a=p.parse_args()
  sysroot=Path(subprocess.check_output([a.rustc,'--print','sysroot'],text=True).strip())
  host=next(line.split(': ',1)[1] for line in subprocess.check_output([a.rustc,'-vV'],text=True).splitlines() if line.startswith('host: '))
  linker=sysroot/'lib'/'rustlib'/host/'bin'/'rust-lld'

@@ -284,6 +284,33 @@ fn close_direct_for(actor:usize) {
  c.scrubbed=c.queues.iter().flatten().all(|m|m.len==0 && m.bytes.iter().all(|b|*b==0));
  if !c.scrubbed {halt()}
 }
+/// Current two-process identities for the isolated VM Ethernet service.
+pub fn network_identities()->Option<[u64;2]> {
+ if !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} || unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {return None}
+ let state=unsafe{read_volatile(addr_of!(TASK_STATE))};if !state.iter().all(|s|matches!(*s,1|2)) {return None}
+ let ids=unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS))};
+ if ids[0]==0 || ids[1]==0 || ids[0]!=incarnation(0) || ids[1]!=incarnation(1) {return None}Some(ids)
+}
+fn network_send(f:&mut Frame,actor:usize) {
+ if !super::net::available() {direct_result(f,-19);return}
+ let Some(ids)=network_identities() else{direct_result(f,-107);return};
+ let address=f.regs[0];let len=f.regs[1];if len==0 || len>64 {direct_result(f,-22);return}
+ let len=len as usize;if user_location(actor,address,len,false,false).is_none() {direct_result(f,-14);return}
+ let mut packet=super::net::Packet{source:ids[actor],destination:ids[1-actor],len,bytes:[0;64]};
+ for i in 0..len {packet.bytes[i]=unsafe{readbyte(address+i as u64)}}
+ if super::net::enqueue(actor,packet) {direct_result(f,0)}else{direct_result(f,-11)}
+}
+fn network_recv(f:&mut Frame,actor:usize) {
+ if !super::net::available() {direct_result(f,-19);return}
+ let Some(ids)=network_identities() else{direct_result(f,-107);return};
+ let cap=f.regs[1];if cap==0 || cap>64 {direct_result(f,-22);return}
+ let Some(packet)=super::net::peek(actor) else{direct_result(f,-11);return};
+ if packet.source!=ids[1-actor] || packet.destination!=ids[actor] {super::net::discard(actor);direct_result(f,-11);return}
+ if packet.len>cap as usize {direct_result(f,-34);return}
+ let address=f.regs[0];if user_location(actor,address,cap as usize,true,false).is_none() {direct_result(f,-14);return}
+ for i in 0..packet.len {unsafe{writebyte(address+i as u64,packet.bytes[i])}}
+ super::net::consume(actor);f.regs[0]=packet.len as u64;f.regs[1]=(1-actor) as u64;f.regs[2]=packet.source;
+}
 unsafe fn read64(p:u64)->u64 {let v:u64;asm!("ldr {v}, [{p}]",p=in(reg)p,v=out(reg)v,options(nostack,preserves_flags));v}
 unsafe fn write64(p:u64,v:u64){asm!("str {v}, [{p}]",p=in(reg)p,v=in(reg)v,options(nostack,preserves_flags));}
 unsafe fn writebyte(p:u64,v:u8){asm!("strb {v:w}, [{p}]",p=in(reg)p,v=in(reg)v as u32,options(nostack,preserves_flags));}
@@ -542,6 +569,8 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
   if !valid {unsafe{write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(actor),2)};return 1}
   match esr&0xffff {
    0x150=>{if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=2 {f.regs[0]=(-38i64) as u64;return 0};unsafe{write_volatile(addr_of_mut!(PAIR_BARRIER_SEEN).cast::<bool>().add(actor),true)};let counts=unsafe{read_volatile(addr_of!(PAIR_IRQS))};let seen=unsafe{read_volatile(addr_of!(PAIR_BARRIER_SEEN))};let frames=unsafe{read_volatile(addr_of!(TASK_FRAMES))};let live=if frames.iter().all(|p|*p!=0) {unsafe{[read_volatile(frames[0] as *const u64),read_volatile(frames[1] as *const u64)]}} else {[0;2]};if counts[0]>0 && counts[1]>0 && seen==[true,true] && frames.iter().all(|p|*p!=0) {unsafe{write_volatile(addr_of_mut!(PAIR_LIVE_MARKERS),live);write_volatile(addr_of_mut!(PAIR_BARRIER_OPEN),true)}};f.regs[0]=if unsafe{read_volatile(addr_of!(PAIR_BARRIER_OPEN))} {0} else {(-11i64) as u64};return 0},
+   0x170=>{network_send(f,actor);return 0},
+   0x171=>{network_recv(f,actor);return 0},
    0x160=>{direct_peer(f,actor);return 0},
    0x161=>{direct_send(f,actor);return 0},
    0x162=>{direct_recv(f,actor);return 0},
@@ -1085,6 +1114,7 @@ fn reclaim_pair(actor:usize) {
  // Closing the channel discards both bounded queues before either frame can
  // be reused by a later incarnation.
  close_direct_for(actor);
+ super::net::revoke(actor,incarnation(actor));
  // Revoke this incarnation's queued or completed generic operation before
  // returning the private frames. Another actor's request is untouched.
  let state=unsafe{&mut *addr_of_mut!(IPC)};let generation=incarnation(actor);

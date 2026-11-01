@@ -26,7 +26,7 @@ def connect(path,process):
     raise TimeoutError('socket timeout')
 
 class Guest:
-    def __init__(self,qemu,kernel,image,tmp,index,out,transport,allow_degraded=False,rng=True):
+    def __init__(self,qemu,kernel,image,tmp,index,out,transport,allow_degraded=False,rng=True,network=False):
         self.trace=[];self.qmp_trace=[];self.socket=Path(tmp)/('mcp'+str(index));self.qmp=Path(tmp)/('qmp'+str(index))
         self.log=tempfile.TemporaryFile(mode='w+b')
         f={'driver':'file','filename':str(image),'node-name':'f0'}
@@ -37,6 +37,12 @@ class Guest:
              '-monitor','none','-qmp',f'unix:{self.qmp},server=on,wait=off','-no-reboot','-kernel',str(kernel),'-global','virtio-mmio.force-legacy='+('true' if transport=='legacy' else 'false'),
              '-blockdev',json.dumps(f),'-blockdev',json.dumps(d),'-device','virtio-blk-device,drive=disk0']
         if rng:cmd+=['-device','virtio-rng-device']
+        # Both NICs attach only to QEMU's in-process hub. There is no host
+        # backend, user-mode network, bridge, TAP, or external listener.
+        if network:
+            for i in range(2):
+                cmd+=['-netdev',f'hubport,id=internal{i},hubid=0',
+                      '-device',f'virtio-net-device,netdev=internal{i},mac=52:54:00:12:34:0{i+1}']
         self.process=subprocess.Popen(cmd,stdout=self.log,stderr=subprocess.STDOUT)
         try:
             self.sock=connect(self.socket,self.process);self.stream=self.sock.makefile('rwb',buffering=0)

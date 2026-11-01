@@ -472,3 +472,38 @@ One legacy-transport full run timed out waiting for the initial MCP response
 at boot 26 (15-second socket read timeout, no kernel diagnostic captured).
 A subsequent run passed that boot with the same timeout. The cause is unknown;
 this observation is intermittent and is not evidence of a fix.
+
+### Experimental VirtIO Ethernet in QEMU
+
+The integrated guest can discover two VirtIO network devices and assign them to
+the two independent process slots by their expected MAC addresses. The QEMU
+scenario attaches both devices to an in-process hub with no host network
+backend. It is a bounded Ethernet experiment, not IP, TCP, a general network
+stack, or support for a physical Apple network adapter.
+
+SVC `0x170` sends one 1–64-byte private Data/Stack buffer, and `0x171` receives
+into one such buffer and reports the source slot and incarnation. Buffers,
+lengths, live process identities and the boot identity are checked. A send
+queues a message in the guest; it does not itself promise delivery. The guest
+encapsulates it in a private EtherType Ethernet frame and the receiver checks
+the embedded boot and incarnation values. These identifiers prevent accidental
+cross-incarnation delivery; they are not authentication against a hostile host
+or peer. `network_status` exposes ports and counters, not packet contents.
+
+The runner includes a boot with no NIC (the ELF must observe -19), followed by
+a boot with two NICs where Rust processes exchange a checked ping and pong. The
+runner verifies each side's VirtIO submission, completion, reception and
+application delivery counters, and process cleanup. Frame buffers and DMA
+requests have explicit lifetime requirements; this prototype does not claim
+bounded response from every failed or malicious VirtIO device, including
+internal driver initialization paths. It has not been tested against real
+hardware and does not offer confidentiality or a complete access-control model.
+There is no frame sequence number: a duplicated frame from the same boot and
+same pair of incarnations can be accepted again. No within-session replay or
+duplication protection is claimed.
+In particular, `VirtIONetRaw::new` may loop while reading a continually changing
+device configuration, so initialization is not guaranteed nonblocking for a
+faulty device.
+The current network channel opens implicitly whenever both independent slots
+are active; there is no explicit bind or capability authorization. A task's
+incarnation is a freshness check, not an access-control credential.
