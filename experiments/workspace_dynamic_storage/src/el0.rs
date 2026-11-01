@@ -2,6 +2,9 @@
 use alloc::vec::Vec;
 use serde_json::{json,Value};
 use core::{arch::{asm,global_asm},ptr::{addr_of,addr_of_mut,read_volatile,write_volatile}};
+// This is still the exact number of real contexts and address spaces.
+// Widen only together with tables, resources, ownership and admission.
+const PROCESS_CAPACITY:usize=2;
 const PAGE:usize=4096;
 const GICD:usize=0x0800_0000;const GICC:usize=0x0801_0000;
 #[repr(C,align(4096))] struct UserStack([u8;PAGE]);
@@ -1448,7 +1451,7 @@ pub fn run_slice(programs:[Option<&[u8]>;4]) {
  if !states_before.contains(&1) {return} // service keeps processing MCP/device events
  let mut current=unsafe{read_volatile(addr_of!(CURRENT))};
  if current>=2 || states_before[current as usize]!=1 {
-  current=if states_before[0]==1 {0}else{1};unsafe{write_volatile(addr_of_mut!(CURRENT),current)}
+  current=states_before.iter().position(|state|*state==1).unwrap_or_else(||halt()) as u64;unsafe{write_volatile(addr_of_mut!(CURRENT),current)}
  }
  check(states_before[current as usize]==1,"slice actor");
  let pair_before=unsafe{read_volatile(addr_of!(PAIR_ACTIVE))};
@@ -1575,8 +1578,8 @@ lower_el_irq:
     adrp x0, CURRENT
     add x0, x0, :lo12:CURRENT
     ldr x2, [x0]
-    cmp x2, #1
-    b.hi irq_entry_fail
+    cmp x2, #{capacity}
+    b.hs irq_entry_fail
     adrp x4, ROOTS
     add x4, x4, :lo12:ROOTS
     ldr x5, [x4, x2, lsl #3]
@@ -1979,20 +1982,22 @@ slice_count_update:
     b.ne irq_schedule_fail
     mov x5, #1
     str x5, [x4, x2, lsl #3]
-    eor x2, x2, #1
+    // Bounded circular search, starting after the interrupted actor. Its
+    // READY state guarantees a candidate even if every other actor sleeps.
+    mov x7, #{capacity}
+30: add x2, x2, #1
+    cmp x2, #{capacity}
+    csel x2, x2, xzr, lo
     ldr x5, [x4, x2, lsl #3]
     cmp x5, #1
     b.eq 21f
-    // The other task exited or is waiting: continue this READY task.
     cmp x5, #3
-    b.eq 23f
+    b.eq 31f
     cmp x5, #4
     b.ne irq_schedule_fail
-23:
-    eor x2, x2, #1
-    ldr x5, [x4, x2, lsl #3]
-    cmp x5, #1
-    b.ne irq_schedule_fail
+31: subs x7, x7, #1
+    b.ne 30b
+    b irq_schedule_fail
 21: str x2, [x0]
     cmp x6, #2
     b.eq slice_return_kernel
@@ -2128,8 +2133,8 @@ start_slice:
     adrp x9, CURRENT
     add x9, x9, :lo12:CURRENT
     ldr x10, [x9]
-    cmp x10, #1
-    b.hi irq_fatal
+    cmp x10, #{capacity}
+    b.hs irq_fatal
     // READY -> RUNNING before entering EL0. This is authoritative: a task
     // in any other state cannot be selected by this scheduler.
     adrp x11, TASK_STATE
@@ -2316,8 +2321,8 @@ svc_wait:
     adrp x9, CURRENT
     add x9, x9, :lo12:CURRENT
     ldr x10, [x9]
-    cmp x10, #1
-    b.hi irq_fatal
+    cmp x10, #{capacity}
+    b.hs irq_fatal
     adrp x11, SAVED
     add x11, x11, :lo12:SAVED
     ldr x11, [x11, x10, lsl #3]
@@ -2341,11 +2346,22 @@ svc_wait:
     b.ne irq_fatal
     mov x12, #4
     str x12, [x11, x10, lsl #3]
-    eor x10, x10, #1
+    // No READY actor is valid here: return to the service loop until wakeup.
+    mov x13, #{capacity}
+32: add x10, x10, #1
+    cmp x10, #{capacity}
+    csel x10, x10, xzr, lo
     ldr x12, [x11, x10, lsl #3]
     cmp x12, #1
-    b.ne 25f
-    str x10, [x9]
+    b.eq 33f
+    cmp x12, #3
+    b.eq 34f
+    cmp x12, #4
+    b.ne irq_fatal
+34: subs x13, x13, #1
+    b.ne 32b
+    b 25f
+33: str x10, [x9]
 25: adrp x11, SLICE_BLOCKS
     add x11, x11, :lo12:SLICE_BLOCKS
     ldr x12, [x11]
@@ -2364,8 +2380,8 @@ svc_exit:
     adrp x9, CURRENT
     add x9, x9, :lo12:CURRENT
     ldr x10, [x9]
-    cmp x10, #1
-    b.hi irq_fatal
+    cmp x10, #{capacity}
+    b.hs irq_fatal
     adrp x11, TASK_STATE
     add x11, x11, :lo12:TASK_STATE
     ldr x12, [x11, x10, lsl #3]
@@ -2373,11 +2389,22 @@ svc_exit:
     b.ne irq_fatal
     mov x12, #3
     str x12, [x11, x10, lsl #3]
-    eor x10, x10, #1
+    // A remaining READY task may run next; none is also a valid outcome.
+    mov x13, #{capacity}
+35: add x10, x10, #1
+    cmp x10, #{capacity}
+    csel x10, x10, xzr, lo
     ldr x12, [x11, x10, lsl #3]
     cmp x12, #1
-    b.ne 22f
-    str x10, [x9]             // next service slice uses the remaining task
+    b.eq 36f
+    cmp x12, #3
+    b.eq 37f
+    cmp x12, #4
+    b.ne irq_fatal
+37: subs x13, x13, #1
+    b.ne 35b
+    b 22f
+36: str x10, [x9]
 22: adrp x11, SLICE_EXITS
     add x11, x11, :lo12:SLICE_EXITS
     ldr x12, [x11]
@@ -2924,7 +2951,7 @@ task_b_end:
 el0_failure_b:
     svc #0x7bad
     b el0_failure_b
-"#);
+"#, capacity=const PROCESS_CAPACITY);
 
 #[no_mangle]
 pub extern "C" fn el0_finish()->! {

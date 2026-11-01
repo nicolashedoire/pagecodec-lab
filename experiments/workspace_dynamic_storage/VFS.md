@@ -572,3 +572,10 @@ its initial graphical capture had succeeded. The failing request and VM state
 were not retained. A full rerun passed boot 43 and completed with the same
 15-second socket timeout; the original cause remains unknown. The new
 pre-cleanup capture path was not exercised by that successful rerun.
+
+The single-CPU scheduler selects the next ready slot by a bounded circular
+search after timer interrupts, a blocking wait, or task exit. If neither slot is
+ready after a wait or exit, control returns to the service loop; device polling
+and MCP can continue. This refactor does not increase process capacity: the
+guest still has exactly two real contexts/address spaces and fixed resources,
+with no general SMP or starvation-freedom guarantee.
