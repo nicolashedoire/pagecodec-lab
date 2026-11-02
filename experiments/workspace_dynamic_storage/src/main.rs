@@ -26,7 +26,7 @@ use serde_json::{json, Value};
 use core::arch::{asm, global_asm};
 use core::panic::PanicInfo;
 use core::ptr::{addr_of_mut, NonNull};
-use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use virtio_drivers::{device::{blk::VirtIOBlk, gpu::VirtIOGpu, input::VirtIOInput}, transport::{mmio::{MmioTransport, VirtIOHeader}, DeviceType, Transport}, BufferDirection, Hal, PhysAddr};
 
 global_asm!(r#"
@@ -489,15 +489,42 @@ fn parse_checksum(text:&str)->Option<u64> {
     u64::from_str_radix(text,16).ok()
 }
 
+// EL0 paths use the same ASCII canonical form as TreeStore but are further
+// bounded by the 16-byte request key. No normalization is performed.
+fn valid_tree_guest_path(path:&str)->bool {
+    let bytes=path.as_bytes();
+    if bytes.is_empty() || bytes.len()>16 || bytes[0]!=b'/' {return false}
+    if bytes==b"/" {return true}
+    bytes[1..].split(|b|*b==b'/').all(|segment| {
+        !segment.is_empty() && segment!=b"." && segment!=b".." &&
+        segment.iter().all(|b|b.is_ascii_alphanumeric() || matches!(b,b'.'|b'_'|b'-'))
+    })
+}
+
+// A discovery snapshot only: it is not an authorization or a disk check.
+// A shared storage uncertainty suppresses discovery immediately, even if no
+// service call has yet closed the cached handle. This runs on one CPU.
+static TREE_CURRENT_GENERATION:AtomicU64=AtomicU64::new(0);
+pub(crate) fn tree_current_generation()->u64 {
+    if STORAGE_WRITE_BLOCKED.load(Ordering::Acquire) {0}
+    else {TREE_CURRENT_GENERATION.load(Ordering::Acquire)}
+}
+
 // The tree uses independent reserved sectors; it is never provisioned from
 // a blank disk automatically. A controller must explicitly assert that the
 // QEMU disk regions are dedicated on each open/provision. MCP is unauthenticated.
 struct TreeVolume {tree:Option<tree_store::TreeStore>,generation:Option<u64>,dedicated:bool}
 impl TreeVolume {
-    fn new()->Self {Self{tree:None,generation:None,dedicated:false}}
-    fn close(&mut self) {self.tree=None;self.generation=None;self.dedicated=false;}
+    fn new()->Self {TREE_CURRENT_GENERATION.store(0,Ordering::Release);Self{tree:None,generation:None,dedicated:false}}
+    fn close(&mut self) {TREE_CURRENT_GENERATION.store(0,Ordering::Release);self.tree=None;self.generation=None;self.dedicated=false;}
     fn inspect<T:Transport>(&mut self,disk:&mut VirtIOBlk<VmHal,T>)->Result<tree_disk::Status,&'static str> {
-        match tree_disk::status(disk) {Ok(s)=>Ok(s),Err(e)=>{self.close();Err(e)}}
+        match tree_disk::status(disk) {
+            Ok(s)=>{
+                if s.write_blocked || s.selection_error || (self.tree.is_some() && s.generation!=self.generation) {self.close()}
+                Ok(s)
+            }
+            Err(e)=>{self.close();Err(e)}
+        }
     }
     fn safe(status:&tree_disk::Status)->Result<(),&'static str> {
         if status.write_blocked {return Err("storage write blocked until restart")}
@@ -524,7 +551,8 @@ impl TreeVolume {
         let candidate=tree_store::TreeStore::new().map_err(tree_error)?;
         let (slot,generation)=tree_disk::store(disk,&candidate,true)?;
         if generation!=1 {STORAGE_WRITE_BLOCKED.store(true,Ordering::Relaxed);return Err("tree generation mismatch")}
-        self.tree=Some(candidate);self.generation=Some(generation);self.dedicated=true;Ok((slot,generation))
+        self.tree=Some(candidate);self.generation=Some(generation);self.dedicated=true;
+        TREE_CURRENT_GENERATION.store(generation,Ordering::Release);Ok((slot,generation))
     }
     fn open<T:Transport>(&mut self,disk:&mut VirtIOBlk<VmHal,T>)->Result<(u64,bool),&'static str> {
         if self.tree.is_some() {return Err("tree already opened")}
@@ -538,7 +566,8 @@ impl TreeVolume {
         if after.selection_error{return Err("tree region needs repair")}
         if after.generation!=Some(generation) {return Err("stale tree generation")}
         let degraded=Self::safe(&after).is_err();
-        self.tree=Some(candidate);self.generation=Some(generation);self.dedicated=true;Ok((generation,degraded))
+        self.tree=Some(candidate);self.generation=Some(generation);self.dedicated=true;
+        TREE_CURRENT_GENERATION.store(generation,Ordering::Release);Ok((generation,degraded))
     }
     fn candidate(&self)->Result<tree_store::TreeStore,&'static str> {
         let tree=self.tree.as_ref().ok_or("tree not opened")?;
@@ -549,7 +578,7 @@ impl TreeVolume {
         self.current(disk,generation,true)?;
         let expected=generation.checked_add(1).ok_or("tree generation exhausted")?;
         match tree_disk::store(disk,&candidate,self.dedicated) {
-            Ok((slot,next)) if next==expected=>{self.tree=Some(candidate);self.generation=Some(next);Ok((slot,next))},
+            Ok((slot,next)) if next==expected=>{self.tree=Some(candidate);self.generation=Some(next);TREE_CURRENT_GENERATION.store(next,Ordering::Release);Ok((slot,next))},
             Ok(_)=>{self.close();STORAGE_WRITE_BLOCKED.store(true,Ordering::Relaxed);Err("tree generation mismatch")},
             Err(error)=>{if STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed) {self.close()} Err(error)},
         }
@@ -861,6 +890,47 @@ pub extern "C" fn graph_main() -> ! {
                         }
                     }
                     if !el0::complete_document(&request,&reply[..reply_len],errno) {halt()}
+                    continue;
+                }
+                if request.file_op==5 {
+                    // request_is_live above rechecks the incarnation. This
+                    // service consumes only requests from active actors;
+                    // completion validates the live token again.
+                    let mut reply=[0u8;32];
+                    let mut count=0usize;
+                    let mut read_error=None;
+                    let mut denied=false;
+                    let mut found=false;
+                    let path=request.key.get(..request.key_len).and_then(|b|core::str::from_utf8(b).ok());
+                    if !el0::is_pair_request(&request) {halt()}
+                    else if path.is_none_or(|p|!valid_tree_guest_path(p)) || request.tree_generation==0 || !(1..=32).contains(&request.read_capacity) || request.file_offset>tree_store::MAX_FILE {
+                        read_error=Some(el0::TreeReadError::InvalidPath);
+                    } else {
+                        let path=path.unwrap();
+                        let prefix=match request.actor {0=>"/a/",1=>"/b/",2=>"/c/",_=>""};
+                        if prefix.is_empty() || !path.starts_with(prefix) {denied=true}
+                        else if let Some(ref mut disk)=block {
+                            match tree_volume.current(disk,request.tree_generation,false) {
+                                Ok(())=>match tree_volume.tree.as_ref() {
+                                    Some(tree)=>match tree.read_at(path,request.file_offset,request.read_capacity) {
+                                        Ok(bytes)=>{count=bytes.len();reply[..count].copy_from_slice(bytes);found=true},
+                                        Err(tree_store::Error::NotFound)=>{},
+                                        Err(tree_store::Error::IsDirectory)=>read_error=Some(el0::TreeReadError::IsDirectory),
+                                        Err(tree_store::Error::InvalidPath)=>read_error=Some(el0::TreeReadError::InvalidPath),
+                                        Err(_)=>read_error=Some(el0::TreeReadError::Io),
+                                    },
+                                    None=>read_error=Some(el0::TreeReadError::Unavailable),
+                                },
+                                Err("tree not opened")=>read_error=Some(el0::TreeReadError::Unavailable),
+                                Err("stale tree generation")=>read_error=Some(el0::TreeReadError::Stale),
+                                Err(_)=>read_error=Some(el0::TreeReadError::Io),
+                            }
+                        } else {read_error=Some(el0::TreeReadError::Unavailable)}
+                    }
+                    let completed=if denied {el0::complete_file_access_denied(&request)}
+                        else if let Some(error)=read_error {el0::complete_tree_read_error(&request,error)}
+                        else {el0::complete_file(&request,found,&reply[..count])};
+                    if !completed {halt()}
                     continue;
                 }
                 if request.file_op!=0 {

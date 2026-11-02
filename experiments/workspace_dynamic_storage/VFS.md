@@ -854,7 +854,8 @@ plus sequential `tree_upload_begin`, `tree_upload_append`, `tree_upload_seal`,
 `tree_upload_commit` and `tree_upload_reset`. Upload chunks are at most 512
 bytes; size and a 64-bit FNV checksum must match. Mutating operations require
 the current generation, and a stale sealed upload cannot replace a newer tree.
-These are MCP operations; no EL0 tree-file ABI is implemented by this change.
+These mutation and listing operations are MCP-only; EL0 has the limited
+read-only interface described below.
 
 If one uniquely selected valid copy remains beside an unknown or invalid slot,
 an explicit open permits read/list in degraded, read-only mode. Mutations
@@ -876,3 +877,37 @@ modern-transport run with storage fault injection passed these checks; the
 recorded legacy trace predates the tree volume. It does not stage an upload
 and then inject damage during the same live guest; `tree_upload_commit` in
 that specific degraded transition is not covered by this scenario.
+
+### Process reads from the tree
+
+An independent ELF process can request `SVC #0x144` with path pointer/length
+in `x0`/`x1`, destination/capacity in `x2`/`x3`, offset in `x4`, and the
+nonzero tree generation in `x5`. The path is at most 16 ASCII bytes, capacity
+is 1–32 bytes, and the offset is at most 16 KiB. Actor slots 0, 1 and 2 can
+read only under `/a/`, `/b/` and `/c/` respectively; these fixed prefixes are
+not authenticated users or general capability controls. EOF returns zero.
+Errors include `-2` for an absent entry, `-13` for another actor's prefix,
+`-19` for a closed tree, `-21` for a directory, `-22` for invalid arguments,
+`-14` for an invalid user range, `-5` for an inconsistent disk and `-116` for
+a stale generation. As with other requests, `-11` means to poll the same
+arguments. The service rechecks generation and process incarnation before
+replying. The user buffers remain valid only while their pages are mapped.
+
+`SVC #0x145` reports the currently published tree generation in `x1` (`0` if
+none is open), with status in `x0`. This is an advisory snapshot, not authority;
+each subsequent read revalidates the tree. The [guest API](guest_api.rs)
+exposes `tree_generation` and `tree_read_at`. There is no EL0 tree write,
+directory enumeration or generation-change subscription yet.
+
+The [`rust-tree-read`](fixtures/rust-tree-read.rs) integrated scenario is
+designed to open a tree with two distinct 513-byte files, reboot, check that
+the still-closed tree is refused, then run two independent readers in parallel.
+The processes check their own complete file in chunks, EOF, namespace and
+generation failures, a changed offset during polling and invalid buffer ranges.
+It exercises both the raw SVC and Rust wrappers. The V1 flat catalog is used
+only for test barriers, not to convey the tree generation. Actor C, degraded
+EL0 reads and a tree generation change during an in-flight read are not
+covered. A focused QEMU run and the complete integrated modern-transport run
+with storage fault injection passed; the recorded legacy trace predates this
+process-read integration. The first complete attempt exposed a missing test
+barrier file and was corrected before the successful rerun.

@@ -1544,6 +1544,78 @@ def main():
    if reserved_tree_sectors(foreign_path)!=before_tree or protected_program_sectors(foreign_path)!=before_programs:raise RuntimeError('refused unknown tree altered protected sectors')
    traces.append(t.trace);states.append(t.call('tree_status',{}))
   finally:t.close()
+  # Clone the separately provisioned synthetic tree; prepare per-slot files,
+  # reboot without opening it, then run actual independent EL0 readers.
+  tree_el0_path=Path(tmp)/'tree-el0.raw';create(tree_el0_path,tree_disk_path.read_bytes())
+  tree_el0_programs=protected_program_sectors(tree_el0_path)
+  tree_el0_image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-tree-read.hex').read_text().strip())
+  data_a=bytes(((i*31+3)^(i>>8))&255 for i in range(513))
+  data_b=bytes(((i*19+79)^(i>>8))&255 for i in range(513))
+  def put_tree(vm,path,data,generation):
+   token=vm.call('tree_upload_begin',{'path':path,'size':len(data),'checksum':fnv64(data),'generation':generation})['id']
+   for offset in range(0,len(data),512):
+    reply=vm.call('tree_upload_append',{'id':token,'offset':offset,'hex':data[offset:offset+512].hex()})
+    if reply.get('received')!=min(offset+512,len(data)):raise RuntimeError('tree EL0 upload progress invalid')
+   if vm.call('tree_upload_seal',{'id':token})!={'sealed':True}:raise RuntimeError('tree EL0 upload seal failed')
+   commit=vm.call('tree_upload_commit',{'id':token})
+   if commit.get('readback_verified') is not True:raise RuntimeError('tree EL0 upload did not commit: '+str(commit))
+   return commit['generation']
+  e=Guest(a.qemu,guest,tree_el0_path,tmp,66,out,a.transport)
+  try:
+   e.progress('before preparing scoped tree files',timeout_image=True,expected_exit_code=0)
+   opened=e.call('tree_open',{'dedicated':True});tree_generation=opened['generation']
+   if opened.get('writable') is not True:raise RuntimeError('tree EL0 setup unexpectedly read-only')
+   for path in ('/a','/a/dir','/b','/b/dir'):
+    result=e.call('tree_mkdir',{'path':path,'generation':tree_generation})
+    if result.get('readback_verified') is not True:raise RuntimeError('tree EL0 mkdir not committed')
+    tree_generation=result['generation']
+   tree_generation=put_tree(e,'/a/data',data_a,tree_generation)
+   tree_generation=put_tree(e,'/b/data',data_b,tree_generation)
+   if chunked_tree_read(e,'/a/data',len(data_a),tree_generation)!=data_a or chunked_tree_read(e,'/b/data',len(data_b),tree_generation)!=data_b:raise RuntimeError('tree EL0 setup bytes mismatch')
+   if protected_program_sectors(tree_el0_path)!=tree_el0_programs:raise RuntimeError('tree EL0 setup changed program regions')
+   traces.append(e.trace);states.append(e.call('tree_status',{}))
+  finally:e.close()
+  e=Guest(a.qemu,guest,tree_el0_path,tmp,67,out,a.transport)
+  try:
+   e.progress('before scoped EL0 tree readers',timeout_image=True,expected_exit_code=0);e.wait_boot_identity()
+   status=e.call('tree_status',{})
+   if status.get('state')!='unopened' or status.get('generation')!=tree_generation:raise RuntimeError('tree EL0 volume unexpectedly opened after restart: '+str(status))
+   gates=('a-tgate','b-tgate');phases=('a-tphase','b-tphase')
+   for name in gates+phases:
+    if any(item.get('name')==name for item in e.call('file_list',{})):raise RuntimeError('tree EL0 gate name already exists')
+   def gate(name,flag):
+    if not e.call('file_put',{'name':name,'data':flag}).get('readback_verified'):raise RuntimeError('tree EL0 gate failed')
+   def phase(name,value):
+    for _ in range(100):
+     result=e.call('file_get',{'name':name}).get('hex')
+     if result==value.encode().hex():return
+     time.sleep(.2)
+    raise RuntimeError('tree EL0 phase missing: '+str((name,value,result)))
+   gate(gates[0],'c')
+   if not e.call('file_put',{'name':phases[0],'data':'0'}).get('readback_verified'):raise RuntimeError('tree EL0 closed phase setup failed')
+   program=stage_program(e,tree_el0_image)
+   closed=e.call('process_spawn_staged',{'id':program})
+   phase(phases[0],'c')
+   state=e.wait_independent(lambda x:x.get('all_slot_states',[None]*3)[0]=='exited','closed tree reader exit')
+   if state.get('all_outcomes',[None]*3)[0]!=1 or state.get('all_exit_codes',[None]*3)[0]!=0:raise RuntimeError('closed tree reader failed: '+str(state))
+   opened=e.call('tree_open',{'dedicated':True})
+   if opened.get('generation')!=tree_generation or opened.get('writable') is not True:raise RuntimeError('tree EL0 open failed: '+str(opened))
+   for name in gates:gate(name,'0')
+   for name in phases:
+    if not e.call('file_put',{'name':name,'data':'0'}).get('readback_verified'):raise RuntimeError('tree EL0 phase reset failed')
+   actors=[e.call('process_spawn_staged',{'id':program}) for _ in range(2)]
+   if [actor.get('slot') for actor in actors]!=[0,1] or actors[0]['incarnation']<=closed['incarnation']:raise RuntimeError('tree EL0 reader admissions failed: '+str(actors))
+   for name in phases:phase(name,'r')
+   ready=e.wait_independent(lambda x:x.get('slot_states')==['ready','ready'] and min(x.get('irq_counts',[0,0]))>0,'both scoped tree readers active')
+   if ready.get('frame_pool_assigned')!=6:raise RuntimeError('tree EL0 reader mapping count invalid: '+str(ready))
+   for name in gates:gate(name,'1')
+   for name in phases:phase(name,'d')
+   done=e.wait_independent(lambda x:x.get('slot_states')==['exited','exited'],'scoped tree readers exit')
+   if done.get('outcomes')!=[1,1] or done.get('exit_codes')!=[0,0] or done.get('frame_pool_assigned')!=0:raise RuntimeError('scoped tree readers failed or leaked: '+str(done))
+   if chunked_tree_read(e,'/a/data',len(data_a),tree_generation)!=data_a or chunked_tree_read(e,'/b/data',len(data_b),tree_generation)!=data_b:raise RuntimeError('tree EL0 readers changed stored bytes')
+   if protected_program_sectors(tree_el0_path)!=tree_el0_programs:raise RuntimeError('tree EL0 reads changed program regions')
+   e.call('upload_reset',{'id':program});traces.append(e.trace);states.append(e.call('tree_status',{}))
+  finally:e.close()
   # Two VM boots, one disposable clone; no host file or raw device is attached.
   chunk_disk=Path(tmp)/'chunk-offset.raw';create(chunk_disk,disk.read_bytes())
   chunk_image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-chunk-io.hex').read_text().strip())

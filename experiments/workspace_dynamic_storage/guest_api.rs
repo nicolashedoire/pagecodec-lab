@@ -121,3 +121,27 @@ pub fn write_at(name: &str, input: &[u8], offset: usize) -> Result<usize, i64> {
         match result as i64 { EAGAIN => core::hint::spin_loop(), n if n < 0 => return Err(n), n => return Ok(n as usize) }
     }
 }
+
+/// Return the last published tree generation, or None if no tree is open.
+/// This is advisory: the tree is rechecked when a read is serviced.
+pub fn tree_generation() -> Result<Option<u64>, i64> {
+    let mut status: u64;
+    let mut generation: u64;
+    unsafe { asm!("svc #0x145", lateout("x0") status, lateout("x1") generation, options(nostack)); }
+    if (status as i64) < 0 { return Err(status as i64); }
+    if status != 0 { return Err(-5); }
+    Ok(if generation == 0 { None } else { Some(generation) })
+}
+
+/// Read one chunk from the current actor's tree namespace at a generation.
+/// A stale generation fails; the caller must not combine different versions.
+pub fn tree_read_at(path: &str, output: &mut [u8], offset: usize, generation: u64) -> Result<usize, i64> {
+    let path_ptr = path.as_ptr() as u64;
+    loop {
+        let mut result = path_ptr;
+        unsafe { asm!("svc #0x144", inout("x0") result, in("x1") path.len() as u64,
+            in("x2") output.as_mut_ptr() as u64, in("x3") output.len() as u64,
+            in("x4") offset as u64, in("x5") generation, options(nostack)); }
+        match result as i64 { EAGAIN => core::hint::spin_loop(), n if n < 0 => return Err(n), n => return Ok(n as usize) }
+    }
+}
