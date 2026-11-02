@@ -641,8 +641,7 @@ A↔C, closes and recreates A↔B while A↔C continues, rejects stale and forei
 IDs, and checks that stopping the common member closes both. Another case
 verifies that an unrelated A↔C message and close cannot wake A waiting on A↔B.
 These channels remain bounded, in-memory, unauthenticated VM mechanisms.
-The separate ordinary-release modern evidence predates this multi-channel
-change; the current extended scenarios are recorded in the feature-enabled
+The extended multi-channel scenarios are recorded in the feature-enabled
 modern and legacy storage-fault evidence.
 The recorded feature-enabled modern and legacy traces include the explicit
 readiness handshake added to the multi-channel fixture.
@@ -679,8 +678,8 @@ PUT and checks restored copies and provenance. This is a bounded two-copy
 experiment; conflict resolution by an AI model, user authentication, SMP and
 power-loss durability are not provided by this interface.
 The recorded integrated runs cover the feature-enabled modern transport and
-the ordinary-release legacy transport. The feature-enabled legacy trace and
-ordinary-release modern trace predate this document-process integration.
+the ordinary-release modern and legacy transports. The feature-enabled legacy
+trace predates this document-process integration.
 The Bridge's in-memory event history currently grows without an eviction bound
 and can exhaust the guest heap; the full event history is not persisted across
 restart. Revoking queued requests or clearing an `Option` is a logical cleanup,
@@ -742,3 +741,41 @@ filling the pool does not itself exercise a subsequent allocation returning
 `-12`. Cross-calling the legacy and indexed APIs for page zero has not been
 separately exercised. Programs using `0x182/183` require a kernel that
 implements those calls.
+
+### Reusable Rust object allocator
+
+[`guest_allocator.rs`](guest_allocator.rs) supplies an opt-in `GlobalAlloc`
+for independent Rust programs with one EL0 thread per address space. It keeps
+up to 256 live allocation records, searches reusable gaps in acquired heap
+pages, and acquires another page when necessary. A single allocation and its
+alignment are each limited to 4 KiB; objects never span pages. A page owned by
+an independent `HeapPage` is skipped. Allocator-acquired page owners remain in
+the allocator until process exit; freeing all objects does not return those
+pages early. Exhausted records, pages or too-large requests return null through
+`GlobalAlloc` and may trigger an application's allocation error handler.
+
+The atomic lock serializes allocator access under the current guest model;
+it does not establish signal-handler, reentrant allocator or SMP safety. A
+deallocated object can be reused immediately, even if its containing page is
+still mapped. Synchronous `guest_api` calls preserve their Rust borrows while
+polling, but code using asynchronous raw SVCs must retain each object until its
+request completes; the page-level `-16` check does not pin individual objects.
+
+The integrated [`rust-global-allocator`](fixtures/rust-global-allocator.rs)
+fixture uses real `Box` and growing `Vec` allocations, retains a separate
+`HeapPage`, verifies object extents and 256-byte alignment, releases a hole and
+checks reuse, and rejects a 4,097-byte allocation. Its Vec bytes are written
+through the guest file API while the objects remain live. Three ELFs run at
+once; the runner stops and readmits one while the others continue, then checks
+that all process-owned pages are reclaimed. The integrated ordinary-release
+modern-transport QEMU series passed this scenario. The recorded legacy and
+feature-enabled traces predate this allocator integration.
+
+The first full run stopped the new fixture with exit code 9 before its gate.
+Inspection of the optimized LLVM IR showed that `alloc::alloc::alloc` and its
+null check had been eliminated and the fixture's failure branch was
+unconditional. This did not show that the allocator returned a non-null value.
+The revised fixture calls `GuestAllocator` through its `GlobalAlloc` trait
+implementation and observes the returned pointer. Optimized IR confirms a
+real call and null comparison; a focused QEMU run reached the 16-byte file
+write, and the complete integrated modern-transport rerun passed.

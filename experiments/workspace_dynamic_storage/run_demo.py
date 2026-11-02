@@ -1142,6 +1142,51 @@ def main():
    for name in mp_gates:
     if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('multi-page gate cleanup failed')
    if g.call('file_list',{})!=files_before:raise RuntimeError('multi-page fixture left files behind')
+   # Actual Rust Box/Vec allocations share a process-owned heap while a
+   # separate HeapPage owns page 0. The gate first carries the live Vec bytes.
+   alloc_gates=('a-rgate','b-rgate','c-rgate')
+   for name in alloc_gates:
+    if any(entry.get('name')==name for entry in files_before):raise RuntimeError('allocator fixture name already exists')
+    if not g.call('file_put',{'name':name,'data':'0'}).get('readback_verified'):raise RuntimeError('allocator gate setup failed')
+   image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-global-allocator.hex').read_text().strip())
+   alloc_upload=stage_program(g,image)
+   def alloc_phase(name,expected):
+    for _ in range(80):
+     got=g.call('file_get',{'name':name}).get('hex')
+     if got==expected.hex():return
+     time.sleep(.2)
+    raise RuntimeError('allocator fixture phase missing: '+str((name,expected.hex(),got)))
+   def start_alloc_actor(i):
+    task=g.call('process_spawn_staged',{'id':alloc_upload})
+    if task.get('slot')!=i:raise RuntimeError('allocator actor slot mismatch: '+str(task))
+    alloc_phase(alloc_gates[i],bytes(x^0xa5 for x in range(16)))
+    if not g.call('file_put',{'name':alloc_gates[i],'data':'g'}).get('readback_verified'):raise RuntimeError('allocator payload acknowledgement failed')
+    alloc_phase(alloc_gates[i],b'r')
+    return task
+   alloc_actors=[]
+   for i in range(3):
+    alloc_actors.append(start_alloc_actor(i))
+    present=all_tasks(lambda x:[sum(row) for row in x.get('all_heap_page_allocated',[])]==[2 if j<=i else 0 for j in range(3)],'allocator admission')
+    if present.get('frame_pool_assigned')!=5*(i+1):raise RuntimeError('allocator admission changed neighbor: '+str(present))
+   live=all_tasks(lambda x:[sum(row) for row in x.get('all_heap_page_allocated',[])]==[2]*3 and x.get('frame_pool_assigned')==15,'three allocators live')
+   frames=live.get('all_heap_page_frame_index',[])
+   if len(frames)!=3 or any(len(row)!=8 or any(not isinstance(x,int) for x in row[:2]) or any(x is not None for x in row[2:]) for row in frames) or len({x for row in frames for x in row[:2]})!=6:raise RuntimeError('allocator pages not distinct: '+str(live))
+   previous=live['all_io_completed']
+   if g.call('process_stop',{'slot':0,'incarnation':alloc_actors[0]['incarnation_text'],'boot_id':alloc_actors[0]['boot_id']}).get('stopped') is not True:raise RuntimeError('allocator actor stop failed')
+   stopped=all_tasks(lambda x:x.get('all_slot_states')==['exited','ready','ready'] and all(x.get('all_io_completed',[0]*3)[i]>previous[i] for i in (1,2)),'allocator neighbors after stop')
+   if [sum(row) for row in stopped.get('all_heap_page_allocated',[])]!=[0,2,2] or stopped.get('all_heap_page_scrubbed',[[False]*8])[0][:2]!=[True]*2 or stopped.get('frame_pool_assigned')!=10:raise RuntimeError('allocator stop failed to reclaim pages: '+str(stopped))
+   replacement=start_alloc_actor(0)
+   if replacement.get('incarnation',0)<=alloc_actors[0]['incarnation']:raise RuntimeError('allocator readmission is not fresh: '+str(replacement))
+   live=all_tasks(lambda x:[sum(row) for row in x.get('all_heap_page_allocated',[])]==[2]*3 and x.get('frame_pool_assigned')==15,'allocator after readmission')
+   if live.get('all_heap_page_frame_index')!=frames:raise RuntimeError('allocator frame reuse or neighbors changed: '+str((frames,live)))
+   for name in alloc_gates:
+    if not g.call('file_put',{'name':name,'data':'q'}).get('readback_verified'):raise RuntimeError('allocator fixture release failed')
+   done=all_tasks(lambda x:x.get('all_slot_states')==['exited']*3,'allocator fixture teardown')
+   if done.get('all_outcomes')!=[1]*3 or done.get('all_exit_codes')!=[0]*3 or [sum(row) for row in done.get('all_heap_page_allocated',[])]!=[0]*3 or any(row[:2]!=[True]*2 for row in done.get('all_heap_page_scrubbed',[])) or done.get('frame_pool_assigned')!=0:raise RuntimeError('allocator fixture cleanup failed: '+str(done))
+   g.call('upload_reset',{'id':alloc_upload})
+   for name in alloc_gates:
+    if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('allocator gate cleanup failed')
+   if g.call('file_list',{})!=files_before:raise RuntimeError('allocator fixture left files behind')
    if a.exercise_storage_fault:
     # A single direct channel can choose any two of three live actors.
     for name in ('a-igate','b-igate','c-igate'):

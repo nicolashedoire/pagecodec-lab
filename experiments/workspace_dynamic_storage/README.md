@@ -140,6 +140,13 @@ not a POSIX interface or a general allocator. The
 [`rust-private-heap`](fixtures/rust-private-heap.rs) program demonstrates
 this interface and constructs a `Vec` from a separately allocated raw buffer
 using a fixture-only one-page allocator. It does not test vector growth.
+[`guest_allocator.rs`](guest_allocator.rs) supplies a reusable bounded Rust
+`GlobalAlloc` for independent processes. It retains its pages until process
+exit, supports allocations fitting within one page and alignments up to 4 KiB,
+and has at most 256 live allocations. Deallocation permits reuse but does not
+erase the released bytes. Blocking file wrappers keep borrows alive until
+completion; any future asynchronous interface must likewise retain or pin its
+buffer until the operation completes.
 See [VFS.md](VFS.md) for the kernel ABI, resource limits and VM evidence.
 
 ### Interactive launcher and boot identity
