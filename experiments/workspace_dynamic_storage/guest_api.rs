@@ -145,3 +145,64 @@ pub fn tree_read_at(path: &str, output: &mut [u8], offset: usize, generation: u6
         match result as i64 { EAGAIN => core::hint::spin_loop(), n if n < 0 => return Err(n), n => return Ok(n as usize) }
     }
 }
+
+/// Sequential, incarnation-bound transfer. Abort explicitly or exit to reclaim it.
+#[must_use]
+pub struct TreeUpload { id: u64, next: usize, active: bool }
+
+impl TreeUpload {
+    pub fn begin(path: &str, size: usize, checksum: u64, generation: u64) -> Result<Self, i64> {
+        let path_ptr = path.as_ptr() as u64;
+        loop {
+            let mut result = path_ptr;
+            unsafe { asm!("svc #0x146", inout("x0") result, in("x1") path.len() as u64,
+                in("x2") size as u64, in("x3") checksum, in("x4") generation,
+                options(nostack)); }
+            match result as i64 {
+                EAGAIN => core::hint::spin_loop(),
+                n if n < 0 => return Err(n),
+                0 => return Err(-5),
+                n => return Ok(Self { id: n as u64, next: 0, active: true }),
+            }
+        }
+    }
+
+    /// Append a nonempty chunk of at most 32 bytes.
+    pub fn append(&mut self, bytes: &[u8]) -> Result<usize, i64> {
+        if !self.active { return Err(-116); }
+        loop {
+            let mut result = self.next as u64;
+            unsafe { asm!("svc #0x147", inout("x0") result, in("x1") bytes.as_ptr() as u64,
+                in("x2") bytes.len() as u64, in("x3") self.id, options(nostack)); }
+            match result as i64 {
+                EAGAIN => core::hint::spin_loop(),
+                n if n < 0 => return Err(n),
+                n if n as usize == bytes.len() => {
+                    self.next = self.next.checked_add(n as usize).ok_or(-75)?;
+                    return Ok(n as usize);
+                }
+                _ => return Err(-5),
+            }
+        }
+    }
+
+    pub fn commit(&mut self) -> Result<(), i64> { self.finish(true) }
+    pub fn abort(&mut self) -> Result<(), i64> { self.finish(false) }
+
+    fn finish(&mut self, commit: bool) -> Result<(), i64> {
+        if !self.active { return Err(-116); }
+        loop {
+            let mut result = self.id;
+            unsafe {
+                if commit { asm!("svc #0x148", inout("x0") result, options(nostack)); }
+                else { asm!("svc #0x149", inout("x0") result, options(nostack)); }
+            }
+            match result as i64 {
+                EAGAIN => core::hint::spin_loop(),
+                n if n < 0 => return Err(n),
+                0 => { self.active = false; return Ok(()); }
+                _ => return Err(-5),
+            }
+        }
+    }
+}

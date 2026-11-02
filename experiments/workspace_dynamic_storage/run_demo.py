@@ -1616,6 +1616,78 @@ def main():
    if protected_program_sectors(tree_el0_path)!=tree_el0_programs:raise RuntimeError('tree EL0 reads changed program regions')
    e.call('upload_reset',{'id':program});traces.append(e.trace);states.append(e.call('tree_status',{}))
   finally:e.close()
+  # Two real EL0 writers, same starting tree generation, per-incarnation stages.
+  # Separate disposable copies test 512-byte then full 16-KiB staged writes.
+  write_image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-tree-write.hex').read_text().strip())
+  def run_tree_writers(big,boot_index):
+   write_disk=Path(tmp)/('tree-el0-write-large.raw' if big else 'tree-el0-write-small.raw')
+   create(write_disk,tree_disk_path.read_bytes());program_sectors=protected_program_sectors(write_disk)
+   e=Guest(a.qemu,guest,write_disk,tmp,boot_index,out,a.transport)
+   try:
+    e.progress('before tree writers',timeout_image=True,expected_exit_code=0);e.wait_boot_identity()
+    opened=e.call('tree_open',{'dedicated':True});write_generation=opened['generation']
+    if opened.get('writable') is not True:raise RuntimeError('tree write volume not writable')
+    for path in ('/a','/b'):
+     update=e.call('tree_mkdir',{'path':path,'generation':write_generation})
+     if update.get('readback_verified') is not True:raise RuntimeError('tree writer mkdir failed')
+     write_generation=update['generation']
+    gates=('a-ugate','b-ugate');phases=('a-uphase','b-uphase')
+    names=[entry['name'] for entry in e.call('file_list',{})]
+    if any(name in names for name in gates+phases):raise RuntimeError('tree writer gate already exists')
+    def gate(name,value):
+     if not e.call('file_put',{'name':name,'data':value}).get('readback_verified'):raise RuntimeError('tree writer gate failed')
+    def phase(name,value):
+     for _ in range(900):
+      result=e.call('file_get',{'name':name}).get('hex')
+      if result==value.encode().hex():return
+      slot=0 if name[0]=='a' else 1;state=e.call('process_status',{})
+      if state.get('all_slot_states',[None]*3)[slot]=='exited':raise RuntimeError('tree writer exited before phase: '+str((name,value,result,state)))
+      time.sleep(.2)
+     raise RuntimeError('tree writer phase timeout: '+str((name,value,result)))
+    for name in gates:gate(name,'L' if big else '0')
+    for name in phases:gate(name,'0')
+    program=stage_program(e,write_image)
+    actors=[e.call('process_spawn_staged',{'id':program}) for _ in range(2)]
+    if [x.get('slot') for x in actors]!=[0,1]:raise RuntimeError('tree writer admissions failed: '+str(actors))
+    for name in phases:phase(name,'r')
+    ready=e.wait_independent(lambda x:x.get('slot_states')==['ready','ready'] and min(x.get('irq_counts',[0,0]))>0,'both tree writers staged')
+    if ready.get('frame_pool_assigned')!=6:raise RuntimeError('tree writer frame accounting invalid: '+str(ready))
+    gate(gates[0],'a');phase(phases[0],'d')
+    after_a=e.call('tree_status',{})
+    if int(after_a['generation'])!=int(write_generation)+1:raise RuntimeError('first tree writer did not advance generation: '+str(after_a))
+    gate(gates[1],'b');phase(phases[1],'e')
+    after_b=e.call('tree_status',{})
+    final_generation=after_b['generation']
+    if int(final_generation)!=int(write_generation)+2:raise RuntimeError('second tree writer did not retry at new generation: '+str(after_b))
+    gate(gates[0],'x');phase(phases[0],'s')
+    if e.call('process_stop',{'slot':0,'incarnation':actors[0]['incarnation_text'],'boot_id':actors[0]['boot_id']}).get('stopped') is not True:raise RuntimeError('tree writer stop failed')
+    before=e.call('process_status',{})['all_io_completed'][1]
+    e.wait_independent(lambda x:x.get('all_slot_states',[None]*3)[:2]==['exited','ready'] and x.get('all_io_completed',[0]*3)[1]>before,'neighbor after staged writer stop')
+    gate(gates[0],'p');gate(phases[0],'0')
+    replacement=e.call('process_spawn_staged',{'id':program})
+    if replacement.get('slot')!=0 or replacement.get('incarnation',0)<=actors[0]['incarnation']:raise RuntimeError('tree writer readmission failed: '+str(replacement))
+    phase(phases[0],'p');gate(gates[1],'q')
+    done=e.wait_independent(lambda x:x.get('slot_states')==['exited','exited'],'tree writers done')
+    if done.get('outcomes')!=[1,1] or done.get('exit_codes')!=[0,0] or done.get('frame_pool_assigned')!=0:raise RuntimeError('tree writer exit failure: '+str(done))
+    size_a=16384 if big else 512;size_b=513
+    data_a=bytes(((i*37+5)^(i>>8))&255 for i in range(size_a));data_b=bytes(((i*23+77)^(i>>8))&255 for i in range(size_b))
+    if chunked_tree_read(e,'/a/write',size_a,final_generation)!=data_a or chunked_tree_read(e,'/b/write',size_b,final_generation)!=data_b:raise RuntimeError('tree writer content differs')
+    entries={entry['path'] for entry in e.call('tree_list',{'generation':final_generation}).get('entries',[])}
+    if any(path in entries for path in ('/a/abort','/b/abort','/a/scrat')):raise RuntimeError('uncommitted stage was published: '+str(entries))
+    if protected_program_sectors(write_disk)!=program_sectors:raise RuntimeError('tree writers changed program regions')
+    e.call('upload_reset',{'id':program});traces.append(e.trace);states.append(e.call('tree_status',{}))
+   finally:e.close()
+   e=Guest(a.qemu,guest,write_disk,tmp,boot_index+1,out,a.transport)
+   try:
+    e.progress('after tree writer reboot',timeout_image=True,expected_exit_code=0)
+    opened=e.call('tree_open',{'dedicated':True})
+    if opened.get('generation')!=final_generation:raise RuntimeError('tree writer generation lost on reboot')
+    if chunked_tree_read(e,'/a/write',size_a,final_generation)!=data_a or chunked_tree_read(e,'/b/write',size_b,final_generation)!=data_b:raise RuntimeError('tree writer content lost on reboot')
+    if protected_program_sectors(write_disk)!=program_sectors:raise RuntimeError('tree writer reboot changed program regions')
+    traces.append(e.trace);states.append(e.call('tree_status',{}))
+   finally:e.close()
+  run_tree_writers(False,68)
+  run_tree_writers(True,70)
   # Two VM boots, one disposable clone; no host file or raw device is attached.
   chunk_disk=Path(tmp)/'chunk-offset.raw';create(chunk_disk,disk.read_bytes())
   chunk_image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-chunk-io.hex').read_text().strip())

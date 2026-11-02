@@ -854,8 +854,8 @@ plus sequential `tree_upload_begin`, `tree_upload_append`, `tree_upload_seal`,
 `tree_upload_commit` and `tree_upload_reset`. Upload chunks are at most 512
 bytes; size and a 64-bit FNV checksum must match. Mutating operations require
 the current generation, and a stale sealed upload cannot replace a newer tree.
-These mutation and listing operations are MCP-only; EL0 has the limited
-read-only interface described below.
+These operations are MCP-facing; EL0 has separate bounded read and staged
+write interfaces described below. Directory enumeration remains MCP-only.
 
 If one uniquely selected valid copy remains beside an unknown or invalid slot,
 an explicit open permits read/list in degraded, read-only mode. Mutations
@@ -896,8 +896,8 @@ replying. The user buffers remain valid only while their pages are mapped.
 `SVC #0x145` reports the currently published tree generation in `x1` (`0` if
 none is open), with status in `x0`. This is an advisory snapshot, not authority;
 each subsequent read revalidates the tree. The [guest API](guest_api.rs)
-exposes `tree_generation` and `tree_read_at`. There is no EL0 tree write,
-directory enumeration or generation-change subscription yet.
+exposes `tree_generation` and `tree_read_at`. There is no EL0 directory
+enumeration or generation-change subscription yet.
 
 The [`rust-tree-read`](fixtures/rust-tree-read.rs) integrated scenario is
 designed to open a tree with two distinct 513-byte files, reboot, check that
@@ -911,3 +911,38 @@ covered. A focused QEMU run and the complete integrated modern-transport run
 with storage fault injection passed; the recorded legacy trace predates this
 process-read integration. The first complete attempt exposed a missing test
 barrier file and was corrected before the successful rerun.
+
+### Process writes to the tree
+
+An independent process can stage a tree file with `SVC #0x146`: path and
+length in `x0`/`x1`, total bytes (at most 16 KiB) in `x2`, FNV-1a 64-bit
+checksum in `x3`, and expected generation in `x4`. A successful BEGIN returns
+a positive stage ID. `SVC #0x147` appends 1–32 bytes from a mapped user range
+at the sequential offset in `x0`, with buffer/length in `x1`/`x2` and the
+stage ID in `x3`. `SVC #0x148` commits and `SVC #0x149` aborts, each using
+that stage ID in `x0`. A result of `-11` means retry the same arguments; the
+kernel copies a submitted chunk before returning control to EL0.
+
+Each live process incarnation has at most one stage. Stage IDs must match the
+current incarnation and are never reused within a boot; they are not secrets or
+authentication. The same `/a/`, `/b/`, `/c/` namespace rule applies. At
+COMMIT the service rechecks the generation and only publishes after the tree
+snapshot is committed and read back. A stale-generation conflict returns
+`-116` and keeps the stage for explicit abort or process cleanup; a successful
+commit consumes it. Other errors include `-13` wrong namespace, `-16` stage
+already occupied, `-19` closed volume, `-21` directory, `-22` invalid input
+or chunk order, `-27` oversized file, `-28` tree quota and `-12` allocation
+failure. A process stop clears its in-memory stage; an already committed file
+is not undone. An uncertain storage write can block further writes until
+restart. Neither the checksum nor generation provides authentication or a
+power-loss durability guarantee.
+
+The [guest API](guest_api.rs) exposes an opt-in `TreeUpload` helper. The
+[`rust-tree-write`](fixtures/rust-tree-write.rs) integrated scenario is
+designed to exercise two independent writers, stale stage-ID rejection,
+generation collision and retry, and stop/readmission with a partial stage. It
+checks 512-byte and 16-KiB files through reboot on disposable disk clones and
+uses both raw SVCs and the helper. The integrated modern-transport QEMU run
+with storage fault injection passed. The recorded legacy trace predates these
+process-write calls. An earlier focused run validated the two-writer collision
+and cleanup before the full run.

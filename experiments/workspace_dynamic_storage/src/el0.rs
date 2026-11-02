@@ -139,7 +139,7 @@ static mut IMAGE_LOADED:bool=false;
 // Single CPU, EL1 service executes only between slices; IRQs are masked on
 // exception entry. The request queue and completions are fixed-size.
 #[derive(Clone,Copy,PartialEq,Eq)]
-pub struct Request {pub actor:usize,pub incarnation:u64,pub id:u64,pub save:bool,pub file_op:u8,pub file_offset:usize,pub read_capacity:usize,pub tree_generation:u64,pub doc_op:u8,pub binding_id:u64,pub key:[u8;16],pub key_len:usize,pub value:[u8;32],pub value_len:usize}
+pub struct Request {pub actor:usize,pub incarnation:u64,pub id:u64,pub save:bool,pub file_op:u8,pub file_offset:usize,pub read_capacity:usize,pub tree_generation:u64,pub tree_total:usize,pub tree_checksum:u64,pub tree_stage_id:u64,pub doc_op:u8,pub binding_id:u64,pub key:[u8;16],pub key_len:usize,pub value:[u8;32],pub value_len:usize}
 // Only the routing token is retained for a delayed-reply check; file bytes
 // from an exited task must not be retained in this fixture.
 #[derive(Clone,Copy)] struct CompletionToken {actor:usize,incarnation:u64,id:u64,binding_id:u64}
@@ -155,7 +155,7 @@ enum UserRegion {Data,Stack,Heap(u8)}
 #[derive(Clone,Copy,PartialEq,Eq)]
 struct UserLocation {region:UserRegion,offset:usize}
 #[derive(Clone,Copy)]
-struct GenericIo {token:CompletionToken,file_op:u8,file_offset:usize,tree_generation:u64,doc_op:u8,name:[u8;16],name_len:usize,name_location:UserLocation,dest_location:UserLocation,capacity:usize}
+struct GenericIo {token:CompletionToken,file_op:u8,file_offset:usize,tree_generation:u64,tree_total:usize,tree_checksum:u64,tree_stage_id:u64,doc_op:u8,name:[u8;16],name_len:usize,name_location:UserLocation,dest_location:UserLocation,capacity:usize}
 static mut GENERIC_IO:[Option<GenericIo>;3]=[None;3];
 static mut NEXT_GENERIC_ID:u64=8;
 // Aggregate only; never expose filenames, user addresses or file contents.
@@ -170,7 +170,7 @@ fn clear_generic_io(actor:usize) {
  // still Some, then clear the discriminant. Single CPU, SVC/service only.
  let p=unsafe{addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor)};
  if let Some(mut old)=unsafe{read_volatile(p)} {
-  old.file_op=0;old.file_offset=0;old.tree_generation=0;old.doc_op=0;old.name=[0;16];old.name_len=0;old.name_location=UserLocation{region:UserRegion::Data,offset:0};old.dest_location=UserLocation{region:UserRegion::Data,offset:0};old.capacity=0;
+  old.file_op=0;old.file_offset=0;old.tree_generation=0;old.tree_total=0;old.tree_checksum=0;old.tree_stage_id=0;old.doc_op=0;old.name=[0;16];old.name_len=0;old.name_location=UserLocation{region:UserRegion::Data,offset:0};old.dest_location=UserLocation{region:UserRegion::Data,offset:0};old.capacity=0;
   old.token=CompletionToken{actor:0,incarnation:0,id:0,binding_id:0};
   unsafe{write_volatile(p,Some(old))};
  }
@@ -700,7 +700,7 @@ fn descriptor(actor:usize,index:usize,id:u64)->Option<Request> {
  if !in_page(h,40) || unsafe{read64(h+32)}!=id {return None}
  let (kp,kn,vp,vn)=unsafe{(read64(h),read64(h+8),read64(h+16),read64(h+24))};
  if kn==0 || kn>16 || vn>32 || !in_page(kp,kn as usize) || !in_page(vp,vn as usize) {return None}
- let mut req=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:0,file_offset:0,read_capacity:0,tree_generation:0,doc_op:0,binding_id:0,key:[0;16],key_len:kn as usize,value:[0;32],value_len:vn as usize};
+ let mut req=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:0,file_offset:0,read_capacity:0,tree_generation:0,tree_total:0,tree_checksum:0,tree_stage_id:0,doc_op:0,binding_id:0,key:[0;16],key_len:kn as usize,value:[0;32],value_len:vn as usize};
  for i in 0..req.key_len {req.key[i]=unsafe{readbyte(kp+i as u64)}}
  for i in 0..req.value_len {req.value[i]=unsafe{readbyte(vp+i as u64)}}
  if core::str::from_utf8(&req.key[..req.key_len]).is_err() || core::str::from_utf8(&req.value[..req.value_len]).is_err(){return None}
@@ -713,8 +713,13 @@ fn submit(state:&mut Ipc,req:Request)->bool {
  if req.file_op==3 && (req.id<8 || req.file_offset>512 || req.read_capacity!=0 || req.file_offset.checked_add(req.value_len).is_none_or(|end|end>512)) {return false}
  if req.file_op==4 && (req.id<8 || req.file_offset>512 || !(1..=32).contains(&req.read_capacity) || req.value_len!=0) {return false}
  if req.file_op==5 && (req.id<8 || req.save || req.doc_op!=0 || req.file_offset>super::tree_store::MAX_FILE || !(1..=32).contains(&req.read_capacity) || req.value_len!=0 || req.tree_generation==0) {return false}
- if !matches!(req.file_op,3|4|5) && (req.file_offset!=0 || req.read_capacity!=0) {return false}
- if req.file_op!=5 && req.tree_generation!=0 {return false}
+ if req.file_op==6 && (req.id<8 || req.save || req.doc_op!=0 || req.binding_id!=0 || req.key_len==0 || req.key_len>16 || req.file_offset!=0 || req.read_capacity!=0 || req.tree_generation==0 || req.tree_stage_id!=0 || req.tree_total>super::tree_store::MAX_FILE || req.value_len!=0) {return false}
+ if req.file_op==7 && (req.id<8 || req.save || req.doc_op!=0 || req.binding_id!=0 || req.key_len!=0 || req.tree_generation!=0 || req.tree_total!=0 || req.tree_checksum!=0 || req.tree_stage_id==0 || req.tree_stage_id>i64::MAX as u64 || req.read_capacity!=0 || !(1..=32).contains(&req.value_len) || req.file_offset.checked_add(req.value_len).is_none_or(|end|end>super::tree_store::MAX_FILE)) {return false}
+ if matches!(req.file_op,8|9) && (req.id<8 || req.save || req.doc_op!=0 || req.binding_id!=0 || req.key_len!=0 || req.value_len!=0 || req.file_offset!=0 || req.read_capacity!=0 || req.tree_generation!=0 || req.tree_total!=0 || req.tree_checksum!=0 || req.tree_stage_id==0 || req.tree_stage_id>i64::MAX as u64) {return false}
+ if !matches!(req.file_op,3|4|5|7) && (req.file_offset!=0 || req.read_capacity!=0) {return false}
+ if !matches!(req.file_op,5|6) && req.tree_generation!=0 {return false}
+ if req.file_op!=6 && (req.tree_total!=0 || req.tree_checksum!=0) {return false}
+ if !matches!(req.file_op,7|8|9) && req.tree_stage_id!=0 {return false}
  if req.actor>=PROCESS_CAPACITY || req.incarnation!=incarnation(req.actor) || state.completions[i].id!=0 || state.len==2 || (req.id<=7 && state.accepted_len>=state.accepted.len()) {return false}
  let slot=(state.head+state.len)%2;state.queue[slot]=Some(req);state.len+=1;
  state.completions[i]=Completion{actor:req.actor,incarnation:req.incarnation,id:req.id,binding_id:req.binding_id,..EMPTY_COMPLETION};
@@ -834,6 +839,30 @@ pub fn complete_tree_read_error(request:&Request,error:TreeReadError)->bool {
  if !apply_completion(s,request.token(),false,&[]) {return false}
  s.completions[7+request.actor].write_errno=match error {TreeReadError::InvalidPath=>-22,TreeReadError::IsDirectory=>-21,TreeReadError::Unavailable=>-19,TreeReadError::Io=>-5,TreeReadError::Stale=>-116};true
 }
+/// Check the task slot and incarnation before retaining per-process service
+/// state. The one-CPU owner calls this after each EL0 slice and drops stale
+/// stages before processing requests from a later incarnation.
+pub fn independent_incarnation_live(actor:usize,generation:u64)->bool {
+ if actor>=PROCESS_CAPACITY || generation==0 || !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} || unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {return false}
+ let state=unsafe{read_volatile(addr_of!(TASK_STATE).cast::<u64>().add(actor))};
+ let current=unsafe{read_volatile(addr_of!(TASK_INCARNATIONS).cast::<u64>().add(actor))};
+ let published=unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS).cast::<u64>().add(actor))};
+ matches!(state,1|2|4) && current==generation && published==generation
+}
+/// Completion is only for a live, popped tree-write request. Errors are
+/// bounded ABI values; -11 remains reserved for a pending request.
+pub fn complete_tree_write(request:&Request,errno:i64,stage_id:u64)->bool {
+ if request.doc_op!=0 || !matches!(request.file_op,6|7|8|9) || request.id<8 || !independent_incarnation_live(request.actor,request.incarnation) || !request_is_live(request)
+  || !matches!(errno,0|-2|-5|-12|-13|-16|-19|-21|-22|-27|-28|-75|-116) {return false}
+ if errno==0 && request.file_op==6 {
+  if stage_id==0 || stage_id>i64::MAX as u64 {return false}
+ } else if stage_id!=0 {return false}
+ let s=unsafe{&mut *addr_of_mut!(IPC)};
+ let id_bytes=stage_id.to_le_bytes();
+ let bytes=if errno==0 && request.file_op==6 {&id_bytes[..]}else{&[]};
+ if !apply_completion(s,request.token(),errno==0,bytes) {return false}
+ s.completions[7+request.actor].write_errno=errno;true
+}
 unsafe fn pair_io_count(actor:usize,submitted:bool) {
  if read_volatile(addr_of!(PAIR_ACTIVE)) {
   let base=if submitted {addr_of_mut!(PAIR_IO_SUBMITTED)} else {addr_of_mut!(PAIR_IO_COMPLETED)};
@@ -871,6 +900,65 @@ fn stop_loaded_task(s:&mut Ipc,reason:u8)->u64 {
  cancel_loaded_requests(s);
  unsafe{write_volatile(addr_of_mut!(SPAWN_FAILED),true);write_volatile(addr_of_mut!(IMAGE_OUTCOMES).cast::<u8>().add(image-1),reason)};
  1
+}
+// 0x146 BEGIN: path x0/x1, total x2, FNV checksum x3, generation x4.
+// 0x147 APPEND: offset x0, source x1, length x2 (1..32), stage ID x3. Source bytes
+// are copied only on first submission; the same arguments must be retried.
+// 0x148 COMMIT and 0x149 ABORT take stage ID in x0. One operation per
+// process can be outstanding; -11 means poll rather than submit a new one.
+fn tree_write(f:&mut Frame,s:&mut Ipc,actor:usize,op:u8) {
+ if !matches!(op,6|7|8|9) || !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} || unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {direct_result(f,-38);return}
+ let mut name=[0u8;16];let mut name_len=0usize;
+ let mut location=UserLocation{region:UserRegion::Data,offset:0};
+ let mut offset=0usize;let mut len=0usize;let mut total=0usize;let mut checksum=0u64;let mut generation=0u64;let mut stage_id=0u64;
+ if op==6 {
+  let (address,n,raw_total,sum,gen)=(f.regs[0],f.regs[1],f.regs[2],f.regs[3],f.regs[4]);
+  if n==0 || n>16 || gen==0 {direct_result(f,-22);return}
+  if raw_total>super::tree_store::MAX_FILE as u64 {direct_result(f,-27);return}
+  name_len=n as usize;total=raw_total as usize;checksum=sum;generation=gen;
+  let Some(loc)=user_location(actor,address,name_len,false,false) else{direct_result(f,-14);return};location=loc;
+  for (i,byte) in name[..name_len].iter_mut().enumerate() {*byte=unsafe{readbyte(address+i as u64)}}
+  if !name[..name_len].is_ascii() {direct_result(f,-22);return}
+ } else if op==7 {
+  let (raw_offset,address,n,token)=(f.regs[0],f.regs[1],f.regs[2],f.regs[3]);
+  if n==0 || n>32 || token==0 || token>i64::MAX as u64 {direct_result(f,-22);return}
+  stage_id=token;
+  if raw_offset.checked_add(n).is_none_or(|end|end>super::tree_store::MAX_FILE as u64) {direct_result(f,-27);return}
+  offset=raw_offset as usize;len=n as usize;
+  let Some(loc)=user_location(actor,address,len,false,false) else{direct_result(f,-14);return};location=loc;
+ } else {
+  stage_id=f.regs[0];
+  if stage_id==0 || stage_id>i64::MAX as u64 {direct_result(f,-22);return}
+ }
+ if let Some(pending)=unsafe{read_volatile(addr_of!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor))} {
+  if pending.doc_op!=0 || pending.file_op!=op || pending.file_offset!=offset || pending.tree_generation!=generation
+   || pending.tree_total!=total || pending.tree_checksum!=checksum || pending.tree_stage_id!=stage_id || pending.token.actor!=actor || pending.token.incarnation!=incarnation(actor)
+   || pending.name!=name || pending.name_len!=name_len || pending.name_location!=location || pending.dest_location!=location || pending.capacity!=len {direct_result(f,-22);return}
+  let c=&mut s.completions[7+actor];
+  if c.id!=pending.token.id || c.actor!=actor || c.incarnation!=pending.token.incarnation {halt()}
+  if !c.applied {direct_result(f,-11);return}
+  let code=if c.write_errno!=0 {c.write_errno} else if c.success {
+   if op==6 {
+    if c.data_len!=8 {halt()}
+    let token=u64::from_le_bytes(c.data[..8].try_into().unwrap_or_else(|_|halt()));
+    if token==0 || token>i64::MAX as u64 {halt()} token as i64
+   } else if op==7 {len as i64}else{0}
+  } else {-5};
+  *c=EMPTY_COMPLETION;clear_generic_io(actor);unsafe{let p=addr_of_mut!(GENERIC_WRITE_COMPLETED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,false)};
+  direct_result(f,code);return
+ }
+ let mut value=[0u8;32];
+ if op==7 {for (i,byte) in value[..len].iter_mut().enumerate() {*byte=unsafe{readbyte(f.regs[1]+i as u64)}}}
+ let id=unsafe{read_volatile(addr_of!(NEXT_GENERIC_ID))};let Some(next)=id.checked_add(1) else{direct_result(f,-75);return};
+ let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:op,file_offset:offset,read_capacity:0,tree_generation:generation,tree_total:total,tree_checksum:checksum,tree_stage_id:stage_id,doc_op:0,binding_id:0,key:name,key_len:name_len,value,value_len:len};
+ if !submit(s,request) {direct_result(f,-11);return}
+ unsafe {
+  write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);
+  write_volatile(addr_of_mut!(PAIR_LAST_TOKENS).cast::<Option<CompletionToken>>().add(actor),Some(request.token()));
+  write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:op,file_offset:offset,tree_generation:generation,tree_total:total,tree_checksum:checksum,tree_stage_id:stage_id,doc_op:0,name,name_len,name_location:location,dest_location:location,capacity:len}));
+  let p=addr_of_mut!(GENERIC_WRITE_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true);
+ }
+ direct_result(f,-11);
 }
 // SVC 0x140: poll one bounded read. x0=name VA, x1=name length,
 // x2=destination VA, x3=capacity; x0 is bytes read or a negative error.
@@ -912,10 +1000,10 @@ fn generic_read(f:&mut Frame,s:&mut Ipc,actor:usize,mode:u8) {
  }
  let id=unsafe{read_volatile(addr_of!(NEXT_GENERIC_ID))};
  let Some(next)=id.checked_add(1) else{result(f,-75);return};
- let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:op,file_offset:offset,read_capacity:if mode!=0 {capacity}else{0},tree_generation:generation,doc_op:0,binding_id:0,key:name,key_len:name_len,value:[0;32],value_len:0};
+ let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:op,file_offset:offset,read_capacity:if mode!=0 {capacity}else{0},tree_generation:generation,tree_total:0,tree_checksum:0,tree_stage_id:0,doc_op:0,binding_id:0,key:name,key_len:name_len,value:[0;32],value_len:0};
  if !submit(s,request) {result(f,-11);return}
  if unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} {unsafe{write_volatile(addr_of_mut!(PAIR_LAST_TOKENS).cast::<Option<CompletionToken>>().add(actor),Some(request.token()))}}
- unsafe{write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:op,file_offset:offset,tree_generation:generation,doc_op:0,name,name_len,name_location,dest_location,capacity}));let p=addr_of_mut!(GENERIC_READ_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true)};
+ unsafe{write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:op,file_offset:offset,tree_generation:generation,tree_total:0,tree_checksum:0,tree_stage_id:0,doc_op:0,name,name_len,name_location,dest_location,capacity}));let p=addr_of_mut!(GENERIC_READ_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true)};
  result(f,-11);
 }
 // SVC 0x141: poll one bounded write. x0=name VA, x1=name length,
@@ -951,10 +1039,10 @@ fn generic_write(f:&mut Frame,s:&mut Ipc,actor:usize,at_offset:bool) {
  for (i,byte) in value[..len].iter_mut().enumerate() {*byte=unsafe{readbyte(src_va+i as u64)}}
  let id=unsafe{read_volatile(addr_of!(NEXT_GENERIC_ID))};
  let Some(next)=id.checked_add(1) else{result(f,-75);return};
- let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:op,file_offset:offset,read_capacity:0,tree_generation:0,doc_op:0,binding_id:0,key:name,key_len:name_len,value,value_len:len};
+ let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:op,file_offset:offset,read_capacity:0,tree_generation:0,tree_total:0,tree_checksum:0,tree_stage_id:0,doc_op:0,binding_id:0,key:name,key_len:name_len,value,value_len:len};
  if !submit(s,request) {result(f,-11);return}
  if unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} {unsafe{write_volatile(addr_of_mut!(PAIR_LAST_TOKENS).cast::<Option<CompletionToken>>().add(actor),Some(request.token()))}}
- unsafe{write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:op,file_offset:offset,tree_generation:0,doc_op:0,name,name_len,name_location,dest_location:src_location,capacity:len}));let p=addr_of_mut!(GENERIC_WRITE_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true)};
+ unsafe{write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:op,file_offset:offset,tree_generation:0,tree_total:0,tree_checksum:0,tree_stage_id:0,doc_op:0,name,name_len,name_location,dest_location:src_location,capacity:len}));let p=addr_of_mut!(GENERIC_WRITE_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true)};
  result(f,-11);
 }
 /// Complete a popped document request; errno 0 means success, otherwise a
@@ -1004,11 +1092,11 @@ fn document_io(f:&mut Frame,s:&mut Ipc,actor:usize,put:bool) {
   if core::str::from_utf8(&value[..value_len]).is_err() {direct_result(f,-22);return}
  }
  let id=unsafe{read_volatile(addr_of!(NEXT_GENERIC_ID))};let Some(next)=id.checked_add(1) else{direct_result(f,-75);return};
- let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:0,file_offset:0,read_capacity:0,tree_generation:0,doc_op:op,binding_id,key,key_len,value,value_len:if put {value_len}else{0}};
+ let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:0,file_offset:0,read_capacity:0,tree_generation:0,tree_total:0,tree_checksum:0,tree_stage_id:0,doc_op:op,binding_id,key,key_len,value,value_len:if put {value_len}else{0}};
  if !submit(s,request) {direct_result(f,-11);return}
  unsafe{
   write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);
-  write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:0,file_offset:0,tree_generation:0,doc_op:op,name:key,name_len:key_len,name_location:key_location,dest_location:value_location,capacity:value_len}));
+  write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:0,file_offset:0,tree_generation:0,tree_total:0,tree_checksum:0,tree_stage_id:0,doc_op:op,name:key,name_len:key_len,name_location:key_location,dest_location:value_location,capacity:value_len}));
   let p=addr_of_mut!(DOCUMENT_SUBMITTED).cast::<u64>().add(actor);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true);
  }
  direct_result(f,-11);
@@ -1054,6 +1142,7 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
    0x142=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_write(f,state,actor,true);return 0},
    0x143=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_read(f,state,actor,1);return 0},
    0x144=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_read(f,state,actor,2);return 0},
+   0x146..=0x149=>{let state=unsafe{&mut *addr_of_mut!(IPC)};tree_write(f,state,actor,((esr&0xff) as u8)-0x40);return 0},
    0x145=>{
     // Advisory published generation, not an authorization or a guarantee
     // that a later disk-backed read succeeds. Zero means no open volume.
@@ -1141,7 +1230,7 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
    }
   },
   0x110 if actor==0 && s.consumed_len==3 && s.completions[3].id==0 => {
-   let r=Request{actor,incarnation:incarnation(actor),id:4,save:true,file_op:0,file_offset:0,read_capacity:0,tree_generation:0,doc_op:0,binding_id:0,key:[0;16],key_len:0,value:[0;32],value_len:0};
+   let r=Request{actor,incarnation:incarnation(actor),id:4,save:true,file_op:0,file_offset:0,read_capacity:0,tree_generation:0,tree_total:0,tree_checksum:0,tree_stage_id:0,doc_op:0,binding_id:0,key:[0;16],key_len:0,value:[0;32],value_len:0};
    if !submit(s,r) {halt()}
   },
   0x130 if actor==0 && unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} && s.completions[5].id==0 => {

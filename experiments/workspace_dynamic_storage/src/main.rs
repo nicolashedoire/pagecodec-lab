@@ -13,6 +13,7 @@ mod program_store_v2;
 mod tree_store;
 mod tree_disk;
 mod tree_staging;
+mod tree_guest_staging;
 mod net;
 extern crate alloc;
 use alloc::format;
@@ -500,6 +501,32 @@ fn valid_tree_guest_path(path:&str)->bool {
         segment.iter().all(|b|b.is_ascii_alphanumeric() || matches!(b,b'.'|b'_'|b'-'))
     })
 }
+fn tree_guest_permitted(actor:usize,path:&str)->bool {
+    let prefix=match actor {0=>"/a/",1=>"/b/",2=>"/c/",_=>return false};
+    path.starts_with(prefix)
+}
+fn tree_guest_stage_error(error:tree_guest_staging::Error)->i64 {
+    use tree_guest_staging::Error::*;
+    match error {Invalid=>-22,Stale=>-116,Busy=>-16,TooLarge=>-27,OutOfMemory=>-12,Exhausted=>-75}
+}
+fn tree_guest_store_error(error:tree_store::Error)->i64 {
+    use tree_store::Error::*;
+    match error {
+        IsDirectory=>-21,
+        TooManyEntries|StorageFull=>-28,
+        FileTooLarge|Overflow=>-27,
+        OutOfMemory=>-12,
+        _=>-22,
+    }
+}
+fn tree_guest_volume_error(error:&str)->i64 {
+    match error {
+        "tree not opened"=>-19,
+        "stale tree generation"=>-116,
+        e if e.ends_with("allocation failed")=>-12,
+        _=>-5,
+    }
+}
 
 // A discovery snapshot only: it is not an authorization or a disk check.
 // A shared storage uncertainty suppresses discovery immediately, even if no
@@ -749,6 +776,7 @@ pub extern "C" fn graph_main() -> ! {
     let mut upload=staging::Staging::new();
     let mut tree_volume=TreeVolume::new();
     let mut tree_upload=tree_staging::Staging::new();
+    let mut tree_guest_uploads=tree_guest_staging::Stages::new();
     let restore_before=document.snapshot();
     let mut restore_status="unavailable";
     let mut restore_generation:Option<u64>=None;
@@ -809,6 +837,9 @@ pub extern "C" fn graph_main() -> ! {
     const SERVICE_POLLS: u32 = 20_000;
     let mut service_polls=SERVICE_POLLS;
     loop {
+        // Revoke stale process-owned uploads even when disk uncertainty keeps
+        // EL0 execution suspended. This is not a guarantee of physical erasure.
+        tree_guest_uploads.reap(el0::independent_incarnation_live);
         if let Some(ref mut source)=entropy {source.poll()}
         network.poll();
         if service_polls>=SERVICE_POLLS {
@@ -819,6 +850,7 @@ pub extern "C" fn graph_main() -> ! {
           // the QEMU guest can still report its state and serve MCP reads.
           if !STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed) {
             el0::run_slice([files.read_for_load("init.bin",512).ok(),files.read_for_load("fault.bin",512).ok(),files.read_for_load("badsvc.bin",512).ok(),files.read_for_load("next.bin",512).ok()]);
+            tree_guest_uploads.reap(el0::independent_incarnation_live);
             // No EL0 task runs while this sole service owns the document.
             // Two entries at most can have been queued before this slice ends.
             for _ in 0..2 {
@@ -890,6 +922,53 @@ pub extern "C" fn graph_main() -> ! {
                         }
                     }
                     if !el0::complete_document(&request,&reply[..reply_len],errno) {halt()}
+                    continue;
+                }
+                if matches!(request.file_op,6..=9) {
+                    // One stage per live actor/incarnation. Kernel copied the
+                    // submitted path/chunk before returning from the SVC.
+                    if !el0::is_pair_request(&request) {halt()}
+                    let mut denied=false;
+                    let result=(||->Result<u64,i64> {
+                        match request.file_op {
+                            6=>{
+                                let path=request.key.get(..request.key_len).and_then(|b|core::str::from_utf8(b).ok()).ok_or(-22)?;
+                                if !valid_tree_guest_path(path) {return Err(-22)}
+                                if !tree_guest_permitted(request.actor,path) {denied=true;return Ok(0)}
+                                let disk=block.as_mut().ok_or(-19)?;
+                                tree_volume.current(disk,request.tree_generation,true).map_err(tree_guest_volume_error)?;
+                                let mut candidate=tree_volume.candidate().map_err(tree_guest_volume_error)?;
+                                candidate.put(path,&[]).map_err(tree_guest_store_error)?;
+                                tree_guest_uploads.begin(request.actor,request.incarnation,path,request.tree_total,request.tree_checksum,request.tree_generation).map_err(tree_guest_stage_error)
+                            }
+                            7=>{
+                                let bytes=request.value.get(..request.value_len).ok_or(-22)?;
+                                tree_guest_uploads.append(request.actor,request.incarnation,request.tree_stage_id,request.file_offset,bytes).map(|_|0).map_err(tree_guest_stage_error)
+                            }
+                            8=>{
+                                let (path,bytes,generation)=tree_guest_uploads.content(request.actor,request.incarnation,request.tree_stage_id).map_err(tree_guest_stage_error)?;
+                                if !valid_tree_guest_path(path) {return Err(-22)}
+                                if !tree_guest_permitted(request.actor,path) {denied=true;return Ok(0)}
+                                let disk=block.as_mut().ok_or(-19)?;
+                                tree_volume.current(disk,generation,true).map_err(tree_guest_volume_error)?;
+                                let mut candidate=tree_volume.candidate().map_err(tree_guest_volume_error)?;
+                                candidate.put(path,bytes).map_err(tree_guest_store_error)?;
+                                // Commit publishes the candidate only after
+                                // stage/commit/flush/readback all succeed.
+                                tree_volume.commit(disk,generation,candidate).map(|_|0).map_err(tree_guest_volume_error)
+                            }
+                            9=>tree_guest_uploads.abort(request.actor,request.incarnation,request.tree_stage_id).map(|_|0).map_err(tree_guest_stage_error),
+                            _=>Err(-22),
+                        }
+                    })();
+                    // A successful commit consumes the stage. An ambiguous
+                    // post-write failure forbids retry and revokes it too.
+                    if request.file_op==8 && ((result.is_ok() && !denied) || STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed)) {
+                        let _=tree_guest_uploads.abort(request.actor,request.incarnation,request.tree_stage_id);
+                    }
+                    let (errno,id)=if denied {(-13,0)} else {match result {Ok(id)=>(0,id),Err(errno)=>(errno,0)}};
+                    let completed=el0::complete_tree_write(&request,errno,id);
+                    if !completed {halt()}
                     continue;
                 }
                 if request.file_op==5 {
