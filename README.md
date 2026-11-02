@@ -16,6 +16,8 @@ The proposed user interface includes a [floating voice assistant](docs/VOICE_ASS
 
 Development of the proposed system now uses [Rust and a VM-first test plan](docs/RUST_SYSTEM.md). The first [workspace core](experiments/system_core/README.md) is user-space code; it is not a bootable operating system.
 
+The [integrated prototype roadmap](docs/PROTOTYPE_ROADMAP.md) records the current VM baseline and the work still required for a usable system.
+
 The [dual-pointer VM experiment](experiments/dual_pointer_display/README.md) boots a minimal Rust guest, draws its own screen, receives virtual tablet input and exposes a small MCP server for moving the second pointer and editing synthetic document copies. The panels are graphical mockups, not isolated workspaces or applications. A [reproducible QEMU run](experiments/dual_pointer_display/README.md#repeat-the-end-to-end-demonstration) records synthetic input and the MCP exchange. [Native Apple Silicon boot research](docs/NATIVE_BOOT_RESEARCH.md) documents the work still needed before any physical installation.
 
 The separate [extensible actor registry](experiments/actor_core/README.md) models multiple participants and pointers. A [workspace bridge](experiments/workspace_bridge/README.md) connects actor labels to two document copies and a deterministic merge; it does not yet use AI to resolve conflicts. The [VM integration contracts](docs/VM_INTEGRATION_CONTRACTS.md) describe how the pieces might connect and what is still missing.
