@@ -804,3 +804,34 @@ predate this change.
 An earlier run was stopped before the FP scenario when a review found that
 the fixture overwrote the register holding its gate name. The fixture was
 corrected, rebuilt and reviewed before the successful run.
+
+### Offset-based file access
+
+Independent ELF processes can issue `SVC #0x142` to write a chunk and
+`SVC #0x143` to read a chunk. In both cases `x0`/`x1` specify the filename,
+`x2`/`x3` specify a user buffer and size, and `x4` is the byte offset. Each
+chunk is at most 32 bytes; reads require a nonzero destination capacity and
+writes may be empty. The [guest API](guest_api.rs) wraps these calls as
+`read_at` and `write_at` and polls the same arguments through completion.
+
+A read can return fewer bytes than requested and returns zero at or beyond
+EOF, with the requested offset limited to 512. An existing file can be
+overwritten in place or extended at EOF, retaining an unmodified suffix.
+Creation is allowed only at offset zero; attempts to create holes return
+`-22`. A write extending beyond 512 bytes, including integer overflow, returns
+`-27`. Missing-file reads return `-2`, invalid user ranges `-14`, mismatched
+retry arguments `-22`, and outstanding operations `-11`. Write completion
+follows the same candidate snapshot and readback policy as the earlier write
+interface, including its uncertain post-commit behavior and lack of proven
+power-loss durability. The flat catalog, total-byte limit, lack of directories
+and unauthenticated MCP interface remain unchanged.
+
+The integrated [`rust-chunk-io`](fixtures/rust-chunk-io.rs) fixture is
+designed to create a 512-byte file with sixteen writes, replace ten bytes
+across an earlier chunk boundary, reject holes/overflow and invalid ranges,
+then verify reads, a short final read and EOF after a VM restart on the same
+disposable disk. A changed offset during polling must be rejected before the
+original request is consumed. The guest Rust wrappers are exercised alongside
+the raw ABI, including empty input slices and persistence of an empty file.
+The integrated modern-transport QEMU run with storage fault injection passed
+this scenario; the recorded legacy trace predates this integration.

@@ -1394,6 +1394,44 @@ def main():
    if g.call('file_list',{})!=files_before:raise RuntimeError('multi-channel fixture left files behind')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
+  # Two VM boots, one disposable clone; no host file or raw device is attached.
+  chunk_disk=Path(tmp)/'chunk-offset.raw';create(chunk_disk,disk.read_bytes())
+  chunk_image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-chunk-io.hex').read_text().strip())
+  expected_chunk=bytearray((i&255)^0x5a for i in range(512));expected_chunk[30:40]=b'CHANGED123'
+  def chunk_phase(guest,value):
+   for _ in range(100):
+    got=guest.call('file_get',{'name':'a-ogate'}).get('hex')
+    if got==value.encode().hex():return
+    time.sleep(.2)
+   raise RuntimeError('chunk phase missing: '+str((value,got)))
+  for boot in (0,1):
+   chunk=Guest(a.qemu,guest,chunk_disk,tmp,56+boot,out,a.transport)
+   try:
+    chunk.progress('before offset task',timeout_image=True,expected_exit_code=0);chunk.wait_boot_identity()
+    if boot==0:
+     for name in ('a-chunk','a-ogate','a-empty'):
+      if any(entry.get('name')==name for entry in chunk.call('file_list',{})):raise RuntimeError('offset fixture name already exists')
+     if not chunk.call('file_put',{'name':'a-ogate','data':'0'}).get('readback_verified'):raise RuntimeError('offset gate setup failed')
+    else:
+     if chunk.call('file_get',{'name':'a-chunk'})!={'name':'a-chunk','hex':expected_chunk.hex()}:raise RuntimeError('offset write not restored on reboot')
+     if chunk.call('file_get',{'name':'a-empty'})!={'name':'a-empty','hex':''}:raise RuntimeError('empty file not restored on reboot')
+     if not chunk.call('file_put',{'name':'a-ogate','data':'r'}).get('readback_verified'):raise RuntimeError('offset restore gate failed')
+    chunk_upload=stage_program(chunk,chunk_image)
+    task=chunk.call('process_spawn_staged',{'id':chunk_upload})
+    if task.get('slot')!=0:raise RuntimeError('offset process admission failed: '+str(task))
+    if boot==0:
+     chunk_phase(chunk,'w')
+     if chunk.call('file_get',{'name':'a-chunk'})!={'name':'a-chunk','hex':expected_chunk.hex()}:raise RuntimeError('offset writes or suffix mismatch')
+     if chunk.call('process_stop',{'slot':0,'incarnation':task['incarnation_text'],'boot_id':task['boot_id']}).get('stopped') is not True:raise RuntimeError('offset process stop failed')
+     state=chunk.wait_independent(lambda x:x.get('all_slot_states',[None]*3)[0]=='exited','offset writer stopped')
+     if state.get('all_outcomes',[None]*3)[0]!=4 or state.get('frame_pool_assigned')!=0:raise RuntimeError('offset writer cleanup failed: '+str(state))
+    else:
+     chunk_phase(chunk,'v')
+     state=chunk.wait_independent(lambda x:x.get('all_slot_states',[None]*3)[0]=='exited','offset reader exited')
+     if state.get('all_outcomes',[None]*3)[0]!=1 or state.get('all_exit_codes',[None]*3)[0]!=0 or state.get('frame_pool_assigned')!=0:raise RuntimeError('offset reader failed: '+str(state))
+     if chunk.call('file_get',{'name':'a-chunk'})!={'name':'a-chunk','hex':expected_chunk.hex()}:raise RuntimeError('offset read unexpectedly modified file')
+    chunk.call('upload_reset',{'id':chunk_upload});traces.append(chunk.trace);states.append(chunk.call('storage_status',{}))
+   finally:chunk.close()
   # Separate disposable image: document PUT persists before process ACK.
   doc_disk=Path(tmp)/'document-process.raw';create(doc_disk,disk.read_bytes())
   d=Guest(a.qemu,guest,doc_disk,tmp,54,out,a.transport)

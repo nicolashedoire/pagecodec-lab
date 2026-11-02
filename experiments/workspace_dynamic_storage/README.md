@@ -147,6 +147,12 @@ and has at most 256 live allocations. Deallocation permits reuse but does not
 erase the released bytes. Blocking file wrappers keep borrows alive until
 completion; any future asynchronous interface must likewise retain or pin its
 buffer until the operation completes.
+
+The guest API also provides offset-based `read_at` and `write_at` calls, each
+transferring up to 32 bytes. An application can use these calls to access a
+larger bounded file without replacing its entire contents on every write.
+Each operation is committed separately; a sequence of writes is not one atomic
+transaction. The current file catalog and its persistence limits still apply.
 See [VFS.md](VFS.md) for the kernel ABI, resource limits and VM evidence.
 
 ### Interactive launcher and boot identity

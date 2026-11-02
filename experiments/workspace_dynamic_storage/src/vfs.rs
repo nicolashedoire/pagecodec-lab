@@ -58,6 +58,37 @@ impl Files {
         self.entries.get(name).map(Vec::as_slice).ok_or("file not found")
     }
 
+    // Return only bytes available at the offset, including an empty slice at
+    // or beyond EOF. Do not add offset and capacity: a caller cannot overflow
+    // that addition even when requesting bytes close to the end of a file.
+    pub fn read_at(&self, name: &str, offset: usize, capacity: usize) -> Result<&[u8], &'static str> {
+        if !(1..=32).contains(&capacity) || offset > MAX_FILE { return Err("invalid read arguments"); }
+        let file = self.get(name)?;
+        let start = offset.min(file.len());
+        let count = capacity.min(file.len() - start);
+        Ok(&file[start..start + count])
+    }
+
+    // Build a private candidate: the owner must commit a snapshot before
+    // publishing it. An empty write at offset zero creates a missing file.
+    pub fn write_at_candidate(&self, name: &str, offset: usize, data: &[u8]) -> Result<Vec<u8>, &'static str> {
+        if !valid_name(name) { return Err("invalid filename"); }
+        let end = offset.checked_add(data.len()).ok_or("file too large")?;
+        if end > MAX_FILE { return Err("file too large"); }
+        let old = self.entries.get(name);
+        let previous = old.map_or(&[][..], Vec::as_slice);
+        if offset > previous.len() { return Err("invalid offset"); }
+        if old.is_none() && self.entries.len() == MAX_FILES { return Err("too many files"); }
+        let size = previous.len().max(end);
+        if self.total - previous.len() + size > MAX_TOTAL { return Err("catalog too large"); }
+        let mut next = Vec::new();
+        next.try_reserve_exact(size).map_err(|_| "out of memory")?;
+        next.extend_from_slice(previous);
+        next.resize(size, 0);
+        next[offset..end].copy_from_slice(data);
+        Ok(next)
+    }
+
     // Loader receives a slice of the existing catalog, not an unbounded copy.
     // The caller must validate the program format and execute permissions.
     pub fn read_for_load(&self, name:&str, max:usize)->Result<&[u8], &'static str> {

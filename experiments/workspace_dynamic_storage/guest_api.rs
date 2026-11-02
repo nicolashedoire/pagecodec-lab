@@ -85,11 +85,39 @@ pub fn read_file(name: &str, output: &mut [u8]) -> Result<usize, i64> {
 /// Write a guest file; the kernel snapshots the input bytes on submission.
 pub fn write_file(name: &str, input: &[u8]) -> Result<usize, i64> {
     let name_ptr = name.as_ptr() as u64;
+    // An empty Rust slice may have a dangling pointer. The ABI still expects
+    // a mapped address for zero-byte buffers, so reuse the validated name.
+    let input_ptr = if input.is_empty() { name_ptr } else { input.as_ptr() as u64 };
     loop {
         let mut result = name_ptr;
         unsafe { asm!("svc #0x141", inout("x0") result, in("x1") name.len() as u64,
-            in("x2") input.as_ptr() as u64, in("x3") input.len() as u64,
+            in("x2") input_ptr, in("x3") input.len() as u64,
             options(nostack)); }
+        match result as i64 { EAGAIN => core::hint::spin_loop(), n if n < 0 => return Err(n), n => return Ok(n as usize) }
+    }
+}
+
+/// Read at a byte offset; one call transfers at most 32 bytes. Zero means EOF.
+pub fn read_at(name: &str, output: &mut [u8], offset: usize) -> Result<usize, i64> {
+    let name_ptr = name.as_ptr() as u64;
+    loop {
+        let mut result = name_ptr;
+        unsafe { asm!("svc #0x143", inout("x0") result, in("x1") name.len() as u64,
+            in("x2") output.as_mut_ptr() as u64, in("x3") output.len() as u64,
+            in("x4") offset as u64, options(nostack)); }
+        match result as i64 { EAGAIN => core::hint::spin_loop(), n if n < 0 => return Err(n), n => return Ok(n as usize) }
+    }
+}
+
+/// Update a byte range without truncating the suffix. Gaps are rejected.
+pub fn write_at(name: &str, input: &[u8], offset: usize) -> Result<usize, i64> {
+    let name_ptr = name.as_ptr() as u64;
+    let input_ptr = if input.is_empty() { name_ptr } else { input.as_ptr() as u64 };
+    loop {
+        let mut result = name_ptr;
+        unsafe { asm!("svc #0x142", inout("x0") result, in("x1") name.len() as u64,
+            in("x2") input_ptr, in("x3") input.len() as u64,
+            in("x4") offset as u64, options(nostack)); }
         match result as i64 { EAGAIN => core::hint::spin_loop(), n if n < 0 => return Err(n), n => return Ok(n as usize) }
     }
 }

@@ -139,7 +139,7 @@ static mut IMAGE_LOADED:bool=false;
 // Single CPU, EL1 service executes only between slices; IRQs are masked on
 // exception entry. The request queue and completions are fixed-size.
 #[derive(Clone,Copy,PartialEq,Eq)]
-pub struct Request {pub actor:usize,pub incarnation:u64,pub id:u64,pub save:bool,pub file_op:u8,pub doc_op:u8,pub binding_id:u64,pub key:[u8;16],pub key_len:usize,pub value:[u8;32],pub value_len:usize}
+pub struct Request {pub actor:usize,pub incarnation:u64,pub id:u64,pub save:bool,pub file_op:u8,pub file_offset:usize,pub read_capacity:usize,pub doc_op:u8,pub binding_id:u64,pub key:[u8;16],pub key_len:usize,pub value:[u8;32],pub value_len:usize}
 // Only the routing token is retained for a delayed-reply check; file bytes
 // from an exited task must not be retained in this fixture.
 #[derive(Clone,Copy)] struct CompletionToken {actor:usize,incarnation:u64,id:u64,binding_id:u64}
@@ -155,7 +155,7 @@ enum UserRegion {Data,Stack,Heap(u8)}
 #[derive(Clone,Copy,PartialEq,Eq)]
 struct UserLocation {region:UserRegion,offset:usize}
 #[derive(Clone,Copy)]
-struct GenericIo {token:CompletionToken,file_op:u8,doc_op:u8,name:[u8;16],name_len:usize,name_location:UserLocation,dest_location:UserLocation,capacity:usize}
+struct GenericIo {token:CompletionToken,file_op:u8,file_offset:usize,doc_op:u8,name:[u8;16],name_len:usize,name_location:UserLocation,dest_location:UserLocation,capacity:usize}
 static mut GENERIC_IO:[Option<GenericIo>;3]=[None;3];
 static mut NEXT_GENERIC_ID:u64=8;
 // Aggregate only; never expose filenames, user addresses or file contents.
@@ -170,7 +170,7 @@ fn clear_generic_io(actor:usize) {
  // still Some, then clear the discriminant. Single CPU, SVC/service only.
  let p=unsafe{addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor)};
  if let Some(mut old)=unsafe{read_volatile(p)} {
-  old.file_op=0;old.doc_op=0;old.name=[0;16];old.name_len=0;old.name_location=UserLocation{region:UserRegion::Data,offset:0};old.dest_location=UserLocation{region:UserRegion::Data,offset:0};old.capacity=0;
+  old.file_op=0;old.file_offset=0;old.doc_op=0;old.name=[0;16];old.name_len=0;old.name_location=UserLocation{region:UserRegion::Data,offset:0};old.dest_location=UserLocation{region:UserRegion::Data,offset:0};old.capacity=0;
   old.token=CompletionToken{actor:0,incarnation:0,id:0,binding_id:0};
   unsafe{write_volatile(p,Some(old))};
  }
@@ -700,7 +700,7 @@ fn descriptor(actor:usize,index:usize,id:u64)->Option<Request> {
  if !in_page(h,40) || unsafe{read64(h+32)}!=id {return None}
  let (kp,kn,vp,vn)=unsafe{(read64(h),read64(h+8),read64(h+16),read64(h+24))};
  if kn==0 || kn>16 || vn>32 || !in_page(kp,kn as usize) || !in_page(vp,vn as usize) {return None}
- let mut req=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:0,doc_op:0,binding_id:0,key:[0;16],key_len:kn as usize,value:[0;32],value_len:vn as usize};
+ let mut req=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:0,file_offset:0,read_capacity:0,doc_op:0,binding_id:0,key:[0;16],key_len:kn as usize,value:[0;32],value_len:vn as usize};
  for i in 0..req.key_len {req.key[i]=unsafe{readbyte(kp+i as u64)}}
  for i in 0..req.value_len {req.value[i]=unsafe{readbyte(vp+i as u64)}}
  if core::str::from_utf8(&req.key[..req.key_len]).is_err() || core::str::from_utf8(&req.value[..req.value_len]).is_err(){return None}
@@ -710,6 +710,9 @@ fn submit(state:&mut Ipc,req:Request)->bool {
  let Some(i)=completion_slot(req.actor,req.id) else{return false};
  if req.doc_op!=0 && (!matches!(req.doc_op,1|2) || req.file_op!=0 || req.save || req.id<8 || req.binding_id==0) {return false}
  if req.doc_op==0 && req.binding_id!=0 {return false}
+ if req.file_op==3 && (req.id<8 || req.file_offset>512 || req.read_capacity!=0 || req.file_offset.checked_add(req.value_len).is_none_or(|end|end>512)) {return false}
+ if req.file_op==4 && (req.id<8 || req.file_offset>512 || !(1..=32).contains(&req.read_capacity) || req.value_len!=0) {return false}
+ if !matches!(req.file_op,3|4) && (req.file_offset!=0 || req.read_capacity!=0) {return false}
  if req.actor>=PROCESS_CAPACITY || req.incarnation!=incarnation(req.actor) || state.completions[i].id!=0 || state.len==2 || (req.id<=7 && state.accepted_len>=state.accepted.len()) {return false}
  let slot=(state.head+state.len)%2;state.queue[slot]=Some(req);state.len+=1;
  state.completions[i]=Completion{actor:req.actor,incarnation:req.incarnation,id:req.id,binding_id:req.binding_id,..EMPTY_COMPLETION};
@@ -771,7 +774,7 @@ pub fn complete(request:&Request,success:bool)->bool {
 /// Complete the file operation in the bounded queue. Bytes are copied into
 /// kernel-owned completion storage before the caller's buffers can change.
 pub fn complete_file(request:&Request,success:bool,data:&[u8])->bool {
- if request.doc_op!=0 || !(request.id>=8 || request.id==6 || request.id==7) || data.len()>32 || (request.id==6 && !data.is_empty()) || (request.id>=8 && !matches!(request.file_op,1|2)) || (request.id>=8 && request.file_op==1 && !data.is_empty()) {return false}
+ if request.doc_op!=0 || !(request.id>=8 || request.id==6 || request.id==7) || data.len()>32 || (request.id==6 && !data.is_empty()) || (request.id>=8 && !matches!(request.file_op,1|2|3|4)) || (request.id>=8 && matches!(request.file_op,1|3) && !data.is_empty()) || (request.file_op==4 && data.len()>request.read_capacity) {return false}
  let s=unsafe{&mut *addr_of_mut!(IPC)};
  // The stale request is captured from an actual earlier loaded task. Try it
  // while the newer incarnation's same-ID completion is genuinely popped.
@@ -793,19 +796,19 @@ pub fn complete_file_oversize(request:&Request)->bool {
 }
 /// Report an invalid generic filename separately from a missing file.
 pub fn complete_file_invalid_name(request:&Request)->bool {
- if request.doc_op!=0 || request.id<8 || request.file_op!=2 {return false}
+ if request.doc_op!=0 || request.id<8 || !matches!(request.file_op,2|4) {return false}
  let s=unsafe{&mut *addr_of_mut!(IPC)};
  if !apply_completion(s,request.token(),false,&[]) {return false}
  s.completions[7+request.actor].invalid_name=true;true
 }
 #[derive(Clone,Copy)]
-pub enum WriteError {InvalidName,NoSpace,Io}
+pub enum WriteError {InvalidName,InvalidOffset,TooLarge,NoSpace,Io}
 /// Complete a generic file write without confusing invalid names, quota and I/O.
 pub fn complete_file_write_error(request:&Request,error:WriteError)->bool {
- if request.doc_op!=0 || request.id<8 || request.file_op!=1 {return false}
+ if request.doc_op!=0 || request.id<8 || !matches!(request.file_op,1|3) {return false}
  let s=unsafe{&mut *addr_of_mut!(IPC)};
  if !apply_completion(s,request.token(),false,&[]) {return false}
- s.completions[7+request.actor].write_errno=match error {WriteError::InvalidName=>-22,WriteError::NoSpace=>-28,WriteError::Io=>-5};true
+ s.completions[7+request.actor].write_errno=match error {WriteError::InvalidName|WriteError::InvalidOffset=>-22,WriteError::TooLarge=>-27,WriteError::NoSpace=>-28,WriteError::Io=>-5};true
 }
 /// Historical name: the owner enforces the experimental per-actor namespace
 /// in both single and pair modes, after checking request liveness.
@@ -814,7 +817,7 @@ pub fn is_pair_request(request:&Request)->bool {
   && unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS).cast::<u64>().add(request.actor))}==request.incarnation
 }
 pub fn complete_file_access_denied(request:&Request)->bool {
- if !is_pair_request(request) || !matches!(request.file_op,1|2) {return false}
+ if !is_pair_request(request) || !matches!(request.file_op,1|2|3|4) {return false}
  let s=unsafe{&mut *addr_of_mut!(IPC)};
  if !apply_completion(s,request.token(),false,&[]) {return false}
  s.completions[7+request.actor].access_denied=true;true
@@ -861,9 +864,12 @@ fn stop_loaded_task(s:&mut Ipc,reason:u8)->u64 {
 // x2=destination VA, x3=capacity; x0 is bytes read or a negative error.
 // -11 means retry, -2 unavailable, -34 too small, -14 invalid range,
 // -22 inconsistent arguments/encoding, -75 exhausted request IDs.
-fn generic_read(f:&mut Frame,s:&mut Ipc,actor:usize) {
+fn generic_read(f:&mut Frame,s:&mut Ipc,actor:usize,at_offset:bool) {
  let (name_va,name_len,dest_va,capacity)=(f.regs[0],f.regs[1],f.regs[2],f.regs[3]);
  let result=|f:&mut Frame,v:i64|{f.regs[0]=v as u64};
+ let raw_offset=if at_offset {f.regs[4]}else{0};
+ if raw_offset>512 {result(f,-22);return}
+ let offset=raw_offset as usize;let op=if at_offset {4}else{2};
  if name_len==0 || name_len>16 || capacity==0 || capacity>32 {result(f,-22);return}
  let (name_len,capacity)=(name_len as usize,capacity as usize);
  let Some(name_location)=user_location(actor,name_va,name_len,false,false) else{result(f,-14);return};
@@ -872,7 +878,7 @@ fn generic_read(f:&mut Frame,s:&mut Ipc,actor:usize) {
  for (i,byte) in name[..name_len].iter_mut().enumerate() {*byte=unsafe{readbyte(name_va+i as u64)}}
  if core::str::from_utf8(&name[..name_len]).is_err() {result(f,-22);return}
  if let Some(pending)=unsafe{read_volatile(addr_of!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor))} {
-  if pending.doc_op!=0 || pending.file_op!=2 || pending.token.actor!=actor || pending.token.incarnation!=incarnation(actor)
+  if pending.doc_op!=0 || pending.file_op!=op || pending.file_offset!=offset || pending.token.actor!=actor || pending.token.incarnation!=incarnation(actor)
    || pending.name!=name || pending.name_len!=name_len || pending.name_location!=name_location
    || pending.dest_location!=dest_location || pending.capacity!=capacity {result(f,-22);return}
   let c=&mut s.completions[7+actor];
@@ -890,10 +896,10 @@ fn generic_read(f:&mut Frame,s:&mut Ipc,actor:usize) {
  }
  let id=unsafe{read_volatile(addr_of!(NEXT_GENERIC_ID))};
  let Some(next)=id.checked_add(1) else{result(f,-75);return};
- let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:2,doc_op:0,binding_id:0,key:name,key_len:name_len,value:[0;32],value_len:0};
+ let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:op,file_offset:offset,read_capacity:if at_offset {capacity}else{0},doc_op:0,binding_id:0,key:name,key_len:name_len,value:[0;32],value_len:0};
  if !submit(s,request) {result(f,-11);return}
  if unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} {unsafe{write_volatile(addr_of_mut!(PAIR_LAST_TOKENS).cast::<Option<CompletionToken>>().add(actor),Some(request.token()))}}
- unsafe{write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:2,doc_op:0,name,name_len,name_location,dest_location,capacity}));let p=addr_of_mut!(GENERIC_READ_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true)};
+ unsafe{write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:op,file_offset:offset,doc_op:0,name,name_len,name_location,dest_location,capacity}));let p=addr_of_mut!(GENERIC_READ_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true)};
  result(f,-11);
 }
 // SVC 0x141: poll one bounded write. x0=name VA, x1=name length,
@@ -902,10 +908,13 @@ fn generic_read(f:&mut Frame,s:&mut Ipc,actor:usize) {
 // -28 catalog full, -5 I/O failure, -75 exhausted request IDs. A write
 // whose on-disk outcome becomes uncertain suspends the fixture instead of
 // promising that -5 can be delivered before restart.
-fn generic_write(f:&mut Frame,s:&mut Ipc,actor:usize) {
+fn generic_write(f:&mut Frame,s:&mut Ipc,actor:usize,at_offset:bool) {
  let (name_va,name_len,src_va,len)=(f.regs[0],f.regs[1],f.regs[2],f.regs[3]);
  let result=|f:&mut Frame,v:i64|{f.regs[0]=v as u64};
  if name_len==0 || name_len>16 || len>32 {result(f,-22);return}
+ let raw_offset=if at_offset {f.regs[4]}else{0};
+ if at_offset && raw_offset.checked_add(len).is_none_or(|end|end>512) {result(f,-27);return}
+ let offset=raw_offset as usize;let op=if at_offset {3}else{1};
  let (name_len,len)=(name_len as usize,len as usize);
  let Some(name_location)=user_location(actor,name_va,name_len,false,false) else{result(f,-14);return};
  let Some(src_location)=user_location(actor,src_va,len,false,true) else{result(f,-14);return};
@@ -913,7 +922,7 @@ fn generic_write(f:&mut Frame,s:&mut Ipc,actor:usize) {
  for (i,byte) in name[..name_len].iter_mut().enumerate() {*byte=unsafe{readbyte(name_va+i as u64)}}
  if core::str::from_utf8(&name[..name_len]).is_err() {result(f,-22);return}
  if let Some(pending)=unsafe{read_volatile(addr_of!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor))} {
-  if pending.doc_op!=0 || pending.file_op!=1 || pending.token.actor!=actor || pending.token.incarnation!=incarnation(actor)
+  if pending.doc_op!=0 || pending.file_op!=op || pending.file_offset!=offset || pending.token.actor!=actor || pending.token.incarnation!=incarnation(actor)
    || pending.name!=name || pending.name_len!=name_len || pending.name_location!=name_location
    || pending.dest_location!=src_location || pending.capacity!=len {result(f,-22);return}
   let c=&mut s.completions[7+actor];
@@ -926,10 +935,10 @@ fn generic_write(f:&mut Frame,s:&mut Ipc,actor:usize) {
  for (i,byte) in value[..len].iter_mut().enumerate() {*byte=unsafe{readbyte(src_va+i as u64)}}
  let id=unsafe{read_volatile(addr_of!(NEXT_GENERIC_ID))};
  let Some(next)=id.checked_add(1) else{result(f,-75);return};
- let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:1,doc_op:0,binding_id:0,key:name,key_len:name_len,value,value_len:len};
+ let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:op,file_offset:offset,read_capacity:0,doc_op:0,binding_id:0,key:name,key_len:name_len,value,value_len:len};
  if !submit(s,request) {result(f,-11);return}
  if unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} {unsafe{write_volatile(addr_of_mut!(PAIR_LAST_TOKENS).cast::<Option<CompletionToken>>().add(actor),Some(request.token()))}}
- unsafe{write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:1,doc_op:0,name,name_len,name_location,dest_location:src_location,capacity:len}));let p=addr_of_mut!(GENERIC_WRITE_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true)};
+ unsafe{write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:op,file_offset:offset,doc_op:0,name,name_len,name_location,dest_location:src_location,capacity:len}));let p=addr_of_mut!(GENERIC_WRITE_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true)};
  result(f,-11);
 }
 /// Complete a popped document request; errno 0 means success, otherwise a
@@ -979,11 +988,11 @@ fn document_io(f:&mut Frame,s:&mut Ipc,actor:usize,put:bool) {
   if core::str::from_utf8(&value[..value_len]).is_err() {direct_result(f,-22);return}
  }
  let id=unsafe{read_volatile(addr_of!(NEXT_GENERIC_ID))};let Some(next)=id.checked_add(1) else{direct_result(f,-75);return};
- let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:0,doc_op:op,binding_id,key,key_len,value,value_len:if put {value_len}else{0}};
+ let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:0,file_offset:0,read_capacity:0,doc_op:op,binding_id,key,key_len,value,value_len:if put {value_len}else{0}};
  if !submit(s,request) {direct_result(f,-11);return}
  unsafe{
   write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);
-  write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:0,doc_op:op,name:key,name_len:key_len,name_location:key_location,dest_location:value_location,capacity:value_len}));
+  write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:0,file_offset:0,doc_op:op,name:key,name_len:key_len,name_location:key_location,dest_location:value_location,capacity:value_len}));
   let p=addr_of_mut!(DOCUMENT_SUBMITTED).cast::<u64>().add(actor);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true);
  }
  direct_result(f,-11);
@@ -1024,8 +1033,10 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
    0x183=>{let index=usize::try_from(f.regs[0]).unwrap_or(usize::MAX);heap_operation(f,actor,index,false,false);return 0},
    0x190=>{let state=unsafe{&mut *addr_of_mut!(IPC)};document_io(f,state,actor,false);return 0},
    0x191=>{let state=unsafe{&mut *addr_of_mut!(IPC)};document_io(f,state,actor,true);return 0},
-   0x140=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_read(f,state,actor);return 0},
-   0x141=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_write(f,state,actor);return 0},
+   0x140=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_read(f,state,actor,false);return 0},
+   0x141=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_write(f,state,actor,false);return 0},
+   0x142=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_write(f,state,actor,true);return 0},
+   0x143=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_read(f,state,actor,true);return 0},
    0x123=>{unsafe{write_volatile(addr_of_mut!(PAIR_EXIT_CODES).cast::<Option<u64>>().add(actor),Some(f.regs[0]));write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(actor),1)};return 1},
    _=>{unsafe{write_volatile(addr_of_mut!(PAIR_OUTCOMES).cast::<u8>().add(actor),2)};return 1},
   }
@@ -1053,7 +1064,7 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
  let s=unsafe{&mut *addr_of_mut!(IPC)};let op=esr&0xffff;
  let stage=unsafe{read_volatile(addr_of!(IMAGE_COUNT))};
  if loaded && ((op==0x130 && stage>3) || (op==0x131 && stage!=1)) {return stop_loaded_task(s,3)}
- if loaded && !matches!(op,0x103|0x105|0x121|0x122|0x123|0x130|0x131|0x140|0x141|0x7bad) {
+ if loaded && !matches!(op,0x103|0x105|0x121|0x122|0x123|0x130|0x131|0x140|0x141|0x142|0x143|0x7bad) {
   if op==0x666 && unsafe{read_volatile(addr_of!(IMAGE_COUNT))}==3 && unsafe{read64((super::mmu::ALIAS+136) as u64)}==1 {
    unsafe{write_volatile(addr_of_mut!(STALE_RESPONSE_BLOCKED),true)};
   }
@@ -1107,7 +1118,7 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
    }
   },
   0x110 if actor==0 && s.consumed_len==3 && s.completions[3].id==0 => {
-   let r=Request{actor,incarnation:incarnation(actor),id:4,save:true,file_op:0,doc_op:0,binding_id:0,key:[0;16],key_len:0,value:[0;32],value_len:0};
+   let r=Request{actor,incarnation:incarnation(actor),id:4,save:true,file_op:0,file_offset:0,read_capacity:0,doc_op:0,binding_id:0,key:[0;16],key_len:0,value:[0;32],value_len:0};
    if !submit(s,r) {halt()}
   },
   0x130 if actor==0 && unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} && s.completions[5].id==0 => {
@@ -1138,8 +1149,10 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
    unsafe{write_volatile(addr_of_mut!(SPAWN_EXECUTED),true);write_volatile(addr_of_mut!(IMAGE_OUTCOMES).cast::<u8>().add(image-1),1)};
    return 1;
   },
-  0x140 if loaded => generic_read(f,s,actor),
-  0x141 if loaded => generic_write(f,s,actor),
+  0x140 if loaded => generic_read(f,s,actor,false),
+  0x141 if loaded => generic_write(f,s,actor,false),
+  0x142 if loaded => generic_write(f,s,actor,true),
+  0x143 if loaded => generic_read(f,s,actor,true),
   0x7bad if loaded => {
    let expected=unsafe{read_volatile(addr_of!(IMAGE_COUNT))}==1 && f.elr==super::mmu::USER_CODE as u64+(addr_of!(spawned_fail_after_svc) as u64-addr_of!(spawned_entry) as u64);
    return stop_loaded_task(s,if expected {4}else{3});

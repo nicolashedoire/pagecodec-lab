@@ -740,10 +740,57 @@ pub extern "C" fn graph_main() -> ! {
                                 Err("invalid filename") if request.id>=8=>{reply_invalid_name=true;false},
                                 _=>false,
                             },
+                            3=>{
+                                // Build the entire next value before persistence;
+                                // unlike op 1, this preserves the old suffix.
+                                if STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed) {
+                                    write_error=Some(el0::WriteError::Io);
+                                    false
+                                } else {
+                                    match files.write_at_candidate(key,request.file_offset,data) {
+                                        Ok(next) if files.get(key).is_ok_and(|old|old==next.as_slice())=>true,
+                                        Ok(next)=>if let Some(ref mut disk)=block {
+                                            match put_file(disk,&document,&mut files,key,&next) {
+                                                Ok(_)=>true,
+                                                Err(error)=>{
+                                                    write_error=Some(match error {
+                                                        "invalid filename"=>el0::WriteError::InvalidName,
+                                                        "too many files"|"catalog too large"|"snapshot invalid or capacity exceeded"=>el0::WriteError::NoSpace,
+                                                        "file too large"=>el0::WriteError::TooLarge,
+                                                        _=>el0::WriteError::Io,
+                                                    });
+                                                    false
+                                                }
+                                            }
+                                        } else {write_error=Some(el0::WriteError::Io);false},
+                                        Err(error)=>{
+                                            write_error=Some(match error {
+                                                "invalid filename"=>el0::WriteError::InvalidName,
+                                                "invalid offset"=>el0::WriteError::InvalidOffset,
+                                                "file too large"=>el0::WriteError::TooLarge,
+                                                "too many files"|"catalog too large"=>el0::WriteError::NoSpace,
+                                                _=>el0::WriteError::Io,
+                                            });
+                                            false
+                                        }
+                                    }
+                                }
+                            },
+                            4=>match files.read_at(key,request.file_offset,request.read_capacity) {
+                                Ok(bytes)=>{reply_len=bytes.len();reply[..reply_len].copy_from_slice(bytes);true},
+                                Err("invalid filename"|"invalid read arguments")=>{reply_invalid_name=true;false},
+                                _=>false,
+                            },
                             _=>false,
                         }
                         }
-                    } else {false};
+                    } else {
+                        // New operations reject malformed keys rather than
+                        // confusing invalid UTF-8 with a missing file.
+                        if request.file_op==3 {write_error=Some(el0::WriteError::InvalidName)}
+                        else if request.file_op==4 {reply_invalid_name=true}
+                        false
+                    };
                     let completed=if reply_denied {el0::complete_file_access_denied(&request)} else if let Some(error)=write_error {el0::complete_file_write_error(&request,error)} else if reply_too_large {el0::complete_file_oversize(&request)} else if reply_invalid_name {el0::complete_file_invalid_name(&request)} else {el0::complete_file(&request,success,&reply[..reply_len])};
                     if !completed {halt()}
                     continue;
