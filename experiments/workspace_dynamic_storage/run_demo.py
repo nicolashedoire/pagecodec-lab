@@ -1094,6 +1094,54 @@ def main():
    for name in heap_gates:
     if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('heap gate cleanup failed')
    if g.call('file_list',{})!=files_before:raise RuntimeError('heap fixture left files behind')
+
+   # Insert after the existing single-page heap scenario. The ELF fixture uses
+   # a-pgate/b-pgate/c-pgate for process 0/1/2.
+   mp_gates=('a-pgate','b-pgate','c-pgate')
+   for name in mp_gates:
+    if any(entry.get('name')==name for entry in files_before):raise RuntimeError('multi-page fixture name already exists')
+    if not g.call('file_put',{'name':name,'data':'0'}).get('readback_verified'):raise RuntimeError('multi-page gate setup failed')
+   image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-multipage-heap.hex').read_text().strip())
+   mp_upload=stage_program(g,image)
+   def mp_phase(name,expected):
+    for _ in range(80):
+     got=g.call('file_get',{'name':name}).get('hex')
+     if got==expected.encode().hex():return
+     time.sleep(.2)
+    raise RuntimeError('multi-page fixture phase missing: '+str((name,expected,got)))
+   def heap_counts(status):return [sum(row) for row in status.get('all_heap_page_allocated',[])]
+   mp_actors=[]
+   for i,name in enumerate(mp_gates):
+    task=g.call('process_spawn_staged',{'id':mp_upload});mp_actors.append(task)
+    if task.get('slot')!=i:raise RuntimeError('multi-page actor slot mismatch: '+str(task))
+    mp_phase(name,'r')
+    present=all_tasks(lambda x:heap_counts(x)==[8 if j<=i else 0 for j in range(3)],'indexed heap admission')
+    if present.get('frame_pool_assigned')!=11*(i+1):raise RuntimeError('indexed heap admission changed neighbor: '+str(present))
+   live=all_tasks(lambda x:heap_counts(x)==[8]*3 and x.get('frame_pool_assigned')==33,'three eight-page heaps')
+   frames=live.get('all_heap_page_frame_index',[])
+   if len(frames)!=3 or any(len(row)!=8 for row in frames) or any(not isinstance(x,int) for row in frames for x in row) or len({x for row in frames for x in row})!=24:raise RuntimeError('multi-page frames not distinct: '+str(live))
+   previous=live['all_io_completed']
+   if g.call('process_stop',{'slot':0,'incarnation':mp_actors[0]['incarnation_text'],'boot_id':mp_actors[0]['boot_id']}).get('stopped') is not True:raise RuntimeError('multi-page actor stop failed')
+   stopped=all_tasks(lambda x:x.get('all_slot_states')==['exited','ready','ready'] and all(x.get('all_io_completed',[0]*3)[i]>previous[i] for i in (1,2)),'multi-page neighbors after stop')
+   if heap_counts(stopped)!=[0,8,8] or stopped.get('all_heap_page_scrubbed',[[False]*8])[0]!=[True]*8 or stopped.get('frame_pool_assigned')!=22:raise RuntimeError('multi-page stop did not clean resources: '+str(stopped))
+   if not g.call('file_put',{'name':'a-pgate','data':'0'}).get('readback_verified'):raise RuntimeError('multi-page gate reset failed')
+   replacement=g.call('process_spawn_staged',{'id':mp_upload})
+   if replacement.get('slot')!=0 or replacement.get('incarnation',0)<=mp_actors[0]['incarnation']:raise RuntimeError('multi-page readmission failed: '+str(replacement))
+   mp_phase('a-pgate','r')
+   live=all_tasks(lambda x:heap_counts(x)==[8]*3 and x.get('frame_pool_assigned')==33,'multi-page after readmission')
+   if live.get('all_heap_page_frame_index')!=frames:raise RuntimeError('multi-page frame reuse or neighbors changed: '+str((frames,live)))
+   for name in mp_gates:
+    if not g.call('file_put',{'name':name,'data':'f'}).get('readback_verified'):raise RuntimeError('multi-page recycle request failed')
+   for name in mp_gates:mp_phase(name,'d')
+   all_tasks(lambda x:heap_counts(x)==[8]*3 and x.get('frame_pool_assigned')==33,'all pages reallocated')
+   for name in mp_gates:
+    if not g.call('file_put',{'name':name,'data':'q'}).get('readback_verified'):raise RuntimeError('multi-page release failed')
+   done=all_tasks(lambda x:x.get('all_slot_states')==['exited']*3,'multi-page teardown')
+   if done.get('all_outcomes')!=[1]*3 or done.get('all_exit_codes')!=[0]*3 or heap_counts(done)!=[0]*3 or done.get('all_heap_page_scrubbed')!=[[True]*8]*3 or done.get('frame_pool_assigned')!=0:raise RuntimeError('multi-page cleanup failed: '+str(done))
+   g.call('upload_reset',{'id':mp_upload})
+   for name in mp_gates:
+    if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('multi-page gate cleanup failed')
+   if g.call('file_list',{})!=files_before:raise RuntimeError('multi-page fixture left files behind')
    if a.exercise_storage_fault:
     # A single direct channel can choose any two of three live actors.
     for name in ('a-igate','b-igate','c-igate'):

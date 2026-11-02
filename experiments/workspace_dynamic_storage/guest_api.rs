@@ -1,20 +1,21 @@
 //! Minimal Rust interface for independent guest applications.
 //!
 //! This ABI is specific to this AArch64 guest; it is not POSIX. The kernel
-//! currently supplies at most one private 4 KiB heap page per process.
+//! currently supplies up to eight private 4 KiB heap pages per process.
 //! File names and buffers must reside in guest data, stack or heap pages,
 //! not in the read-only code page. File methods poll without a deadline and
 //! can wait indefinitely if the service stops making progress.
 use core::{arch::asm, ptr::NonNull, slice};
 
 pub const PAGE_SIZE: usize = 4096;
+pub const PAGE_LIMIT: usize = 8;
 const USER_HEAP: usize = 0x5000_4000;
 const EAGAIN: i64 = -11;
 
 /// Owns the caller's private page. Dropping a page attempts to return it.
 /// If the kernel reports it busy, the process retains it until it exits.
 #[must_use]
-pub struct HeapPage { ptr: NonNull<u8>, active: bool }
+pub struct HeapPage { ptr: NonNull<u8>, index: usize, active: bool }
 
 impl HeapPage {
     pub fn allocate() -> Result<Self, i64> {
@@ -25,7 +26,20 @@ impl HeapPage {
         if result < 0 { return Err(result); }
         if result as usize != USER_HEAP { return Err(-5); }
         let ptr = NonNull::new(result as usize as *mut u8).ok_or(-5)?;
-        Ok(Self { ptr, active: true })
+        Ok(Self { ptr, index: 0, active: true })
+    }
+
+    /// Allocate one of the eight independently owned page slots.
+    pub fn allocate_index(index: usize) -> Result<Self, i64> {
+        if index >= PAGE_LIMIT { return Err(-22); }
+        let mut result = index as u64;
+        unsafe { asm!("svc #0x182", inout("x0") result, options(nostack)); }
+        let result = result as i64;
+        if result < 0 { return Err(result); }
+        let expected = USER_HEAP + index * PAGE_SIZE;
+        if result as usize != expected { return Err(-5); }
+        let ptr = NonNull::new(expected as *mut u8).ok_or(-5)?;
+        Ok(Self { ptr, index, active: true })
     }
 
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
@@ -40,8 +54,12 @@ impl HeapPage {
     }
 
     fn free_raw(&self) -> i64 {
-        let mut result = self.ptr.as_ptr() as u64;
-        unsafe { asm!("svc #0x181", inout("x0") result, options(nostack)); }
+        let mut result = if self.index == 0 { self.ptr.as_ptr() as u64 } else { self.index as u64 };
+        if self.index == 0 {
+            unsafe { asm!("svc #0x181", inout("x0") result, options(nostack)); }
+        } else {
+            unsafe { asm!("svc #0x183", inout("x0") result, options(nostack)); }
+        }
         result as i64
     }
 }

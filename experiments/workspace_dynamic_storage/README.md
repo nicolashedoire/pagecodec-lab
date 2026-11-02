@@ -129,8 +129,8 @@ The harness records synthetic MCP I/O, guest hash and QEMU version and checks th
 
 ### Rust guest applications
 
-[`guest_api.rs`](guest_api.rs) provides a small `no_std` interface for a
-private heap page and bounded file reads and writes in independent guest
+[`guest_api.rs`](guest_api.rs) provides a small `no_std` interface for
+private heap pages and bounded file reads and writes in independent guest
 processes. Its file calls retain their borrowed buffers while polling and may
 wait indefinitely if the service does not progress. Names and buffers must be
 in a mapped data, stack or heap page: a literal placed in the code page is not

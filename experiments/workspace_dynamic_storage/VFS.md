@@ -593,7 +593,7 @@ The single-CPU scheduler selects the next ready slot by a bounded circular
 search after timer interrupts, a blocking wait, or task exit. If no slot is
 ready, control returns to the service loop; device polling and MCP can continue.
 The guest admits up to three independent fixed contexts, with a third page-table
-root (ASID 3) and a pool of twelve user frames. This is not SMP, arbitrary task
+root (ASID 3) and a pool of thirty-three user frames. This is not SMP, arbitrary task
 capacity, or a general starvation-freedom guarantee. Up to two direct IPC channels can each bind any two slots; the single two-port
 network grant can also bind any two slots. These are fixed limits, not arbitrary
 simultaneous channels or grants.
@@ -695,13 +695,17 @@ merge or conflict resolver is not implemented.
 
 ### Private process memory
 
-Each independent ELF process can request one extra 4 KiB private page through
-`SVC #0x180`. A successful allocation returns `0x50004000`, with RW and NX
-permissions. A second allocation in the same process returns `-17` (quota),
-and a lack of free frames returns `-12`; a duplicate request does not establish
-that global exhaustion was exercised. `SVC #0x181` frees that exact address,
-returning `-22` for a different address, `-2` when none is allocated, and `-16`
-if a pending generic file or document request retains a heap-page range.
+Each independent ELF process can request up to eight extra 4 KiB private
+pages. `SVC #0x182` takes an index 0–7 and returns `0x50004000 + index*4096`,
+with RW and NX permissions. `SVC #0x183` frees an indexed page. An invalid
+index returns `-22`, an already allocated index returns `-17`, a page that is
+not allocated returns `-2`, and a lack of free frames returns `-12`; a
+duplicate request does not establish that global exhaustion was exercised.
+The earlier `SVC #0x180` and `SVC #0x181` allocate and free page 0, preserving
+the address-based interface. Free returns `-16` if a pending generic file or
+document request retains that page. Mapping a previously absent neighboring
+page can also return `-16` while a zero-length one-past buffer would change
+classification on polling.
 Mappings and ownership are tied to the current process incarnation. Free and
 process teardown remove the mapping, invalidate local translations, clear the
 physical page and return the frame to the pool. These operations assume a
@@ -722,3 +726,18 @@ The integrated modern-transport run with storage fault injection and the
 ordinary-release legacy run passed this scenario. They do not demonstrate
 global frame exhaustion, multi-object allocation, SMP behavior or an
 application runtime.
+
+The additional [`rust-multipage-heap`](fixtures/rust-multipage-heap.rs)
+scenario is designed to allocate eight pages in each of three independent ELFs,
+occupying the 33-frame pool including code, data and stacks. It exercises
+distinct page ownership, stopping and readmitting an actor while neighbors
+keep their pages, zeroing after reallocation, and heap-backed file I/O with
+the name and output on different pages. It also requests a free of both
+referenced pages during that I/O and frees/reallocates an unrelated page.
+Zero-length PUTs cover stack-to-heap and adjacent heap page boundaries,
+including mapping a neighbor while an operation is pending. The integrated
+modern-transport run with storage fault injection passed this scenario;
+filling the pool does not itself exercise a subsequent allocation returning
+`-12`. Cross-calling the legacy and indexed APIs for page zero has not been
+separately exercised. Programs using `0x182/183` require a kernel that
+implements those calls.

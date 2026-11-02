@@ -6,6 +6,8 @@ pub const ALIAS:usize=0x5000_0000;
 pub const USER_CODE:usize=ALIAS+PAGE;
 pub const USER_STACK:usize=ALIAS+3*PAGE;
 pub const USER_HEAP:usize=ALIAS+4*PAGE;
+pub const USER_HEAP_PAGES:usize=8;
+pub fn heap_address(index:usize)->Option<usize> {if index<USER_HEAP_PAGES {USER_HEAP.checked_add(index*PAGE)}else{None}}
 const AF:u64=1<<10;const SH:u64=3<<8;const RO:u64=1<<7;const USER:u64=1<<6;const NORMAL:u64=1<<2;
 const NG:u64=1<<11;const PXN:u64=1<<53;const UXN:u64=1<<54;const DESC:u64=3;const PA_MASK:u64=0x0000_ffff_ffff_f000;
 #[repr(C,align(4096))] struct Table([u64;512]);
@@ -40,7 +42,7 @@ pub fn switch_root(root:u64) {unsafe{asm!("dsb ishst","msr TTBR0_EL1, {r}","isb"
 /// Verify one complete single-page user region against its caller-owned frame.
 /// The caller must already have selected the task's TTBR and masked IRQs.
 pub fn user_region_matches(address:u64,len:usize,base:usize,frame:usize,write:bool)->bool {
- if len==0 || frame==0 || frame%PAGE!=0 || !matches!(base,ALIAS|USER_STACK|USER_HEAP) {return false}
+ if len==0 || frame==0 || frame%PAGE!=0 || !(base==ALIAS || base==USER_STACK || (0..USER_HEAP_PAGES).any(|i|heap_address(i)==Some(base))) {return false}
  let Ok(start)=usize::try_from(address) else{return false};
  let Some(end)=start.checked_add(len) else{return false};
  let Some(limit)=base.checked_add(PAGE) else{return false};
@@ -88,7 +90,8 @@ pub fn map_task_code(actor:usize,frame:usize) {
 pub fn slot_available(actor:usize)->bool {
  if actor>=3 || active_root()!=root(0) {return false}
  switch_root(root(actor));let ok=query(ALIAS,false,true)&1!=0 && query(USER_CODE,false,true)&1!=0
-  && query(USER_STACK-PAGE,false,true)&1!=0 && query(USER_STACK,false,true)&1!=0 && query(USER_HEAP,false,true)&1!=0;
+  && query(USER_STACK-PAGE,false,true)&1!=0 && query(USER_STACK,false,true)&1!=0
+  && (0..USER_HEAP_PAGES).all(|i|query(heap_address(i).unwrap(),false,true)&1!=0 && query(heap_address(i).unwrap(),true,true)&1!=0);
  switch_root(root(0));ok
 }
 /// Map a dedicated RW/NX user stack. The preceding page remains unmapped.
@@ -112,30 +115,32 @@ pub fn unmap_task_stack(actor:usize,frame:usize) {
 }
 /// Map and revoke a private RW/NX heap frame on the single CPU. The caller
 /// switches to the service root and masks interrupts before invoking these.
-pub fn map_task_heap(actor:usize,frame:usize) {
+pub fn map_task_heap(actor:usize,index:usize,frame:usize) {
  assert!(actor<3 && frame%PAGE==0 && active_root()==root(0));
- let entry=unsafe{alias_table(actor).cast::<u64>().add((USER_HEAP>>12)&511)};
+ let address=heap_address(index).unwrap();
+ let entry=unsafe{alias_table(actor).cast::<u64>().add((address>>12)&511)};
  assert!(unsafe{read_volatile(entry)}==0);
  unsafe{write_volatile(entry,frame as u64|AF|SH|NORMAL|USER|PXN|UXN|NG|DESC);asm!("dsb ishst","tlbi vmalle1","dsb ish","isb");}
- switch_root(root(actor));let r=query(USER_HEAP,false,true);
+ switch_root(root(actor));let r=query(address,false,true);
  let descriptor=unsafe{read_volatile(entry)};
- assert!(r&1==0 && r&PA_MASK==frame as u64 && query(USER_HEAP,true,true)&1==0 && descriptor&(RO|USER|PXN|UXN|NG)==USER|PXN|UXN|NG);
+ assert!(r&1==0 && r&PA_MASK==frame as u64 && query(address,true,true)&1==0 && descriptor&(RO|USER|PXN|UXN|NG)==USER|PXN|UXN|NG);
  switch_root(root(0));
 }
-pub fn unmap_task_heap(actor:usize,frame:usize) {
+pub fn unmap_task_heap(actor:usize,index:usize,frame:usize) {
  assert!(actor<3 && active_root()==root(0));
- let entry=unsafe{alias_table(actor).cast::<u64>().add((USER_HEAP>>12)&511)};
+ let address=heap_address(index).unwrap();
+ let entry=unsafe{alias_table(actor).cast::<u64>().add((address>>12)&511)};
  let old=unsafe{read_volatile(entry)};assert!(old&3==DESC && old&PA_MASK==(frame as u64&PA_MASK));
  unsafe{write_volatile(entry,0);asm!("dsb ishst","tlbi vmalle1","dsb ish","isb");}
- switch_root(root(actor));assert!(query(USER_HEAP,false,true)&1!=0 && query(USER_HEAP,true,true)&1!=0);switch_root(root(0));
+ switch_root(root(actor));assert!(query(address,false,true)&1!=0 && query(address,true,true)&1!=0);switch_root(root(0));
 }
 /// Validate all independent mappings and frame separation across the 3 roots.
-pub fn verify_independent(data:[usize;3],code:[usize;3],stack:[usize;3],heap:[usize;3])->bool {
+pub fn verify_independent(data:[usize;3],code:[usize;3],stack:[usize;3],heap:[[usize;USER_HEAP_PAGES];3])->bool {
  if active_root()!=root(0) {return false}
- let mut frames=[0usize;12];let mut n=0usize;
+ let mut frames=[0usize;3*(3+USER_HEAP_PAGES)];let mut n=0usize;
  for actor in 0..3 {
-  if (data[actor]==0)!=(code[actor]==0) || (data[actor]==0 && (stack[actor]!=0 || heap[actor]!=0)) {return false}
-  for frame in [data[actor],code[actor],stack[actor],heap[actor]] {
+  if (data[actor]==0)!=(code[actor]==0) || (data[actor]==0 && (stack[actor]!=0 || heap[actor].iter().any(|p|*p!=0))) {return false}
+  for frame in [data[actor],code[actor],stack[actor]].into_iter().chain(heap[actor]) {
    if frame==0 {continue}
    if frame%PAGE!=0 || frames[..n].contains(&frame) {return false}
    frames[n]=frame;n+=1;
@@ -145,7 +150,8 @@ pub fn verify_independent(data:[usize;3],code:[usize;3],stack:[usize;3],heap:[us
  for actor in 0..3 {
   switch_root(root(actor));
   for &frame in &frames[..n] {ok &= query(frame,false,true)&1!=0 && query(frame,true,true)&1!=0}
-  for (va,frame,writable) in [(ALIAS,data[actor],true),(USER_CODE,code[actor],false),(USER_STACK,stack[actor],true),(USER_HEAP,heap[actor],true)] {
+  let base=[(ALIAS,data[actor],true),(USER_CODE,code[actor],false),(USER_STACK,stack[actor],true)];
+  for (va,frame,writable) in base.into_iter().chain(heap[actor].into_iter().enumerate().map(|(i,p)|(heap_address(i).unwrap(),p,true))) {
    let r=query(va,false,true);let w=query(va,true,true);
    if frame==0 {ok &= r&1!=0 && w&1!=0}
    else {
