@@ -4,7 +4,7 @@
 use alloc::vec::Vec;
 
 const ACTORS:usize=3;
-const PATH_MAX:usize=16;
+const PATH_MAX:usize=crate::tree_store::MAX_PATH;
 const CHUNK_MAX:usize=32;
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]

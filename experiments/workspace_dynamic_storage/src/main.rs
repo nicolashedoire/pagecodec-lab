@@ -490,11 +490,11 @@ fn parse_checksum(text:&str)->Option<u64> {
     u64::from_str_radix(text,16).ok()
 }
 
-// EL0 paths use the same ASCII canonical form as TreeStore but are further
-// bounded by the 16-byte request key. No normalization is performed.
+// EL0 paths use the same canonical ASCII form and 255-byte bound as TreeStore.
+// No normalization is performed.
 fn valid_tree_guest_path(path:&str)->bool {
     let bytes=path.as_bytes();
-    if bytes.is_empty() || bytes.len()>16 || bytes[0]!=b'/' {return false}
+    if bytes.is_empty() || bytes.len()>tree_store::MAX_PATH || bytes[0]!=b'/' {return false}
     if bytes==b"/" {return true}
     bytes[1..].split(|b|*b==b'/').all(|segment| {
         !segment.is_empty() && segment!=b"." && segment!=b".." &&
@@ -1117,7 +1117,9 @@ pub extern "C" fn graph_main() -> ! {
                 if request.file_op!=0 {
                     // Requests were copied from a private EL0 page by SVC;
                     // authorize again at the owner boundary before disk access.
-                    let key=request.key.get(..request.key_len).and_then(|x|core::str::from_utf8(x).ok());
+                    // Flat-file requests retain their historical 16-byte ABI
+                    // even though tree paths now use a larger request buffer.
+                    let key=request.key.get(..request.key_len).filter(|_|request.key_len<=16).and_then(|x|core::str::from_utf8(x).ok());
                     let data=request.value.get(..request.value_len);
                     let mut reply=[0u8;32];
                     let mut reply_len=0usize;

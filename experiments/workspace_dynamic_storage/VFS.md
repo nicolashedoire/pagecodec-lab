@@ -882,7 +882,7 @@ that specific degraded transition is not covered by this scenario.
 
 An independent ELF process can request `SVC #0x144` with path pointer/length
 in `x0`/`x1`, destination/capacity in `x2`/`x3`, offset in `x4`, and the
-nonzero tree generation in `x5`. The path is at most 16 ASCII bytes, capacity
+nonzero tree generation in `x5`. The path is at most 255 ASCII bytes, capacity
 is 1–32 bytes, and the offset is at most 16 KiB. Actor slots 0, 1 and 2 can
 read only under `/a/`, `/b/` and `/c/` respectively; these fixed prefixes are
 not authenticated users or general capability controls. EOF returns zero.
@@ -951,7 +951,7 @@ and cleanup before the full run.
 
 Independent ELF processes can request `SVC #0x14a` to create a directory or
 `SVC #0x14b` to remove a file or empty directory. The path pointer/length are
-in `x0`/`x1` (canonical ASCII path of at most 16 bytes), with the expected
+in `x0`/`x1` (canonical ASCII path of at most 255 bytes), with the expected
 nonzero tree generation in `x2`. Each call returns zero on success, or `-11`
 while pending; retry the same arguments. The `/a/`, `/b/`, `/c/` actor-slot
 scope applies, and a successful mutation advances the tree generation.
@@ -975,7 +975,7 @@ authentication or power-loss durability guarantees.
 
 `SVC #0x14c` enumerates one immediate child fragment at an expected tree
 generation. It takes the directory path pointer/length in `x0`/`x1` (at most
-16 bytes), child ordinal in `x2`, output pointer/capacity in `x3`/`x4` (2–32
+255 bytes), child ordinal in `x2`, output pointer/capacity in `x3`/`x4` (2–32
 bytes), generation in `x5` and byte offset within the child's name in `x6`.
 Zero means end of directory when the name offset is zero. Otherwise the
 positive return is one header byte followed by 1–31 name bytes, with no NUL:
@@ -1003,3 +1003,26 @@ arguments. It reopens the same disposable disk after reboot and repeats the
 scenario. A focused run and the complete integrated modern-transport QEMU run
 with storage fault injection passed. The recorded legacy trace predates this
 listing interface.
+
+### Long process tree paths
+
+The tree-specific process calls accept canonical ASCII paths of 1–255 bytes.
+The complete user range must be contained within one mapped data, stack or
+heap page; it is copied on submission and rechecked when polling. A changed
+path on retry returns `-22`; a path crossing a page boundary returns `-14`,
+and a 256-byte tree path returns `-22`. Pending I/O pins a heap page used by
+the path against explicit page release. The flat file and document-key ABIs
+retain their independent 16-byte limits.
+
+The integrated [`rust-tree-paths`](fixtures/rust-tree-paths.rs) scenario is
+designed to create, list and remove a 255-byte tree path, reject 256 bytes and
+cross-page ranges, and use 33-byte paths for file creation/read/removal. It
+checks another actor's prefix and verifies the old flat and document limits
+using real document bindings. One actor submits its long path from a heap page,
+mutates and restores it during polling, and checks that releasing the page is
+refused while the request is outstanding. A second actor uses its stack. A
+file in each scope is retained and read after reboot on a disposable disk.
+Both a focused run and the full integrated modern-transport QEMU run with
+storage fault injection passed. The 255-byte case uses one long path segment;
+deeply nested paths remain untested. The recorded legacy trace predates this
+path extension.

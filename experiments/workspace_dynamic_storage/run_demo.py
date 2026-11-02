@@ -1795,6 +1795,71 @@ def main():
      if not e.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('enumeration gate cleanup failed')
     traces.append(e.trace);states.append(e.call('tree_status',{}))
    finally:e.close()
+  # Two scoped EL0 actors exercise 255-byte tree paths and unchanged 16-byte ABIs.
+  path_disk=Path(tmp)/'tree-el0-long-path.raw';create(path_disk,tree_disk_path.read_bytes())
+  path_program_sectors=protected_program_sectors(path_disk)
+  path_image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-tree-paths.hex').read_text().strip())
+  e=Guest(a.qemu,guest,path_disk,tmp,76,out,a.transport)
+  try:
+   e.progress('before long tree paths',timeout_image=True,expected_exit_code=0);e.wait_boot_identity()
+   revision=e.call('tree_open',{'dedicated':True})['generation'];document_before=e.call('document_snapshot',{})
+   for path in ('/a','/b'):
+    result=e.call('tree_mkdir',{'path':path,'generation':revision})
+    if result.get('readback_verified') is not True:raise RuntimeError('long-path actor root creation failed')
+    revision=result['generation']
+   gates=('a-pgate','b-pgate');phases=('a-pphase','b-pphase')
+   names=[entry['name'] for entry in e.call('file_list',{})]
+   if any(name in names for name in gates+phases):raise RuntimeError('long-path test gate already exists')
+   def path_gate(name,binding,flag):
+    raw=int(binding).to_bytes(8,'little')+flag.encode()
+    if not e.call('file_put_hex',{'name':name,'hex':raw.hex()}).get('readback_verified'):raise RuntimeError('long-path gate write failed')
+   def path_phase(name,value):
+    for _ in range(160):
+     result=e.call('file_get',{'name':name}).get('hex')
+     if result==value.encode().hex():return
+     slot=0 if name[0]=='a' else 1;state=e.call('process_status',{})
+     if state.get('all_slot_states',[None]*3)[slot]=='exited':raise RuntimeError('long-path actor exited before phase: '+str((name,value,result,state)))
+     time.sleep(.2)
+    raise RuntimeError('long-path phase timed out: '+str((name,value,result)))
+   for name in gates:path_gate(name,0,'0')
+   for name in phases:
+    if not e.call('file_put',{'name':name,'data':'0'}).get('readback_verified'):raise RuntimeError('long-path phase setup failed')
+   program=stage_program(e,path_image);actors=[e.call('process_spawn_staged',{'id':program}) for _ in range(2)]
+   if [actor.get('slot') for actor in actors]!=[0,1]:raise RuntimeError('long-path actor admissions failed: '+str(actors))
+   for name in phases:path_phase(name,'r')
+   bindings=[]
+   for slot,role in enumerate(('human','assistant')):
+    bindings.append(e.call('document_bind',{'slot':slot,'incarnation':actors[slot]['incarnation_text'],'boot_id':actors[slot]['boot_id'],'role':role})['binding_id'])
+   path_gate(gates[0],bindings[0],'1');path_phase(phases[0],'d')
+   after_a=e.call('tree_status',{})
+   if int(after_a['generation'])!=int(revision)+5:raise RuntimeError('long-path A generation invalid: '+str(after_a))
+   path_gate(gates[1],bindings[1],'1');path_phase(phases[1],'d')
+   after_b=e.call('tree_status',{});final_generation=after_b['generation']
+   if int(final_generation)!=int(revision)+10:raise RuntimeError('long-path B generation invalid: '+str(after_b))
+   expected_paths=['/'+first+'/'+'p'*30 for first in ('a','b')]
+   for first,path in zip(('a','b'),expected_paths):
+    expected=bytes(((i*19)^ord(first))&255 for i in range(65))
+    if chunked_tree_read(e,path,65,final_generation)!=expected:raise RuntimeError('long-path kept file differs')
+   listing=e.call('tree_list',{'generation':final_generation})['entries'];paths={entry['path'] for entry in listing}
+   if not set(expected_paths).issubset(paths) or any('/'+first+'/'+'k'*252 in paths or '/'+first+'/'+'f'*30 in paths for first in ('a','b')):raise RuntimeError('long-path create/delete result differs: '+str(listing))
+   for name,binding in zip(gates,bindings):path_gate(name,binding,'q')
+   done=e.wait_independent(lambda x:x.get('slot_states')==['exited','exited'],'long-path actors exited')
+   if done.get('outcomes')!=[1,1] or done.get('exit_codes')!=[0,0] or done.get('frame_pool_assigned')!=0:raise RuntimeError('long-path actor cleanup failed: '+str(done))
+   if e.call('document_snapshot',{})!=document_before or protected_program_sectors(path_disk)!=path_program_sectors:raise RuntimeError('long-path operations modified legacy workspace/programs')
+   e.call('upload_reset',{'id':program});traces.append(e.trace);states.append(e.call('tree_status',{}))
+  finally:e.close()
+  e=Guest(a.qemu,guest,path_disk,tmp,77,out,a.transport)
+  try:
+   e.progress('after long-path reboot',timeout_image=True,expected_exit_code=0)
+   if e.call('tree_open',{'dedicated':True}).get('generation')!=final_generation:raise RuntimeError('long-path tree revision not restored')
+   for first,path in zip(('a','b'),expected_paths):
+    expected=bytes(((i*19)^ord(first))&255 for i in range(65))
+    if chunked_tree_read(e,path,65,final_generation)!=expected:raise RuntimeError('long-path file lost on reboot')
+   listing=e.call('tree_list',{'generation':final_generation})['entries'];paths={entry['path'] for entry in listing}
+   if not set(expected_paths).issubset(paths) or any('/'+first+'/'+'k'*252 in paths or '/'+first+'/'+'f'*30 in paths for first in ('a','b')):raise RuntimeError('long-path deletion not retained after reboot')
+   if e.call('document_snapshot',{})!=document_before or protected_program_sectors(path_disk)!=path_program_sectors:raise RuntimeError('long-path reboot changed legacy workspace/programs')
+   traces.append(e.trace);states.append(e.call('tree_status',{}))
+  finally:e.close()
   # Two VM boots, one disposable clone; no host file or raw device is attached.
   chunk_disk=Path(tmp)/'chunk-offset.raw';create(chunk_disk,disk.read_bytes())
   chunk_image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-chunk-io.hex').read_text().strip())
