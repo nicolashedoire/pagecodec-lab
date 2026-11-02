@@ -733,6 +733,18 @@ fn tree_tool<T:Transport>(name:&str,args:Option<&serde_json::Map<String,Value>>,
             let size=tree.get(path).map_err(tree_error)?.len();let data=tree.read_at(path,offset,capacity).map_err(tree_error)?;
             Ok(json!({"path":path,"offset":offset,"hex":tree_hex(data)?,"size":size,"generation":format!("{}",g)}))
         }
+        "tree_spawn"=>{
+            if args.len()!=2{return Err("invalid tree_spawn arguments")}
+            let path=string("path")?;let g=generation()?;
+            // Opening and selecting a current snapshot are explicit. The guest
+            // service is single-CPU and serialized with tree writes, so this
+            // borrowed image stays stable until admission has copied its pages.
+            volume.current(disk,g,false)?;
+            let image=volume.tree.as_ref().ok_or("tree not opened")?.get(path).map_err(tree_error)?;
+            let boot_id=boot_identity::identifier().ok_or("boot identity unavailable")?;
+            let (slot,incarnation)=el0::start_independent(image)?;
+            Ok(json!({"started":true,"path":path,"generation":format!("{}",g),"slot":slot,"incarnation":incarnation,"incarnation_text":format!("{}",incarnation),"boot_id":boot_id_text(boot_id)}))
+        }
         "tree_list"=>{
             if args.len()!=1{return Err("invalid tree_list arguments")}
             let g=generation()?;volume.current(disk,g,false)?;let tree=volume.tree.as_ref().ok_or("tree not opened")?;
@@ -1415,6 +1427,7 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"move_ai","description":"Move AI pointer within its right-hand QEMU workspace.","inputSchema":{"type":"object","properties":{"x":{"type":"integer","minimum":400,"maximum":773},"y":{"type":"integer","minimum":0,"maximum":573}},"required":["x","y"],"additionalProperties":false}},
                                         {"name":"pointer_state","description":"Read the two pointer coordinates in this guest only.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"click_ai","description":"Send a synthetic AI click to a visible process surface or demo button; no host click or authentication.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"key_ai","description":"Send one raw evdev key to the focused AI-process surface; token checks are not authentication.","inputSchema":{"type":"object","properties":{"id":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20},"incarnation":{"type":"string","pattern":"^[1-9][0-9]*$","maxLength":20},"boot_id":{"type":"string","pattern":"^[0-9a-f]{32}$"},"code":{"type":"integer","minimum":1,"maximum":767},"value":{"type":"integer","minimum":0,"maximum":2}},"required":["id","incarnation","boot_id","code","value"],"additionalProperties":false}},
                                         {"name":"interaction_state","description":"Read logical button focus and click counts in this guest.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"surface_status","description":"Inspect process surface metadata without pixels or event contents; actor labels are not authenticated.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"heap_status","description":"Read bounded guest heap allocator metrics.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
@@ -1461,6 +1474,7 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"tree_upload_seal","description":"Verify tree-upload length and checksum.","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}},
                                         {"name":"tree_upload_commit","description":"Persist a sealed tree file if its original generation is current.","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}},
                                         {"name":"tree_upload_reset","description":"Discard a tree-file upload.","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}},
+                                        {"name":"tree_spawn","description":"Admit a named ELF from the opened tree at an exact generation; MCP is unauthenticated.","inputSchema":{"type":"object","properties":{"path":{"type":"string","maxLength":255},"generation":{"type":"string"}},"required":["path","generation"],"additionalProperties":false}},
                                         {"name":"tree_read","description":"Read up to 512 bytes of a tree file at an expected generation.","inputSchema":{"type":"object","properties":{"path":{"type":"string","maxLength":255},"offset":{"type":"integer","minimum":0},"capacity":{"type":"integer","minimum":1,"maximum":512},"generation":{"type":"string"}},"required":["path","offset","capacity","generation"],"additionalProperties":false}},
                                         {"name":"tree_list","description":"List tree paths and sizes at an expected generation.","inputSchema":{"type":"object","properties":{"generation":{"type":"string"}},"required":["generation"],"additionalProperties":false}},
                                         {"name":"file_get","description":"Read one synthetic flat file as hexadecimal bytes; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}},
@@ -1523,7 +1537,7 @@ pub extern "C" fn graph_main() -> ! {
                                             }
                                             Some("tree_status") | Some("tree_provision") | Some("tree_open") | Some("tree_mkdir") |
                                             Some("tree_upload_begin") | Some("tree_upload_append") | Some("tree_upload_seal") |
-                                            Some("tree_upload_commit") | Some("tree_upload_reset") | Some("tree_read") | Some("tree_list") => {
+                                            Some("tree_upload_commit") | Some("tree_upload_reset") | Some("tree_read") | Some("tree_list") | Some("tree_spawn") => {
                                                 let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
                                                 if let Some(ref mut disk)=block {
                                                     match tree_tool(name.unwrap(),args,disk,&mut tree_volume,&mut tree_upload) {
@@ -1905,6 +1919,34 @@ pub extern "C" fn graph_main() -> ! {
                                                 if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"status requires empty arguments");}
                                                 else {let mut status=surfaces.status();status["keyboard_available_at_boot"]=json!(keyboard.is_some() || tablet_has_keyboard);tool_json(id,status);}
                                             }
+                                            Some("key_ai") => {
+                                                let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
+                                                let values=args.filter(|o|o.len()==5).and_then(|o| {
+                                                    let sid=parse_incarnation(o.get("id")?.as_str()?)?;
+                                                    let inc=parse_incarnation(o.get("incarnation")?.as_str()?)?;
+                                                    let boot=parse_boot_id(o.get("boot_id")?.as_str()?)?;
+                                                    let code=u16::try_from(o.get("code")?.as_u64()?).ok()?;
+                                                    let value=u32::try_from(o.get("value")?.as_u64()?).ok()?;
+                                                    if !input_keyboard_code(code) || value>2 {return None}
+                                                    Some((sid,inc,boot,code,value))
+                                                });
+                                                if let Some((sid,inc,boot,code,value))=values {
+                                                    match boot_identity::identifier() {
+                                                        None=>tool_error(id,"boot identity unavailable"),
+                                                        Some(current) if current!=boot=>tool_error(id,"stale boot identity"),
+                                                        Some(_) if !el0::independent_incarnation_live(1,inc)=>tool_error(id,"stale process incarnation"),
+                                                        Some(_)=>match surfaces.ai_key(inc,sid,u32::from(code),value) {
+                                                            Ok(surface::KeyDelivery::Queued)=>tool_json(id,json!({"delivered":true})),
+                                                            Ok(surface::KeyDelivery::Reset)=>tool_json(id,json!({"delivered":false,"reason":"queue reset"})),
+                                                            Ok(surface::KeyDelivery::NoFocus)=>tool_json(id,json!({"delivered":false,"reason":"no focus"})),
+                                                            Ok(surface::KeyDelivery::Unpaired)=>tool_json(id,json!({"delivered":false,"reason":"unpaired"})),
+                                                            Ok(surface::KeyDelivery::Invalid)=>tool_error(id,"invalid AI key"),
+                                                            Err(surface::Error::Denied)=>tool_error(id,"surface access denied"),
+                                                            Err(_)=>tool_error(id,"stale surface"),
+                                                        }
+                                                    }
+                                                } else {tool_error(id,"invalid key_ai arguments");}
+                                            }
                                             Some("click_ai") => {
                                                 let args=params.and_then(|p|p.get("arguments"));
                                                 if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) { tool_error(id,"click requires empty arguments"); }
@@ -1915,6 +1957,7 @@ pub extern "C" fn graph_main() -> ! {
                                                         surface::Click::Full=>tool_json(id,json!({"surface":true,"delivered":false,"reason":"queue full"})),
                                                         surface::Click::Blocked=>tool_json(id,json!({"surface":true,"delivered":false,"reason":"not routed"})),
                                                         surface::Click::Miss=>if let Some(target)=button_hit((x,y),true) {
+                                                            surfaces.clear_ai_focus();
                                                             interaction.ai_focus=target;
                                                             interaction.ai_clicks=interaction.ai_clicks.saturating_add(1);
                                                             pending_ai_click=Some(id);changed=true;

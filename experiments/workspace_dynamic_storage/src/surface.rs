@@ -18,6 +18,8 @@ impl Error {pub fn errno(self)->i64 {match self {Self::Invalid=>-22,Self::NoSpac
 
 #[derive(Clone,Copy,PartialEq,Eq)]
 pub enum Click {Miss,Queued,Full,Blocked}
+#[derive(Clone,Copy,PartialEq,Eq)]
+pub enum KeyDelivery {Queued,Reset,NoFocus,Unpaired,Invalid}
 
 #[derive(Clone,Copy,Default)]
 struct Event {x:u32,y:u32,buttons:u32,source:u32}
@@ -34,9 +36,9 @@ impl Drop for Surface {
     fn drop(&mut self) {self.front.fill(0);self.back.fill(0);self.events.fill(Event::default());self.keys.fill(KeyEvent::default());self.delivered_down.fill(0);}
 }
 
-pub struct Surfaces {slots:[Option<Surface>;ACTORS],next_id:u64,human_focus:Option<(u64,u64)>}
+pub struct Surfaces {slots:[Option<Surface>;ACTORS],next_id:u64,human_focus:Option<(u64,u64)>,ai_focus:Option<(u64,u64)>}
 impl Surfaces {
-    pub fn new()->Self {Self{slots:core::array::from_fn(|_|None),next_id:1,human_focus:None}}
+    pub fn new()->Self {Self{slots:core::array::from_fn(|_|None),next_id:1,human_focus:None,ai_focus:None}}
     /// Return true if a visible surface was removed and must be redrawn.
     pub fn reap(&mut self,mut live:impl FnMut(usize,u64)->bool)->bool {
         let mut redraw=false;
@@ -44,6 +46,7 @@ impl Surfaces {
             if slot.as_ref().is_some_and(|s|!live(actor,s.incarnation)) {
                 redraw|=slot.as_ref().is_some_and(|s|s.visible);*slot=None;
                 if actor==0 {self.human_focus=None;}
+                if actor==1 {self.ai_focus=None;}
             }
         }
         redraw
@@ -88,7 +91,7 @@ impl Surfaces {
     /// Return whether a redraw is required after removing a visible surface.
     pub fn destroy(&mut self,actor:usize,incarnation:u64,id:u64)->Result<bool,Error> {
         let slot=self.locate(actor,incarnation,id)?;let visible=self.slots[slot].as_ref().is_some_and(|s|s.visible);
-        self.slots[slot]=None;if slot==0 {self.human_focus=None}Ok(visible)
+        self.slots[slot]=None;if slot==0 {self.human_focus=None}if slot==1 {self.ai_focus=None}Ok(visible)
     }
     /// Human source 0 targets slot 0, AI source 1 targets slot 1. These are
     /// demo routing conventions, not user identity or a remote access policy.
@@ -105,11 +108,14 @@ impl Surfaces {
             if actor!=permitted {if source==0 {self.human_focus=None}return Click::Blocked}
             if source==0 {self.human_focus=Some((s.id,s.incarnation));}
             if s.len==QUEUE {s.dropped=s.dropped.saturating_add(1);return Click::Full}
+            if source==1 {self.ai_focus=Some((s.id,s.incarnation));}
             let index=(s.head+s.len)%QUEUE;s.events[index]=Event{x:local_x as u32,y:local_y as u32,buttons:1,source};s.len+=1;return Click::Queued
         }
         if source==0 {self.human_focus=None}
         Click::Miss
     }
+    /// A successfully activated non-surface AI control releases AI focus.
+    pub fn clear_ai_focus(&mut self) {self.ai_focus=None}
     pub fn poll(&mut self,actor:usize,incarnation:u64,id:u64)->Result<Option<[u8;16]>,Error> {
         let slot=self.locate(actor,incarnation,id)?;let s=self.slots[slot].as_mut().ok_or(Error::Stale)?;
         if s.len==0{return Ok(None)}
@@ -118,15 +124,11 @@ impl Surfaces {
         for (i,value) in [e.x,e.y,e.buttons,e.source].into_iter().enumerate() {data[i*4..i*4+4].copy_from_slice(&value.to_le_bytes())}
         Ok(Some(data))
     }
-    /// A release follows its surface after focus loss if its press was
-    /// delivered or remains queued. Overflow replaces pending events with a
-    /// KEY_RESET marker so the client can clear all held-key state.
-    /// Source 0 denotes the VirtIO keyboard, not an authenticated user.
-    pub fn human_key(&mut self,code:u32,value:u32)->bool {
-        if value>2 || code as usize>=KEY_WORDS*64 {return false}
-        let Some(s)=self.slots[0].as_mut() else{self.human_focus=None;return false};
-        if !s.visible {self.human_focus=None;return false}
-        let focused=self.human_focus==Some((s.id,s.incarnation));
+    /// A release follows its original surface after focus loss if its press
+    /// was delivered or remains queued. Saturation replaces pending events
+    /// with a source-specific KEY_RESET; neither source is authenticated.
+    fn push_key(s:&mut Surface,focused:bool,code:u32,value:u32,source:u32)->KeyDelivery {
+        if value>2 || code as usize>=KEY_WORDS*64 {return KeyDelivery::Invalid}
         let word=code as usize/64;let mask=1u64<<(code%64);
         let mut down=s.delivered_down[word]&mask!=0;
         // Also retain ordering when the press has not yet been polled.
@@ -134,18 +136,31 @@ impl Surfaces {
             let event=s.keys[(s.key_head+n)%QUEUE];
             if event.code==code {if event.value==1 {down=true} else if event.value==0 {down=false}}
         }
-        if (value==0 || value==2) && !down {return false}
-        if value==1 && down {return false}
-        if !focused && !(value==0 && down) {return false}
+        if (value==0 || value==2) && !down {return KeyDelivery::Unpaired}
+        if value==1 && down {return KeyDelivery::Unpaired}
+        if !focused && !(value==0 && down) {return KeyDelivery::NoFocus}
         if s.key_len==QUEUE {
             // Notify the client to clear held keys after losing queued input.
             // This only helps if the client receives and honors the reset.
             s.key_dropped=s.key_dropped.saturating_add((s.key_len+1) as u64);
             s.keys.fill(KeyEvent::default());s.key_head=0;s.key_len=1;
-            s.keys[0]=KeyEvent{code:u32::MAX,value:0,source:0};
-            s.delivered_down.fill(0);return false
+            s.keys[0]=KeyEvent{code:u32::MAX,value:0,source};
+            s.delivered_down.fill(0);return KeyDelivery::Reset
         }
-        let i=(s.key_head+s.key_len)%QUEUE;s.keys[i]=KeyEvent{code,value,source:0};s.key_len+=1;true
+        let i=(s.key_head+s.key_len)%QUEUE;s.keys[i]=KeyEvent{code,value,source};s.key_len+=1;KeyDelivery::Queued
+    }
+    pub fn human_key(&mut self,code:u32,value:u32)->bool {
+        let Some(s)=self.slots[0].as_mut() else{self.human_focus=None;return false};
+        if !s.visible {self.human_focus=None;return false}
+        let focused=self.human_focus==Some((s.id,s.incarnation));
+        Self::push_key(s,focused,code,value,0)==KeyDelivery::Queued
+    }
+    pub fn ai_key(&mut self,incarnation:u64,id:u64,code:u32,value:u32)->Result<KeyDelivery,Error> {
+        let slot=self.locate(1,incarnation,id)?;
+        let s=self.slots[slot].as_mut().ok_or(Error::Stale)?;
+        if !s.visible {return Ok(KeyDelivery::NoFocus)}
+        let focused=self.ai_focus==Some((s.id,s.incarnation));
+        Ok(Self::push_key(s,focused,code,value,1))
     }
     pub fn poll_key(&mut self,actor:usize,incarnation:u64,id:u64)->Result<Option<[u8;12]>,Error> {
         let slot=self.locate(actor,incarnation,id)?;let s=self.slots[slot].as_mut().ok_or(Error::Stale)?;
@@ -174,7 +189,7 @@ impl Surfaces {
     }
     pub fn status(&self)->Value {
         let slots:Vec<Value>=self.slots.iter().enumerate().filter_map(|(actor,s)|s.as_ref().map(|s| {
-            let (x,y)=POSITIONS[actor];json!({"slot":actor,"incarnation":format!("{}",s.incarnation),"id":format!("{}",s.id),"x":x,"y":y,"width":s.width,"height":s.height,"visible":s.visible,"queued":s.len,"dropped":s.dropped,"keyboard_focused":actor==0 && self.human_focus==Some((s.id,s.incarnation)),"keyboard_queued":s.key_len,"keyboard_dropped":s.key_dropped})
+            let (x,y)=POSITIONS[actor];json!({"slot":actor,"incarnation":format!("{}",s.incarnation),"id":format!("{}",s.id),"x":x,"y":y,"width":s.width,"height":s.height,"visible":s.visible,"queued":s.len,"dropped":s.dropped,"keyboard_focused":actor==0 && self.human_focus==Some((s.id,s.incarnation)),"ai_keyboard_focused":actor==1 && self.ai_focus==Some((s.id,s.incarnation)),"keyboard_queued":s.key_len,"keyboard_dropped":s.key_dropped})
         })).collect();json!({"surfaces":slots})
     }
 }

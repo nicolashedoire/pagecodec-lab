@@ -1881,6 +1881,30 @@ def main():
     traces.append(key_guest.trace);states.append(key_guest.call('process_status',{}))
     (out/('surface-key-qmp-'+str(keyboard)+'.json')).write_text(json.dumps(key_guest.qmp_trace,indent=2)+'\n')
    finally:key_guest.close()
+  # Independent human and AI keyboard focus, event routing and lifecycle.
+  from ai_key_scenario import run_ai_key_scenario
+  ai_key_disk=Path(tmp)/'ai-key.raw';create(ai_key_disk,bytes(SIZE))
+  ai_key_image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-ai-key.hex').read_text().strip())
+  ai_key_guest=Guest(a.qemu,guest,ai_key_disk,tmp,83,out,a.transport)
+  try:
+   run_ai_key_scenario(ai_key_guest,ai_key_image,stage_program)
+   traces.append(ai_key_guest.trace);states.append(ai_key_guest.call('process_status',{}))
+   (out/'ai-key-qmp.json').write_text(json.dumps(ai_key_guest.qmp_trace,indent=2)+'\n')
+  finally:ai_key_guest.close()
+  # Admit real Rust ELFs stored in the persistent tree, then reopen on reboot.
+  from tree_spawn_scenario import first_boot as tree_spawn_first, second_boot as tree_spawn_second
+  spawn_disk=Path(tmp)/'tree-spawn.raw';create(spawn_disk,bytes(SIZE))
+  spawn_image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-three-process.hex').read_text().strip())
+  spawn_guest=Guest(a.qemu,guest,spawn_disk,tmp,81,out,a.transport)
+  try:
+   spawn_generation,spawn_boot=tree_spawn_first(spawn_guest,spawn_image)
+   traces.append(spawn_guest.trace);states.append(spawn_guest.call('tree_status',{}))
+  finally:spawn_guest.close()
+  spawn_guest=Guest(a.qemu,guest,spawn_disk,tmp,82,out,a.transport)
+  try:
+   tree_spawn_second(spawn_guest,spawn_image,spawn_generation,spawn_boot)
+   traces.append(spawn_guest.trace);states.append(spawn_guest.call('tree_status',{}))
+  finally:spawn_guest.close()
   # Two VM boots, one disposable clone; no host file or raw device is attached.
   chunk_disk=Path(tmp)/'chunk-offset.raw';create(chunk_disk,disk.read_bytes())
   chunk_image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-chunk-io.hex').read_text().strip())

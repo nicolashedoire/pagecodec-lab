@@ -855,7 +855,7 @@ plus sequential `tree_upload_begin`, `tree_upload_append`, `tree_upload_seal`,
 bytes; size and a 64-bit FNV checksum must match. Mutating operations require
 the current generation, and a stale sealed upload cannot replace a newer tree.
 These operations are MCP-facing; EL0 has separate bounded read and staged
-write interfaces described below. Directory enumeration remains MCP-only.
+write and directory-enumeration interfaces described below.
 
 If one uniquely selected valid copy remains beside an unknown or invalid slot,
 an explicit open permits read/list in degraded, read-only mode. Mutations
@@ -877,6 +877,32 @@ modern-transport run with storage fault injection passed these checks; the
 recorded legacy trace predates the tree volume. It does not stage an upload
 and then inject damage during the same live guest; `tree_upload_commit` in
 that specific degraded transition is not covered by this scenario.
+
+### Starting a named executable from the tree
+
+`tree_spawn` accepts an absolute `path` and the exact `generation` of an
+explicitly opened tree. It rechecks the selected volume, reads the named file,
+and admits its ELF through the same isolated-process loader as the existing
+program-store entry points. It returns the path, generation, slot, incarnation
+and boot ID. A closed tree, stale generation, missing entry, directory or
+invalid ELF fails before admission. A uniquely recoverable degraded tree can
+be read and used to start an executable; no repair is performed.
+
+The file is at most 16 KiB. The current loader accepts only static AArch64
+ELF64 executables with at most one 4 KiB RX segment and, optionally, one 4 KiB
+RW segment; it does not provide an interpreter, dynamic linking or relocation.
+Admission remains bounded to three process slots and the available physical
+frames. This MCP operation does not start a program automatically at boot or
+provide an EL0 `exec` syscall. The control endpoint has no authentication and
+the tree has no executable permission bit: the endpoint can start any valid
+ELF file accessible in the tree. The tree generation identifies the selected
+snapshot; FNV checksums do not authenticate its contents.
+
+The integrated modern-transport QEMU run passed: it starts the saved ELF,
+checks rejection cases, stops and readmits processes, and starts it again after
+a guest restart. The recorded legacy trace predates this interface. For the
+security work needed before processes can spawn children themselves, see
+[process authority research](../../docs/PROCESS_AUTHORITY_RESEARCH.md).
 
 ### Process reads from the tree
 
@@ -1056,13 +1082,14 @@ predates this surface interface.
 On the QEMU guest, an optional VirtIO keyboard feeds a separate, eight-event
 FIFO for the focused human surface. A human click on the visible slot-0
 surface grants focus; a human click outside it clears focus. AI clicks do not
-change human keyboard focus, and keyboard data is not routed to slot 1. An
+change human keyboard focus, and the virtual physical keyboard is not routed
+to slot 1. An
 app must poll `SVC #0x1a5` with its own surface handle and a private 12-byte
 output buffer. It receives 0 if empty or 12 bytes containing three
 little-endian `u32` values: Linux input event code, value (0 release, 1 press,
 2 repeat), and source (0 human). The Rust `Surface::poll_key` wrapper returns
 `KeyEvent` records. This is a virtual-device path; it does not grant access to
-the host keyboard or implement remote keyboard injection. Codes are raw evdev key
+the host keyboard or implement authenticated remote-human keyboard input. Codes are raw evdev key
 identifiers, not text, keyboard-layout translation or IME composition. Device
 hotplug and a reset on device disconnection are not implemented.
 
@@ -1082,3 +1109,32 @@ record a person's actual typing. The focused run passed with and without the
 keyboard; the complete integrated modern-transport run with storage fault
 injection also passed. QMP did not exercise the repeat value (2). The recorded
 legacy trace predates this keyboard interface.
+
+### MCP AI keyboard input
+
+An accepted `click_ai` on the visible slot-1 surface gives that surface an AI
+keyboard focus independent of the human focus. A refused surface click (full
+queue or blocked target) or a click with no target leaves AI focus unchanged;
+an accepted click on a demo button clears it. The existing human convention is
+different: a human click on its surface gives focus even when its click queue
+is full. `surface_status` retains `keyboard_focused` for the human route and
+adds `ai_keyboard_focused` for the AI route.
+
+MCP `key_ai` takes exact decimal-string `id` and `incarnation`, the current
+32-character lowercase hexadecimal `boot_id`, an evdev `code`, and a `value`
+(0 release, 1 press, 2 repeat). These public identifiers protect against stale
+targets during the current run; they are **not authentication**. Accepted
+events enter the slot-1 surface's separate eight-event key FIFO, with `source`
+1 in `Surface::poll_key`. A successful `{"delivered":true}` means queued, not
+yet consumed by the process. A refusal reports `delivered:false` with reason
+`no focus`, `unpaired`, or `queue reset`; malformed or stale identifiers return
+a tool error. A release already attributed to the surface may still be queued
+after focus is lost. A full key FIFO replaces its contents with
+`{code:0xffffffff,value:0,source:1}`; the consumer must clear its held-key
+state on that marker. Stopping or destroying the surface clears its focus and
+queue. This is synthetic guest input, not host keyboard control, text/IME
+composition, or an authenticated remote session.
+
+The integrated modern-transport QEMU run passed the AI-keyboard scenario,
+including focus separation, stale identifiers, queue reset and readmission.
+The recorded legacy trace predates this interface.
