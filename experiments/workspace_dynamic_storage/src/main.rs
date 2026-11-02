@@ -29,7 +29,7 @@ use core::arch::{asm, global_asm};
 use core::panic::PanicInfo;
 use core::ptr::{addr_of_mut, NonNull};
 use core::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use virtio_drivers::{device::{blk::VirtIOBlk, gpu::VirtIOGpu, input::VirtIOInput}, transport::{mmio::{MmioTransport, VirtIOHeader}, DeviceType, Transport}, BufferDirection, Hal, PhysAddr};
+use virtio_drivers::{device::{blk::VirtIOBlk, gpu::VirtIOGpu, input::{VirtIOInput,InputConfigSelect}}, transport::{mmio::{MmioTransport, VirtIOHeader}, DeviceType, Transport}, BufferDirection, Hal, PhysAddr};
 
 global_asm!(r#"
     .section .text.boot, "ax"
@@ -754,6 +754,23 @@ fn cursor(router: &Router, actor: &ActorId) -> (u32,u32) {
     let point = router.actor(actor).and_then(|a|a.pointer()).unwrap();
     (point.x as u32, point.y as u32)
 }
+// Classify input devices by advertised event bits, never discovery order.
+// The QEMU tablet exposes ABS_X/ABS_Y + BTN_LEFT; its keyboard exposes KEY_A.
+// This is a QEMU demo convention, not support for every HID/hotplug device.
+fn input_capabilities<T:Transport>(device:&mut VirtIOInput<VmHal,T>)->(bool,bool) {
+    let mut keys=[0u8;128];let mut axes=[0u8;128];
+    let key_len=device.query_config_select(InputConfigSelect::EvBits,1,&mut keys).ok().map(usize::from).filter(|n|*n<=keys.len()).unwrap_or(0);
+    let axis_len=device.query_config_select(InputConfigSelect::EvBits,3,&mut axes).ok().map(usize::from).filter(|n|*n<=axes.len()).unwrap_or(0);
+    let bit=|bits:&[u8],len:usize,code:usize| code/8<len && bits[code/8]&(1<<(code%8))!=0;
+    let tablet=bit(&axes,axis_len,0) && bit(&axes,axis_len,1) && bit(&keys,key_len,272);
+    let keyboard=bit(&keys,key_len,30);
+    (tablet,keyboard)
+}
+// Exclude the evdev BTN_* groups when a hybrid device also advertises keys.
+// The remaining key codes are forwarded raw, without layout or composition.
+fn input_keyboard_code(code:u16)->bool {
+    code>0 && code<=0x2ff && !(0x100..0x160).contains(&code) && !(0x220..0x228).contains(&code) && !(0x2c0..0x300).contains(&code)
+}
 
 #[no_mangle]
 pub extern "C" fn rust_main() -> ! {
@@ -765,6 +782,8 @@ pub extern "C" fn rust_main() -> ! {
 pub extern "C" fn graph_main() -> ! {
     let mut gpu = None;
     let mut input = None;
+    let mut keyboard = None;
+    let mut tablet_has_keyboard=false;
     let mut block = None;
     let mut entropy = None;
     let mut network = net::Network::new();
@@ -775,7 +794,13 @@ pub extern "C" fn graph_main() -> ! {
         match transport.device_type() {
             DeviceType::Block if block.is_none() => { block = VirtIOBlk::<VmHal, _>::new(transport).ok(); }
             DeviceType::GPU if gpu.is_none() => { gpu = VirtIOGpu::<VmHal, _>::new(transport).ok(); }
-            DeviceType::Input if input.is_none() => { input = VirtIOInput::<VmHal, _>::new(transport).ok(); }
+            DeviceType::Input => {
+                if let Ok(mut device)=VirtIOInput::<VmHal,_>::new(transport) {
+                    let (tablet,keys)=input_capabilities(&mut device);
+                    if tablet && input.is_none() {tablet_has_keyboard=keys;input=Some(device)}
+                    else if keys && keyboard.is_none() {keyboard=Some(device)}
+                }
+            }
             DeviceType::EntropySource if entropy.is_none() => { entropy=boot_identity::BootEntropy::begin(transport).ok(); }
             DeviceType::Network => { network.add(transport); }
             _ => {}
@@ -962,7 +987,7 @@ pub extern "C" fn graph_main() -> ! {
                     if !el0::complete_document(&request,&reply[..reply_len],errno) {halt()}
                     continue;
                 }
-                if matches!(request.file_op,13..=17) {
+                if matches!(request.file_op,13..=18) {
                     // EL1 owns the surfaces; payloads are already copied into
                     // Request. No guest pointers are retained by the service.
                     if !el0::independent_incarnation_live(request.actor,request.incarnation) {halt()}
@@ -1001,6 +1026,12 @@ pub extern "C" fn graph_main() -> ! {
                                 if data.len()!=8 {return Err(surface::Error::Invalid)}
                                 let id=surface_u64(data,0).ok_or(surface::Error::Invalid)?;
                                 if let Some(event)=surfaces.poll(request.actor,request.incarnation,id)? {reply=event;reply_len=16;}
+                                Ok(())
+                            }
+                            18=>{
+                                if data.len()!=8 {return Err(surface::Error::Invalid)}
+                                let id=surface_u64(data,0).ok_or(surface::Error::Invalid)?;
+                                if let Some(event)=surfaces.poll_key(request.actor,request.incarnation,id)? {reply[..12].copy_from_slice(&event);reply_len=12;}
                                 Ok(())
                             }
                             _=>Err(surface::Error::Invalid),
@@ -1307,7 +1338,10 @@ pub extern "C" fn graph_main() -> ! {
         }
         service_polls+=1;
         let mut changed = surface_redraw;
-        while let Some(ev) = input.pop_pending_event() {
+        // Bound both tablet and keyboard processing so a sustained input
+        // stream cannot monopolize the guest service loop.
+        for _ in 0..64 {
+            let Some(ev)=input.pop_pending_event() else{break};
             service_polls=SERVICE_POLLS;
             match (ev.event_type,ev.code) {
                 (3,0) => {
@@ -1333,7 +1367,15 @@ pub extern "C" fn graph_main() -> ! {
                     }
                     hclick=pressed; changed=true;
                 }
+                (1,_) if tablet_has_keyboard && input_keyboard_code(ev.code) => {surfaces.human_key(u32::from(ev.code),ev.value);}
                 _ => {}
+            }
+        }
+        // Bound keyboard work per turn so a flood does not starve the service.
+        if let Some(ref mut keyboard)=keyboard {
+            for _ in 0..64 {
+                let Some(ev)=keyboard.pop_pending_event() else{break};
+                if ev.event_type==1 && input_keyboard_code(ev.code) {surfaces.human_key(u32::from(ev.code),ev.value);}
             }
         }
         while let Some(b) = poll_uart() {
@@ -1861,7 +1903,7 @@ pub extern "C" fn graph_main() -> ! {
                                             Some("surface_status") => {
                                                 let args=params.and_then(|p|p.get("arguments"));
                                                 if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"status requires empty arguments");}
-                                                else {tool_json(id,surfaces.status());}
+                                                else {let mut status=surfaces.status();status["keyboard_available_at_boot"]=json!(keyboard.is_some() || tablet_has_keyboard);tool_json(id,status);}
                                             }
                                             Some("click_ai") => {
                                                 let args=params.and_then(|p|p.get("arguments"));

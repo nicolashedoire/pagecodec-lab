@@ -1050,3 +1050,35 @@ is no remote-human input in this path, and this interface is not the final
 visual design. The focused run and the complete integrated modern-transport
 QEMU run with storage fault injection passed. The recorded legacy trace
 predates this surface interface.
+
+### Focused virtual keyboard input
+
+On the QEMU guest, an optional VirtIO keyboard feeds a separate, eight-event
+FIFO for the focused human surface. A human click on the visible slot-0
+surface grants focus; a human click outside it clears focus. AI clicks do not
+change human keyboard focus, and keyboard data is not routed to slot 1. An
+app must poll `SVC #0x1a5` with its own surface handle and a private 12-byte
+output buffer. It receives 0 if empty or 12 bytes containing three
+little-endian `u32` values: Linux input event code, value (0 release, 1 press,
+2 repeat), and source (0 human). The Rust `Surface::poll_key` wrapper returns
+`KeyEvent` records. This is a virtual-device path; it does not grant access to
+the host keyboard or implement remote keyboard injection. Codes are raw evdev key
+identifiers, not text, keyboard-layout translation or IME composition. Device
+hotplug and a reset on device disconnection are not implemented.
+
+A release follows the surface that received the press even when focus changes,
+provided its event can still be queued. An overflow clears the event queue and
+pressed-key attribution and enqueues `KEY_RESET`, represented as
+`{code: 0xffffffff, value: 0, source: 0}`. **The consumer must clear its entire
+local pressed-key state on KEY_RESET; this is not an ordinary key.** Repeats and
+releases without an attributed press are ignored. The reset signals lost input;
+it does not reconstruct keystrokes dropped during overflow.
+
+The new [`rust-surface-key`](fixtures/rust-surface-key.rs) integration scenario
+checks focus, press/release across focus loss, neighbor isolation, queue
+overflow/reset, stop and readmission, and boot without a keyboard. QMP injects
+only the known synthetic `a` key into disposable VMs; logs must not be used to
+record a person's actual typing. The focused run passed with and without the
+keyboard; the complete integrated modern-transport run with storage fault
+injection also passed. QMP did not exercise the repeat value (2). The recorded
+legacy trace predates this keyboard interface.

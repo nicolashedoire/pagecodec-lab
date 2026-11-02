@@ -713,8 +713,8 @@ fn submit(state:&mut Ipc,req:Request)->bool {
  if req.key_len>key_limit {return false}
  if req.doc_op!=0 && (!matches!(req.doc_op,1|2) || req.file_op!=0 || req.save || req.id<8 || req.binding_id==0) {return false}
  if req.doc_op==0 && req.binding_id!=0 {return false}
- if matches!(req.file_op,13..=17) {
-  let expected=match req.file_op {13=>8,14|16|17=>8,15=>28,_=>unreachable!()};
+ if matches!(req.file_op,13..=18) {
+  let expected=match req.file_op {13=>8,14|16|17|18=>8,15=>28,_=>unreachable!()};
   if req.id<8 || req.save || req.doc_op!=0 || req.binding_id!=0 || req.key_len!=0 || req.value_len!=expected || req.file_offset!=0 || req.read_capacity!=0 || req.tree_generation!=0 || req.tree_total!=0 || req.tree_checksum!=0 || req.tree_stage_id!=0 {return false}
  }
  if req.file_op==3 && (req.id<8 || req.file_offset>512 || req.read_capacity!=0 || req.file_offset.checked_add(req.value_len).is_none_or(|end|end>512)) {return false}
@@ -891,13 +891,13 @@ pub fn complete_tree_list_error(request:&Request,error:TreeListError)->bool {
  s.completions[7+request.actor].write_errno=match error {TreeListError::NotFound=>-2,TreeListError::Io=>-5,TreeListError::Denied=>-13,TreeListError::Unavailable=>-19,TreeListError::NotDirectory=>-20,TreeListError::Invalid=>-22,TreeListError::TooSmall=>-34,TreeListError::Stale=>-116};true
 }
 /// Complete one still-live surface operation. Payload is kernel-owned and
-/// contains either the created ID (8 bytes), one event (16 bytes), or nothing.
+/// contains either the created ID (8 bytes), one pointer event (16 bytes), one key event (12 bytes), or nothing.
 pub fn complete_surface(request:&Request,errno:i64,data:&[u8])->bool {
- if request.doc_op!=0 || !matches!(request.file_op,13..=17) || request.id<8
+ if request.doc_op!=0 || !matches!(request.file_op,13..=18) || request.id<8
   || !independent_incarnation_live(request.actor,request.incarnation) || !request_is_live(request)
   || !matches!(errno,0|-5|-12|-13|-19|-22|-28|-34|-75|-116) {return false}
  if errno!=0 && !data.is_empty() {return false}
- if errno==0 && match request.file_op {13=>data.len()!=8,17=>!(data.is_empty() || data.len()==16),_=>!data.is_empty()} {return false}
+ if errno==0 && match request.file_op {13=>data.len()!=8,17=>!(data.is_empty() || data.len()==16),18=>!(data.is_empty() || data.len()==12),_=>!data.is_empty()} {return false}
  if errno==0 && request.file_op==13 {
   let id=u64::from_le_bytes(data.try_into().unwrap_or_else(|_|halt()));
   if id==0 || id>i64::MAX as u64 {return false}
@@ -946,12 +946,14 @@ fn stop_loaded_task(s:&mut Ipc,reason:u8)->u64 {
 }
 // Surface operations: 0x1a0 create(width,height), 0x1a1 destroy(id),
 // 0x1a2 fill(id,x,y,width,height,rgb), 0x1a3 present(id), 0x1a4
-// poll_event(id,destination[16]); -11 means retry identical arguments.
+// poll_event(id,destination[16]); 0x1a5 poll_key(id,destination[12]);
+// -11 means retry identical arguments.
 // Only the fixed-size packed request and private destination location survive
 // a context switch; no user pointer or borrowed bytes reach the service.
 fn surface_io(f:&mut Frame,s:&mut Ipc,actor:usize,op:u8) {
- if !matches!(op,13..=17) || !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} || unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {direct_result(f,-38);return}
+ if !matches!(op,13..=18) || !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} || unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {direct_result(f,-38);return}
  let mut value=[0u8;32];
+ let event_capacity=match op {17=>16,18=>12,_=>0};
  let mut location=UserLocation{region:UserRegion::Data,offset:0};
  let len=if op==13 {
   let (width,height)=(f.regs[0],f.regs[1]);
@@ -965,14 +967,14 @@ fn surface_io(f:&mut Frame,s:&mut Ipc,actor:usize,op:u8) {
    for i in 0..5 {let v=f.regs[i+1];if v>u32::MAX as u64 {direct_result(f,-22);return} value[8+i*4..12+i*4].copy_from_slice(&(v as u32).to_le_bytes());}
    28
   } else {
-   if op==17 {let Some(dest)=user_location(actor,f.regs[1],16,true,false) else{direct_result(f,-14);return};location=dest;}
+   if matches!(op,17|18) {let Some(dest)=user_location(actor,f.regs[1],event_capacity,true,false) else{direct_result(f,-14);return};location=dest;}
    8
   }
  };
  let mut name=[0u8;super::tree_store::MAX_PATH];name[..len].copy_from_slice(&value[..len]);
  if let Some(pending)=unsafe{read_volatile(addr_of!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor))} {
   if pending.doc_op!=0 || pending.file_op!=op || pending.token.actor!=actor || pending.token.incarnation!=incarnation(actor)
-   || pending.name!=name || pending.name_len!=len || pending.name_location!=location || pending.dest_location!=location || pending.capacity!=if op==17 {16}else{0} {direct_result(f,-22);return}
+   || pending.name!=name || pending.name_len!=len || pending.name_location!=location || pending.dest_location!=location || pending.capacity!=event_capacity {direct_result(f,-22);return}
   let c=&mut s.completions[7+actor];
   if c.id!=pending.token.id || c.actor!=actor || c.incarnation!=pending.token.incarnation {halt()}
   if !c.applied {direct_result(f,-11);return}
@@ -980,12 +982,12 @@ fn surface_io(f:&mut Frame,s:&mut Ipc,actor:usize,op:u8) {
    if c.data_len!=8 {halt()}
    let id=u64::from_le_bytes(c.data[..8].try_into().unwrap_or_else(|_|halt()));
    if id==0 || id>i64::MAX as u64 {halt()} id as i64
-  } else if op==17 {
-   if c.data_len!=0 && c.data_len!=16 {halt()}
+  } else if matches!(op,17|18) {
+   if c.data_len!=0 && c.data_len!=event_capacity {halt()}
    if c.data_len!=0 {
     let Some(address)=user_address(pending.dest_location) else{direct_result(f,-14);return};
-    if incarnation(actor)!=pending.token.incarnation || user_location(actor,address,16,true,false)!=Some(pending.dest_location) {direct_result(f,-14);return}
-    for i in 0..16 {unsafe{writebyte(address+i as u64,c.data[i])}}
+    if incarnation(actor)!=pending.token.incarnation || user_location(actor,address,event_capacity,true,false)!=Some(pending.dest_location) {direct_result(f,-14);return}
+    for i in 0..event_capacity {unsafe{writebyte(address+i as u64,c.data[i])}}
    }
    c.data_len as i64
   } else {if c.data_len!=0 {halt()} 0};
@@ -999,7 +1001,7 @@ fn surface_io(f:&mut Frame,s:&mut Ipc,actor:usize,op:u8) {
  unsafe {
   write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);
   write_volatile(addr_of_mut!(PAIR_LAST_TOKENS).cast::<Option<CompletionToken>>().add(actor),Some(request.token()));
-  write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:op,file_offset:0,tree_generation:0,tree_total:0,tree_checksum:0,tree_stage_id:0,doc_op:0,name,name_len:len,name_location:location,dest_location:location,capacity:if op==17 {16}else{0}}));
+  write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:op,file_offset:0,tree_generation:0,tree_total:0,tree_checksum:0,tree_stage_id:0,doc_op:0,name,name_len:len,name_location:location,dest_location:location,capacity:event_capacity}));
   pair_io_count(actor,true);
  }
  direct_result(f,-11);
@@ -1314,7 +1316,7 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
    0x181=>{heap_operation(f,actor,0,false,true);return 0},
    0x182=>{let index=usize::try_from(f.regs[0]).unwrap_or(usize::MAX);heap_operation(f,actor,index,true,false);return 0},
    0x183=>{let index=usize::try_from(f.regs[0]).unwrap_or(usize::MAX);heap_operation(f,actor,index,false,false);return 0},
-   0x1a0..=0x1a4=>{let state=unsafe{&mut *addr_of_mut!(IPC)};surface_io(f,state,actor,((esr&0xff) as u8)-0xa0+13);return 0},
+   0x1a0..=0x1a5=>{let state=unsafe{&mut *addr_of_mut!(IPC)};surface_io(f,state,actor,((esr&0xff) as u8)-0xa0+13);return 0},
    0x190=>{let state=unsafe{&mut *addr_of_mut!(IPC)};document_io(f,state,actor,false);return 0},
    0x191=>{let state=unsafe{&mut *addr_of_mut!(IPC)};document_io(f,state,actor,true);return 0},
    0x140=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_read(f,state,actor,0);return 0},

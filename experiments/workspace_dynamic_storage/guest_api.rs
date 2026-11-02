@@ -257,6 +257,11 @@ pub struct Surface { id: u64, active: bool }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SurfaceEvent { pub x: u32, pub y: u32, pub buttons: u32, pub source: u32 }
 
+/// A reset event requires the application to clear all held-key state.
+pub const KEY_RESET: u32 = u32::MAX;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct KeyEvent { pub code: u32, pub value: u32, pub source: u32 }
+
 impl Surface {
     /// Public handle used for routing; it is not an authentication secret.
     pub fn id(&self) -> u64 { self.id }
@@ -317,6 +322,27 @@ impl Surface {
                     y: u32::from_le_bytes(bytes[4..8].try_into().map_err(|_| -5)?),
                     buttons: u32::from_le_bytes(bytes[8..12].try_into().map_err(|_| -5)?),
                     source: u32::from_le_bytes(bytes[12..16].try_into().map_err(|_| -5)?),
+                })),
+                _ => return Err(-5),
+            }
+        }
+    }
+
+    /// Poll an evdev-style key transition, or None when no key is queued.
+    /// KEY_RESET is a state reset, not an ordinary key.
+    pub fn poll_key(&self) -> Result<Option<KeyEvent>, i64> {
+        if !self.active { return Err(-116); }
+        let mut bytes = [0u8; 12];
+        loop {
+            let mut result = self.id;
+            unsafe { asm!("svc #0x1a5", inout("x0") result, in("x1") bytes.as_mut_ptr() as u64, options(nostack)); }
+            match result as i64 {
+                EAGAIN => core::hint::spin_loop(), n if n < 0 => return Err(n),
+                0 => return Ok(None),
+                12 => return Ok(Some(KeyEvent {
+                    code: u32::from_le_bytes(bytes[0..4].try_into().map_err(|_| -5)?),
+                    value: u32::from_le_bytes(bytes[4..8].try_into().map_err(|_| -5)?),
+                    source: u32::from_le_bytes(bytes[8..12].try_into().map_err(|_| -5)?),
                 })),
                 _ => return Err(-5),
             }

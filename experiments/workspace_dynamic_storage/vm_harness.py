@@ -26,7 +26,7 @@ def connect(path,process):
     raise TimeoutError('socket timeout')
 
 class Guest:
-    def __init__(self,qemu,kernel,image,tmp,index,out,transport,allow_degraded=False,rng=True,network=False):
+    def __init__(self,qemu,kernel,image,tmp,index,out,transport,allow_degraded=False,rng=True,network=False,keyboard=True):
         self.trace=[];self.qmp_trace=[];self.socket=Path(tmp)/('mcp'+str(index));self.qmp=Path(tmp)/('qmp'+str(index))
         self.disk_image=Path(image);self.output_dir=Path(out);self.run_index=index
         self.log=tempfile.TemporaryFile(mode='w+b')
@@ -37,6 +37,7 @@ class Guest:
              '-chardev',f'socket,id=mcp,path={self.socket},server=on,wait=off','-serial','chardev:mcp',
              '-monitor','none','-qmp',f'unix:{self.qmp},server=on,wait=off','-no-reboot','-kernel',str(kernel),'-global','virtio-mmio.force-legacy='+('true' if transport=='legacy' else 'false'),
              '-blockdev',json.dumps(f),'-blockdev',json.dumps(d),'-device','virtio-blk-device,drive=disk0']
+        if keyboard:cmd+=['-device','virtio-keyboard-device']
         if rng:cmd+=['-device','virtio-rng-device']
         # Both NICs attach only to QEMU's in-process hub. There is no host
         # backend, user-mode network, bridge, TAP, or external listener.

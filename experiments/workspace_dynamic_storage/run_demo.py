@@ -1870,6 +1870,17 @@ def main():
    traces.append(surface_guest.trace);states.append(surface_guest.call('process_status',{}))
    (out/'surface-qmp-evidence.json').write_text(json.dumps(surface_guest.qmp_trace,indent=2)+'\n')
   finally:surface_guest.close()
+  # Two disposable VMs exercise keyboard input and absence of the device.
+  from surface_key_scenario import run_keyboard_scenario
+  key_image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-surface-key.hex').read_text().strip())
+  for keyboard in (True,False):
+   key_disk=Path(tmp)/('surface-key-'+str(keyboard)+'.raw');create(key_disk,bytes(SIZE))
+   key_guest=Guest(a.qemu,guest,key_disk,tmp,79 if keyboard else 80,out,a.transport,keyboard=keyboard)
+   try:
+    run_keyboard_scenario(key_guest,key_image,stage_program,keyboard)
+    traces.append(key_guest.trace);states.append(key_guest.call('process_status',{}))
+    (out/('surface-key-qmp-'+str(keyboard)+'.json')).write_text(json.dumps(key_guest.qmp_trace,indent=2)+'\n')
+   finally:key_guest.close()
   # Two VM boots, one disposable clone; no host file or raw device is attached.
   chunk_disk=Path(tmp)/'chunk-offset.raw';create(chunk_disk,disk.read_bytes())
   chunk_image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-chunk-io.hex').read_text().strip())
