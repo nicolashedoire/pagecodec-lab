@@ -1394,6 +1394,156 @@ def main():
    if g.call('file_list',{})!=files_before:raise RuntimeError('multi-channel fixture left files behind')
    traces.append(g.trace);states.append(g.call('storage_status',{}))
   finally:g.close()
+  # Draft: the actual MCP schemas and errors must be reconciled with the guest.
+  # QEMU-only disposable clones; no physical block device or host directory.
+  tree_disk_path=Path(tmp)/'tree-volume.raw';create(tree_disk_path,disk.read_bytes())
+  def protected_program_sectors(path):
+   data=path.read_bytes();return (data[20*512:40*512],data[64*512:130*512])
+  def reserved_tree_sectors(path):return path.read_bytes()[256*512:768*512]
+  def non_tree_sectors(path):
+   data=path.read_bytes();return (data[:256*512],data[768*512:])
+  def chunked_tree_read(vm,path,size,generation):
+   result=bytearray()
+   for offset in range(0,size,512):
+    reply=vm.call('tree_read',{'path':path,'offset':offset,'capacity':min(512,size-offset),'generation':generation})
+    if reply.get('path')!=path or reply.get('offset')!=offset or reply.get('size')!=size or reply.get('generation')!=generation:raise RuntimeError('wrong tree read metadata: '+str(reply))
+    data=bytes.fromhex(reply['hex'])
+    if len(data)!=min(512,size-offset):raise RuntimeError('wrong tree read length')
+    result.extend(data)
+   eof=vm.call('tree_read',{'path':path,'offset':size,'capacity':1,'generation':generation})
+   if eof.get('hex')!='':raise RuntimeError('tree EOF returned data')
+   return bytes(result)
+  payload=bytes(((i*37+11)^(i>>8)^(i>>13))&255 for i in range(16*1024))
+  t=Guest(a.qemu,guest,tree_disk_path,tmp,58,out,a.transport)
+  try:
+   t.progress('before provisioned tree volume',timeout_image=True,expected_exit_code=0)
+   old_programs=protected_program_sectors(tree_disk_path);old_non_tree=non_tree_sectors(tree_disk_path)
+   old_document=t.call('document_snapshot',{});old_files=t.call('file_list',{})
+   status=t.call('tree_status',{})
+   if status.get('slots')!=['blank','blank']:raise RuntimeError('tree region was not blank: '+str(status))
+   provision=t.call('tree_provision',{'dedicated':True})
+   if provision.get('readback_verified') is not True or provision.get('generation')!='1':raise RuntimeError('tree provision failed: '+str(provision))
+   generation=provision['generation']
+   reject(t,'tree_mkdir',{'path':'/missing/child','generation':generation},'tree entry not found')
+   for path in ('/human','/human/projects','/agent'):
+    update=t.call('tree_mkdir',{'path':path,'generation':generation})
+    if update.get('readback_verified') is not True:raise RuntimeError('tree mkdir not verified: '+str(update))
+    generation=update['generation']
+   # A sealed upload may not overwrite a newer generation.
+   stale=t.call('tree_upload_begin',{'path':'/human/projects/stale.bin','size':4,'checksum':fnv64(b'test'),'generation':generation})['id']
+   if t.call('tree_upload_append',{'id':stale,'offset':0,'hex':b'test'.hex()}).get('received')!=4:raise RuntimeError('stale upload staging failed')
+   if t.call('tree_upload_seal',{'id':stale})!={'sealed':True}:raise RuntimeError('stale upload sealing failed')
+   update=t.call('tree_mkdir',{'path':'/other','generation':generation})
+   if update.get('readback_verified') is not True:raise RuntimeError('tree revision update failed')
+   old_generation=generation;generation=update['generation']
+   reject(t,'tree_upload_commit',{'id':stale},'stale tree generation')
+   if t.call('tree_upload_reset',{'id':stale})!={'reset':True}:raise RuntimeError('stale upload reset failed')
+   reject(t,'tree_list',{'generation':old_generation},'stale tree generation')
+   bad=t.call('tree_upload_begin',{'path':'/human/projects/bad.bin','size':4,'checksum':fnv64(b'other'),'generation':generation})['id']
+   if t.call('tree_upload_append',{'id':bad,'offset':0,'hex':b'test'.hex()}).get('received')!=4:raise RuntimeError('checksum test staging failed')
+   reject(t,'tree_upload_seal',{'id':bad},'tree upload checksum mismatch')
+   reject(t,'tree_upload_commit',{'id':bad},'tree upload not sealed')
+   if t.call('tree_upload_reset',{'id':bad})!={'reset':True}:raise RuntimeError('bad upload reset failed')
+   begin=t.call('tree_upload_begin',{'path':'/human/projects/data.bin','size':len(payload),'checksum':fnv64(payload),'generation':generation})
+   token=begin['id']
+   reject(t,'tree_upload_append',{'id':token,'offset':1,'hex':'00'},'tree upload offset mismatch')
+   for offset in range(0,len(payload),512):
+    reply=t.call('tree_upload_append',{'id':token,'offset':offset,'hex':payload[offset:offset+512].hex()})
+    if reply.get('received')!=min(offset+512,len(payload)):raise RuntimeError('wrong tree upload progress: '+str(reply))
+   if t.call('tree_upload_seal',{'id':token})!={'sealed':True}:raise RuntimeError('tree upload failed sealing')
+   update=t.call('tree_upload_commit',{'id':token})
+   if update.get('readback_verified') is not True:raise RuntimeError('tree commit not verified: '+str(update))
+   generation=update['generation']
+   listed=t.call('tree_list',{'generation':generation})
+   expected_paths={'/','/human','/human/projects','/agent','/other','/human/projects/data.bin'}
+   if {e['path'] for e in listed.get('entries',[])}!=expected_paths:raise RuntimeError('tree hierarchy differs: '+str(listed))
+   if next((e for e in listed['entries'] if e['path']=='/human/projects/data.bin'),None)!={'path':'/human/projects/data.bin','kind':'file','size':len(payload)}:raise RuntimeError('tree file metadata differs')
+   if chunked_tree_read(t,'/human/projects/data.bin',len(payload),generation)!=payload:raise RuntimeError('tree bytes differ')
+   if t.call('document_snapshot',{})!=old_document or t.call('file_list',{})!=old_files:raise RuntimeError('separate tree operation modified legacy workspace')
+   if protected_program_sectors(tree_disk_path)!=old_programs:raise RuntimeError('tree commit modified program sectors')
+   if non_tree_sectors(tree_disk_path)!=old_non_tree:raise RuntimeError('tree commit modified sectors outside reserved tree area')
+   traces.append(t.trace);states.append(t.call('tree_status',{}))
+  finally:t.close()
+  t=Guest(a.qemu,guest,tree_disk_path,tmp,59,out,a.transport)
+  try:
+   t.progress('after tree volume restart',timeout_image=True,expected_exit_code=0)
+   after_startup_non_tree=non_tree_sectors(tree_disk_path)
+   opened=t.call('tree_open',{'dedicated':True})
+   if opened.get('generation')!=generation:raise RuntimeError('tree generation not restored: '+str(opened))
+   if chunked_tree_read(t,'/human/projects/data.bin',len(payload),generation)!=payload:raise RuntimeError('tree bytes lost on reboot')
+   if t.call('document_snapshot',{})!=old_document or t.call('file_list',{})!=old_files:raise RuntimeError('legacy workspace changed after tree reboot')
+   if protected_program_sectors(tree_disk_path)!=old_programs:raise RuntimeError('tree restart modified program sectors')
+   if non_tree_sectors(tree_disk_path)!=after_startup_non_tree:raise RuntimeError('tree open/read modified sectors outside reserved tree area')
+   traces.append(t.trace);states.append(t.call('tree_status',{}))
+  finally:t.close()
+
+  # A valid latest copy remains readable beside an unknown or invalid older copy,
+  # but opening must never repair the companion or authorize writes.
+  tree_image=tree_disk_path.read_bytes();slot_starts=(256*512,512*512)
+  generations=[int.from_bytes(tree_image[offset+8:offset+16],'little') for offset in slot_starts]
+  if any(tree_image[offset:offset+8]!=b'TREE0001' for offset in slot_starts) or max(generations)!=int(generation) or generations[0]==generations[1]:raise RuntimeError('tree recovery fixture lacks two distinct valid generations')
+  older=generations.index(min(generations))
+  for index,(kind,error) in enumerate((('unknown','unknown tree region'),('invalid','tree region needs repair'))):
+   damaged=bytearray(tree_image);offset=slot_starts[older]
+   if kind=='unknown':damaged[offset:offset+8]=b'FOREIGN!'
+   else:damaged[offset+28]=0 # recognized record with missing commit marker
+   damaged_path=Path(tmp)/('tree-degraded-'+kind+'.raw');create(damaged_path,damaged)
+   t=Guest(a.qemu,guest,damaged_path,tmp,61+index,out,a.transport)
+   try:
+    t.progress('before degraded tree open',timeout_image=True,expected_exit_code=0)
+    before_tree=reserved_tree_sectors(damaged_path);before_programs=protected_program_sectors(damaged_path);before_non_tree=non_tree_sectors(damaged_path)
+    before_open=t.call('tree_status',{})
+    if before_open.get('state')!='degraded' or before_open.get('opened') is not False or before_open.get('writable') is not False:raise RuntimeError('unopened degraded status mismatch: '+str(before_open))
+    opened=t.call('tree_open',{'dedicated':True})
+    if opened.get('generation')!=generation or opened.get('degraded') is not True or opened.get('writable') is not False:raise RuntimeError('degraded tree chose wrong generation: '+str(opened))
+    status=t.call('tree_status',{})
+    if status.get('state')!='degraded' or status.get('opened') is not True or status.get('writable') is not False or status.get('slots',[None,None])[older]!=kind:raise RuntimeError('degraded tree status mismatch: '+str(status))
+    if chunked_tree_read(t,'/human/projects/data.bin',len(payload),generation)!=payload:raise RuntimeError('degraded tree read lost bytes')
+    if '/human/projects/data.bin' not in {e['path'] for e in t.call('tree_list',{'generation':generation}).get('entries',[])}:raise RuntimeError('degraded tree list lost file')
+    reject(t,'tree_mkdir',{'path':'/forbidden','generation':generation},error)
+    reject(t,'tree_upload_begin',{'path':'/human/projects/forbidden.bin','size':4,'checksum':fnv64(b'test'),'generation':generation},error)
+    if reserved_tree_sectors(damaged_path)!=before_tree or protected_program_sectors(damaged_path)!=before_programs:raise RuntimeError('degraded tree read/refusal modified protected sectors')
+    if non_tree_sectors(damaged_path)!=before_non_tree:raise RuntimeError('degraded tree read/refusal modified outside sectors')
+    traces.append(t.trace);states.append(t.call('tree_status',{}))
+   finally:t.close()
+
+  # Neither duplicate generations nor two invalid records may be selected.
+  for index,kind in enumerate(('both-invalid','duplicate-generation')):
+   damaged=bytearray(tree_image)
+   if kind=='both-invalid':
+    for offset in slot_starts:damaged[offset+28]=0
+   else:
+    offset=slot_starts[older]
+    damaged[offset+8:offset+16]=int(generation).to_bytes(8,'little')
+    n=int.from_bytes(damaged[offset+16:offset+20],'little')
+    digest=int(fnv64(damaged[offset+8:offset+20]+damaged[offset+512:offset+512+n]),16)
+    damaged[offset+20:offset+28]=digest.to_bytes(8,'little')
+   damaged_path=Path(tmp)/('tree-selection-'+kind+'.raw');create(damaged_path,damaged)
+   t=Guest(a.qemu,guest,damaged_path,tmp,63+index,out,a.transport)
+   try:
+    t.progress('before invalid tree selection',timeout_image=True,expected_exit_code=0)
+    before=damaged_path.read_bytes();status=t.call('tree_status',{})
+    expected_slots=['invalid','invalid'] if kind=='both-invalid' else ['valid','valid']
+    if status.get('state')!='invalid' or status.get('slots')!=expected_slots or status.get('generation') is not None or status.get('opened') is not False:raise RuntimeError('invalid tree selection was not refused: '+str(status))
+    reject(t,'tree_open',{'dedicated':True},'tree region needs repair')
+    reject(t,'tree_provision',{'dedicated':True},'tree region needs repair')
+    if damaged_path.read_bytes()!=before:raise RuntimeError('invalid tree selection changed virtual disk')
+    traces.append(t.trace);states.append(t.call('tree_status',{}))
+   finally:t.close()
+
+  # Refusal before mutating a foreign signature in the reserved region.
+  foreign=bytearray(disk.read_bytes());foreign[256*512:256*512+8]=b'FOREIGN!'
+  foreign_path=Path(tmp)/'tree-foreign.raw';create(foreign_path,foreign)
+  t=Guest(a.qemu,guest,foreign_path,tmp,60,out,a.transport)
+  try:
+   t.progress('before unknown tree region',timeout_image=True,expected_exit_code=0)
+   before_tree=reserved_tree_sectors(foreign_path);before_programs=protected_program_sectors(foreign_path)
+   status=t.call('tree_status',{})
+   if status.get('slots',[None,None])[0]!='unknown':raise RuntimeError('unknown tree region not detected: '+str(status))
+   reject(t,'tree_provision',{'dedicated':True},'unknown tree region')
+   if reserved_tree_sectors(foreign_path)!=before_tree or protected_program_sectors(foreign_path)!=before_programs:raise RuntimeError('refused unknown tree altered protected sectors')
+   traces.append(t.trace);states.append(t.call('tree_status',{}))
+  finally:t.close()
   # Two VM boots, one disposable clone; no host file or raw device is attached.
   chunk_disk=Path(tmp)/'chunk-offset.raw';create(chunk_disk,disk.read_bytes())
   chunk_image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-chunk-io.hex').read_text().strip())

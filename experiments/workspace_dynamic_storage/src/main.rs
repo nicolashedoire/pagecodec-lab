@@ -10,6 +10,9 @@ mod boot_identity;
 mod staging;
 mod program_store;
 mod program_store_v2;
+mod tree_store;
+mod tree_disk;
+mod tree_staging;
 mod net;
 extern crate alloc;
 use alloc::format;
@@ -485,6 +488,169 @@ fn parse_checksum(text:&str)->Option<u64> {
     if text.len()!=16 || !text.bytes().all(|b|b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {return None}
     u64::from_str_radix(text,16).ok()
 }
+
+// The tree uses independent reserved sectors; it is never provisioned from
+// a blank disk automatically. A controller must explicitly assert that the
+// QEMU disk regions are dedicated on each open/provision. MCP is unauthenticated.
+struct TreeVolume {tree:Option<tree_store::TreeStore>,generation:Option<u64>,dedicated:bool}
+impl TreeVolume {
+    fn new()->Self {Self{tree:None,generation:None,dedicated:false}}
+    fn close(&mut self) {self.tree=None;self.generation=None;self.dedicated=false;}
+    fn inspect<T:Transport>(&mut self,disk:&mut VirtIOBlk<VmHal,T>)->Result<tree_disk::Status,&'static str> {
+        match tree_disk::status(disk) {Ok(s)=>Ok(s),Err(e)=>{self.close();Err(e)}}
+    }
+    fn safe(status:&tree_disk::Status)->Result<(),&'static str> {
+        if status.write_blocked {return Err("storage write blocked until restart")}
+        if status.slots.contains(&tree_disk::SlotState::Unknown) {return Err("unknown tree region")}
+        if status.slots.contains(&tree_disk::SlotState::Invalid) || status.selection_error {return Err("tree region needs repair")}
+        Ok(())
+    }
+    fn current<T:Transport>(&mut self,disk:&mut VirtIOBlk<VmHal,T>,generation:u64,write:bool)->Result<(),&'static str> {
+        if !self.dedicated || self.tree.is_none() {return Err("tree not opened")}
+        if self.generation!=Some(generation) {return Err("stale tree generation")}
+        let status=self.inspect(disk)?;
+        if status.write_blocked {self.close();return Err("storage write blocked until restart")}
+        if status.selection_error {self.close();return Err("tree region needs repair")}
+        if status.generation!=Some(generation) {self.close();return Err("stale tree generation")}
+        // A unique valid copy permits read-only recovery even with a damaged
+        // neighbor; it never authorizes repair or overwriting that region.
+        if write {Self::safe(&status)?}
+        Ok(())
+    }
+    fn provision<T:Transport>(&mut self,disk:&mut VirtIOBlk<VmHal,T>)->Result<(usize,u64),&'static str> {
+        if self.tree.is_some() {return Err("tree already opened")}
+        let status=self.inspect(disk)?;Self::safe(&status)?;
+        if status.slots!=[tree_disk::SlotState::Blank;2] || status.generation.is_some() {return Err("tree region not blank")}
+        let candidate=tree_store::TreeStore::new().map_err(tree_error)?;
+        let (slot,generation)=tree_disk::store(disk,&candidate,true)?;
+        if generation!=1 {STORAGE_WRITE_BLOCKED.store(true,Ordering::Relaxed);return Err("tree generation mismatch")}
+        self.tree=Some(candidate);self.generation=Some(generation);self.dedicated=true;Ok((slot,generation))
+    }
+    fn open<T:Transport>(&mut self,disk:&mut VirtIOBlk<VmHal,T>)->Result<(u64,bool),&'static str> {
+        if self.tree.is_some() {return Err("tree already opened")}
+        let status=self.inspect(disk)?;
+        if status.write_blocked{return Err("storage write blocked until restart")}
+        if status.selection_error{return Err("tree region needs repair")}
+        let generation=status.generation.ok_or("tree not provisioned")?;
+        let candidate=tree_disk::load(disk)?;
+        let after=self.inspect(disk)?;
+        if after.write_blocked{return Err("storage write blocked until restart")}
+        if after.selection_error{return Err("tree region needs repair")}
+        if after.generation!=Some(generation) {return Err("stale tree generation")}
+        let degraded=Self::safe(&after).is_err();
+        self.tree=Some(candidate);self.generation=Some(generation);self.dedicated=true;Ok((generation,degraded))
+    }
+    fn candidate(&self)->Result<tree_store::TreeStore,&'static str> {
+        let tree=self.tree.as_ref().ok_or("tree not opened")?;
+        let image=tree.encode().map_err(tree_error)?;
+        tree_store::TreeStore::decode(&image).map_err(tree_error)
+    }
+    fn commit<T:Transport>(&mut self,disk:&mut VirtIOBlk<VmHal,T>,generation:u64,candidate:tree_store::TreeStore)->Result<(usize,u64),&'static str> {
+        self.current(disk,generation,true)?;
+        let expected=generation.checked_add(1).ok_or("tree generation exhausted")?;
+        match tree_disk::store(disk,&candidate,self.dedicated) {
+            Ok((slot,next)) if next==expected=>{self.tree=Some(candidate);self.generation=Some(next);Ok((slot,next))},
+            Ok(_)=>{self.close();STORAGE_WRITE_BLOCKED.store(true,Ordering::Relaxed);Err("tree generation mismatch")},
+            Err(error)=>{if STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed) {self.close()} Err(error)},
+        }
+    }
+}
+fn tree_error(error:tree_store::Error)->&'static str {
+    use tree_store::Error::*;
+    match error {
+        InvalidPath=>"invalid tree path",NotFound=>"tree entry not found",NotDirectory=>"tree parent not directory",
+        IsDirectory=>"tree entry is directory",AlreadyExists=>"tree entry already exists",NotEmpty=>"tree directory not empty",
+        Root=>"tree root cannot be removed",TooManyEntries=>"too many tree entries",FileTooLarge=>"tree file too large",
+        StorageFull=>"tree volume full",Hole=>"tree file hole",Overflow=>"tree size overflow",
+        OutOfMemory=>"tree allocation failed",InvalidFormat=>"tree format invalid",
+    }
+}
+fn tree_hex(bytes:&[u8])->Result<String,&'static str> {
+    let mut out=String::new();out.try_reserve_exact(bytes.len().checked_mul(2).ok_or("tree size overflow")?).map_err(|_|"tree allocation failed")?;
+    const HEX:&[u8;16]=b"0123456789abcdef";
+    for b in bytes {out.push(HEX[(b>>4) as usize] as char);out.push(HEX[(b&15) as usize] as char)} Ok(out)
+}
+fn tree_slot_name(slot:tree_disk::SlotState)->&'static str {
+    match slot {tree_disk::SlotState::Blank=>"blank",tree_disk::SlotState::Unknown=>"unknown",tree_disk::SlotState::Invalid=>"invalid",tree_disk::SlotState::Valid=>"valid"}
+}
+fn tree_tool<T:Transport>(name:&str,args:Option<&serde_json::Map<String,Value>>,disk:&mut VirtIOBlk<VmHal,T>,volume:&mut TreeVolume,upload:&mut tree_staging::Staging)->Result<Value,&'static str> {
+    let args=args.ok_or("invalid tree arguments")?;
+    let string=|key:&str|args.get(key).and_then(Value::as_str).ok_or("invalid tree arguments");
+    let number=|key:&str|args.get(key).and_then(Value::as_u64).and_then(|n|usize::try_from(n).ok()).ok_or("invalid tree arguments");
+    let generation=||parse_incarnation(string("generation")?).ok_or("invalid tree generation");
+    let id=||parse_incarnation(string("id")?).ok_or("invalid tree upload id");
+    match name {
+        "tree_status"=>{
+            if !args.is_empty(){return Err("invalid tree_status arguments")}
+            let status=volume.inspect(disk)?;
+            let safe=TreeVolume::safe(&status);
+            if status.write_blocked || status.selection_error || (volume.tree.is_some() && volume.generation!=status.generation) {volume.close()}
+            let state=if status.write_blocked {"blocked"} else if status.selection_error {"invalid"}
+                else if status.generation.is_none() {"blank"} else if safe.is_err() {"degraded"} else if volume.tree.is_some() {"ready"} else {"unopened"};
+            Ok(json!({"state":state,"slots":status.slots.map(tree_slot_name),"generation":if status.selection_error {None}else{status.generation.map(|g|format!("{}",g))},"opened":volume.tree.is_some(),"writable":volume.tree.is_some() && safe.is_ok(),"write_blocked":status.write_blocked}))
+        }
+        "tree_provision"|"tree_open"=>{
+            if args.len()!=1 || args.get("dedicated").and_then(Value::as_bool)!=Some(true) {return Err("tree requires explicit dedicated disk confirmation")}
+            if name=="tree_provision" {let (slot,g)=volume.provision(disk)?;Ok(json!({"slot":slot,"generation":format!("{}",g),"readback_verified":true}))}
+            else {let (g,degraded)=volume.open(disk)?;Ok(json!({"generation":format!("{}",g),"degraded":degraded,"writable":!degraded}))}
+        }
+        "tree_mkdir"=>{
+            if args.len()!=2{return Err("invalid tree_mkdir arguments")}
+            let path=string("path")?;let g=generation()?;volume.current(disk,g,true)?;
+            let mut candidate=volume.candidate()?;candidate.mkdir(path).map_err(tree_error)?;
+            let (slot,next)=volume.commit(disk,g,candidate)?;
+            Ok(json!({"slot":slot,"generation":format!("{}",next),"readback_verified":true}))
+        }
+        "tree_upload_begin"=>{
+            if args.len()!=4{return Err("invalid tree_upload_begin arguments")}
+            let path=string("path")?;let size=number("size")?;let checksum=parse_checksum(string("checksum")?).ok_or("invalid tree checksum")?;let g=generation()?;
+            volume.current(disk,g,true)?;
+            // Validate canonical path, parent and file-vs-directory on a
+            // disposable candidate before retaining any upload state.
+            let mut candidate=volume.candidate()?;candidate.put(path,&[]).map_err(tree_error)?;
+            let upload_id=upload.begin(path,size,checksum,g)?;
+            Ok(json!({"id":format!("{}",upload_id)}))
+        }
+        "tree_upload_append"=>{
+            if args.len()!=3{return Err("invalid tree_upload_append arguments")}
+            let upload_id=id()?;let offset=number("offset")?;let bytes=vfs::decode_hex(string("hex")?)?;
+            let received=upload.append(upload_id,offset,&bytes)?;Ok(json!({"received":received}))
+        }
+        "tree_upload_seal"=>{
+            if args.len()!=1{return Err("invalid tree_upload_seal arguments")}
+            upload.seal(id()?)?;Ok(json!({"sealed":true}))
+        }
+        "tree_upload_reset"=>{
+            if args.len()!=1{return Err("invalid tree_upload_reset arguments")}
+            upload.reset(id()?)?;Ok(json!({"reset":true}))
+        }
+        "tree_upload_commit"=>{
+            if args.len()!=1{return Err("invalid tree_upload_commit arguments")}
+            let upload_id=id()?;let (path,bytes,g)=upload.content(upload_id)?;
+            volume.current(disk,g,true)?;let mut candidate=volume.candidate()?;candidate.put(path,bytes).map_err(tree_error)?;
+            let (slot,next)=volume.commit(disk,g,candidate)?;
+            // Once committed, report success even if an internal reset were
+            // unexpectedly to fail; never misrepresent an applied effect.
+            let reset=upload.reset(upload_id).is_ok();
+            Ok(json!({"slot":slot,"generation":format!("{}",next),"readback_verified":true,"upload_reset":reset}))
+        }
+        "tree_read"=>{
+            if args.len()!=4{return Err("invalid tree_read arguments")}
+            let path=string("path")?;let offset=number("offset")?;let capacity=number("capacity")?;let g=generation()?;
+            if offset>tree_store::MAX_FILE || !(1..=tree_staging::MAX_CHUNK).contains(&capacity){return Err("invalid tree read range")}
+            volume.current(disk,g,false)?;let tree=volume.tree.as_ref().ok_or("tree not opened")?;
+            let size=tree.get(path).map_err(tree_error)?.len();let data=tree.read_at(path,offset,capacity).map_err(tree_error)?;
+            Ok(json!({"path":path,"offset":offset,"hex":tree_hex(data)?,"size":size,"generation":format!("{}",g)}))
+        }
+        "tree_list"=>{
+            if args.len()!=1{return Err("invalid tree_list arguments")}
+            let g=generation()?;volume.current(disk,g,false)?;let tree=volume.tree.as_ref().ok_or("tree not opened")?;
+            let entries:Vec<Value>=tree.entries().map(|(path,kind,size)|json!({"path":path,"kind":match kind {tree_store::Kind::Directory=>"directory",tree_store::Kind::File=>"file"},"size":size})).collect();
+            Ok(json!({"generation":format!("{}",g),"entries":entries}))
+        }
+        _=>Err("unknown tree tool"),
+    }
+}
 fn origin_name(origin: Origin) -> &'static str {
     match origin { Origin::Base=>"base", Origin::Human=>"human", Origin::Assistant=>"assistant", Origin::Both=>"both" }
 }
@@ -552,6 +718,8 @@ pub extern "C" fn graph_main() -> ! {
     let mut document = DocumentDemo::new();
     let mut files=vfs::Files::default();
     let mut upload=staging::Staging::new();
+    let mut tree_volume=TreeVolume::new();
+    let mut tree_upload=tree_staging::Staging::new();
     let restore_before=document.snapshot();
     let mut restore_status="unavailable";
     let mut restore_generation:Option<u64>=None;
@@ -920,6 +1088,17 @@ pub extern "C" fn graph_main() -> ! {
                                         {"name":"remote_state","description":"Read the third synthetic actor's logical position.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"exercise_human_moves","description":"Run 1101 synthetic human moves in this VM; overwrites older bounded trace entries.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"storage_status","description":"Read synthetic startup restore and last SVC save status.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"tree_status","description":"Inspect reserved tree sectors without provisioning; MCP is unauthenticated.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"tree_provision","description":"Explicitly provision blank tree regions on a dedicated QEMU disk; no authentication.","inputSchema":{"type":"object","properties":{"dedicated":{"const":true}},"required":["dedicated"],"additionalProperties":false}},
+                                        {"name":"tree_open","description":"Explicitly open an existing tree on a dedicated QEMU disk; no authentication.","inputSchema":{"type":"object","properties":{"dedicated":{"const":true}},"required":["dedicated"],"additionalProperties":false}},
+                                        {"name":"tree_mkdir","description":"Create a tree directory at an expected generation.","inputSchema":{"type":"object","properties":{"path":{"type":"string","maxLength":255},"generation":{"type":"string"}},"required":["path","generation"],"additionalProperties":false}},
+                                        {"name":"tree_upload_begin","description":"Begin a bounded tree-file upload at an expected generation.","inputSchema":{"type":"object","properties":{"path":{"type":"string","maxLength":255},"size":{"type":"integer","minimum":0,"maximum":16384},"checksum":{"type":"string","pattern":"^[0-9a-f]{16}$"},"generation":{"type":"string"}},"required":["path","size","checksum","generation"],"additionalProperties":false}},
+                                        {"name":"tree_upload_append","description":"Append a sequential lowercase-hex tree-file chunk, up to 512 bytes.","inputSchema":{"type":"object","properties":{"id":{"type":"string"},"offset":{"type":"integer","minimum":0},"hex":{"type":"string","maxLength":1024}},"required":["id","offset","hex"],"additionalProperties":false}},
+                                        {"name":"tree_upload_seal","description":"Verify tree-upload length and checksum.","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}},
+                                        {"name":"tree_upload_commit","description":"Persist a sealed tree file if its original generation is current.","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}},
+                                        {"name":"tree_upload_reset","description":"Discard a tree-file upload.","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}},
+                                        {"name":"tree_read","description":"Read up to 512 bytes of a tree file at an expected generation.","inputSchema":{"type":"object","properties":{"path":{"type":"string","maxLength":255},"offset":{"type":"integer","minimum":0},"capacity":{"type":"integer","minimum":1,"maximum":512},"generation":{"type":"string"}},"required":["path","offset","capacity","generation"],"additionalProperties":false}},
+                                        {"name":"tree_list","description":"List tree paths and sizes at an expected generation.","inputSchema":{"type":"object","properties":{"generation":{"type":"string"}},"required":["generation"],"additionalProperties":false}},
                                         {"name":"file_get","description":"Read one synthetic flat file as hexadecimal bytes; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}},
                                         {"name":"file_put","description":"Save one bounded synthetic UTF-8 file with the current workspace snapshot; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"data":{"type":"string"}},"required":["name","data"],"additionalProperties":false}},
                                         {"name":"file_put_hex","description":"Save bounded binary bytes encoded as lowercase hexadecimal; no authentication.","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"hex":{"type":"string"}},"required":["name","hex"],"additionalProperties":false}},
@@ -977,6 +1156,19 @@ pub extern "C" fn graph_main() -> ! {
                                                     let v = format!("human={},{}; ai={},{}",human_point.0,human_point.1,ai_point.0,ai_point.1);
                                                     send(&json!({"jsonrpc":"2.0","id":id,"result":{"content":[{"type":"text","text":v}],"isError":false}}));
                                                 }
+                                            }
+                                            Some("tree_status") | Some("tree_provision") | Some("tree_open") | Some("tree_mkdir") |
+                                            Some("tree_upload_begin") | Some("tree_upload_append") | Some("tree_upload_seal") |
+                                            Some("tree_upload_commit") | Some("tree_upload_reset") | Some("tree_read") | Some("tree_list") => {
+                                                let args=params.and_then(|p|p.get("arguments")).and_then(Value::as_object);
+                                                if let Some(ref mut disk)=block {
+                                                    match tree_tool(name.unwrap(),args,disk,&mut tree_volume,&mut tree_upload) {
+                                                        Ok(value)=>tool_json(id,value),Err(error)=>tool_error(id,error),
+                                                    }
+                                                } else if name==Some("tree_status") && args.is_some_and(|o|o.is_empty()) {
+                                                    tree_volume.close();
+                                                    tool_json(id,json!({"state":"unavailable","slots":null,"generation":null,"opened":false,"writable":false,"write_blocked":STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed)}));
+                                                } else {tool_error(id,"storage unavailable");}
                                             }
                                             Some("storage_status") => {
                                                 let args=params.and_then(|p|p.get("arguments"));

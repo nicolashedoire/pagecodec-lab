@@ -835,3 +835,44 @@ original request is consumed. The guest Rust wrappers are exercised alongside
 the raw ABI, including empty input slices and persistence of an empty file.
 The integrated modern-transport QEMU run with storage fault injection passed
 this scenario; the recorded legacy trace predates this integration.
+
+### Dedicated experimental tree volume
+
+The tree volume is separate from the legacy flat catalog and workspace
+document snapshots. Its two 256-sector records occupy LBA ranges `[256,512)`
+and `[512,768)` on an explicitly provisioned 2,048-sector QEMU disk. This is
+not a partition map or evidence that arbitrary physical sectors are safe to
+overwrite. `tree_provision` and `tree_open` require an explicit `dedicated`
+assertion; blank bytes and record magic alone do not establish ownership. The
+MCP control endpoint remains unauthenticated.
+
+The tree contains at most 64 entries including root, up to 64 KiB of total
+file contents and at most 16 KiB per file. Paths are canonical absolute ASCII
+with a 255-byte limit and no empty, dot or dot-dot components. The service
+offers `tree_mkdir`, `tree_list`, and `tree_read` (up to 512 bytes per call),
+plus sequential `tree_upload_begin`, `tree_upload_append`, `tree_upload_seal`,
+`tree_upload_commit` and `tree_upload_reset`. Upload chunks are at most 512
+bytes; size and a 64-bit FNV checksum must match. Mutating operations require
+the current generation, and a stale sealed upload cannot replace a newer tree.
+These are MCP operations; no EL0 tree-file ABI is implemented by this change.
+
+If one uniquely selected valid copy remains beside an unknown or invalid slot,
+an explicit open permits read/list in degraded, read-only mode. Mutations
+remain refused and no automatic repair occurs. Two invalid copies or duplicate
+valid generations cannot be selected. Commit stages and flushes a record,
+commits its marker, flushes and checks readback; FNV is not authentication,
+and readback does not prove atomicity under power loss or volatile caches.
+The tree and legacy documents have **no shared transaction**, automatic V1
+migration or synchronization. A write elsewhere after opening can also cause a
+generation mismatch or block writes until restart.
+
+The integrated runner is designed to use only disposable disk clones: it
+provisions a tree, creates directories, transfers a synthetic 16 KiB file in
+chunks, checks the same bytes after reboot, and compares all sectors outside
+the tree region and the pre-existing documents. It also tests stale uploads,
+unknown or invalid companion slots, read-only degraded opening, duplicate
+generations and refusal to overwrite unrecognized regions. The complete
+modern-transport run with storage fault injection passed these checks; the
+recorded legacy trace predates the tree volume. It does not stage an upload
+and then inject damage during the same live guest; `tree_upload_commit` in
+that specific degraded transition is not covered by this scenario.
