@@ -1744,6 +1744,57 @@ def main():
    if protected_program_sectors(dir_disk)!=dir_program_sectors:raise RuntimeError('directory reboot modified program regions')
    traces.append(e.trace);states.append(e.call('tree_status',{}))
   finally:e.close()
+  # Two processes enumerate only immediate children in their own tree scopes.
+  list_disk=Path(tmp)/'tree-el0-list.raw';create(list_disk,tree_disk_path.read_bytes())
+  list_program_sectors=protected_program_sectors(list_disk)
+  list_image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-tree-list.hex').read_text().strip())
+  listing_generation=None
+  for boot in (0,1):
+   e=Guest(a.qemu,guest,list_disk,tmp,74+boot,out,a.transport)
+   try:
+    e.progress('EL0 tree enumeration',timeout_image=True,expected_exit_code=0);e.wait_boot_identity()
+    opened=e.call('tree_open',{'dedicated':True});revision=opened['generation']
+    if boot==0:
+     for path in ('/a','/a/d','/a/d/branch','/b','/b/d','/b/d/branch'):
+      result=e.call('tree_mkdir',{'path':path,'generation':revision})
+      if result.get('readback_verified') is not True:raise RuntimeError('list test mkdir failed')
+      revision=result['generation']
+     for first in ('a','b'):
+      for suffix,data in (('aa',b'a'),('branch/hidden',b'h'),('zz',b'z'),('z'*32,b'l')):
+       revision=put_tree(e,'/'+first+'/d/'+suffix,data,revision)
+     listing_generation=revision
+    elif revision!=listing_generation:raise RuntimeError('enumeration tree revision did not survive reboot')
+    gates=('a-lgate','b-lgate');phases=('a-lphase','b-lphase')
+    names=[entry['name'] for entry in e.call('file_list',{})]
+    if any(name in names for name in gates+phases):raise RuntimeError('enumeration gate already exists')
+    def list_gate(name,value):
+     if not e.call('file_put',{'name':name,'data':value}).get('readback_verified'):raise RuntimeError('enumeration gate write failed')
+    def list_phase(name,value):
+     for _ in range(160):
+      result=e.call('file_get',{'name':name}).get('hex')
+      if result==value.encode().hex():return
+      slot=0 if name[0]=='a' else 1;state=e.call('process_status',{})
+      if state.get('all_slot_states',[None]*3)[slot]=='exited':raise RuntimeError('enumerator exited before phase: '+str((name,value,result,state)))
+      time.sleep(.2)
+     raise RuntimeError('enumeration phase timed out: '+str((name,value,result)))
+    for name in gates+phases:list_gate(name,'0')
+    program=stage_program(e,list_image)
+    actors=[e.call('process_spawn_staged',{'id':program}) for _ in range(2)]
+    if [x.get('slot') for x in actors]!=[0,1]:raise RuntimeError('enumeration admissions failed: '+str(actors))
+    for name in phases:list_phase(name,'r')
+    ready=e.wait_independent(lambda x:x.get('slot_states')==['ready','ready'] and min(x.get('irq_counts',[0,0]))>0,'both enumerators ready')
+    if ready.get('frame_pool_assigned')!=6:raise RuntimeError('enumerator frame count invalid: '+str(ready))
+    for name in gates:list_gate(name,'1')
+    for name in phases:list_phase(name,'d')
+    done=e.wait_independent(lambda x:x.get('slot_states')==['exited','exited'],'enumerators exited')
+    if done.get('outcomes')!=[1,1] or done.get('exit_codes')!=[0,0] or done.get('frame_pool_assigned')!=0:raise RuntimeError('enumerator cleanup failed: '+str(done))
+    if e.call('tree_status',{})['generation']!=listing_generation:raise RuntimeError('enumeration mutated tree')
+    if protected_program_sectors(list_disk)!=list_program_sectors:raise RuntimeError('enumeration changed program regions')
+    e.call('upload_reset',{'id':program})
+    for name in gates+phases:
+     if not e.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('enumeration gate cleanup failed')
+    traces.append(e.trace);states.append(e.call('tree_status',{}))
+   finally:e.close()
   # Two VM boots, one disposable clone; no host file or raw device is attached.
   chunk_disk=Path(tmp)/'chunk-offset.raw';create(chunk_disk,disk.read_bytes())
   chunk_image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-chunk-io.hex').read_text().strip())

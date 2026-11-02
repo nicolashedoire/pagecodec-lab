@@ -951,6 +951,57 @@ pub extern "C" fn graph_main() -> ! {
                     if !el0::complete_document(&request,&reply[..reply_len],errno) {halt()}
                     continue;
                 }
+                if request.file_op==12 {
+                    // List one immediate child in canonical path order. The
+                    // header identifies its type and whether the name has
+                    // more bytes; each fragment carries at least one byte.
+                    if !el0::is_pair_request(&request) {halt()}
+                    let mut reply=[0u8;32];
+                    let result=(||->Result<usize,el0::TreeListError> {
+                        use el0::TreeListError as E;
+                        let path=request.key.get(..request.key_len).and_then(|b|core::str::from_utf8(b).ok()).ok_or(E::Invalid)?;
+                        if !valid_tree_guest_path(path) || request.tree_generation==0 || !(2..=32).contains(&request.read_capacity) {return Err(E::Invalid)}
+                        let own_root=tree_guest_root(request.actor).ok_or(E::Denied)?;
+                        if path!=own_root && !tree_guest_permitted(request.actor,path) {return Err(E::Denied)}
+                        let disk=block.as_mut().ok_or(E::Unavailable)?;
+                        tree_volume.current(disk,request.tree_generation,false).map_err(|error| match error {
+                            "tree not opened"=>E::Unavailable,
+                            "stale tree generation"=>E::Stale,
+                            _=>E::Io,
+                        })?;
+                        let tree=tree_volume.tree.as_ref().ok_or(E::Unavailable)?;
+                        // get() rejects invalid paths and distinguishes an
+                        // existing directory from an ordinary file.
+                        match tree.get(path) {
+                            Err(tree_store::Error::IsDirectory)=>{},
+                            Ok(_)=>return Err(E::NotDirectory),
+                            Err(tree_store::Error::NotFound)=>return Err(E::NotFound),
+                            Err(tree_store::Error::InvalidPath)=>return Err(E::Invalid),
+                            Err(_)=>return Err(E::Io),
+                        }
+                        let child=tree.entries().filter_map(|(entry,kind,_)| {
+                            let name=entry.strip_prefix(path)?.strip_prefix('/')?;
+                            if name.is_empty() || name.contains('/') {None} else {Some((name,kind))}
+                        }).nth(request.file_offset);
+                        let Some((name,kind))=child else {
+                            return if request.tree_total==0 {Ok(0)} else {Err(E::Invalid)}
+                        };
+                        let name=name.as_bytes();
+                        let offset=request.tree_total;
+                        if offset>=name.len() {return Err(E::Invalid)}
+                        let n=(name.len()-offset).min(request.read_capacity-1);
+                        let end=offset.checked_add(n).ok_or(E::Invalid)?;
+                        let more=end<name.len();
+                        reply[0]=(match kind {tree_store::Kind::Directory=>0,tree_store::Kind::File=>1}) | if more {0x80} else {0};
+                        reply[1..1+n].copy_from_slice(&name[offset..end]);Ok(1+n)
+                    })();
+                    let completed=match result {
+                        Ok(count)=>el0::complete_file(&request,true,&reply[..count]),
+                        Err(error)=>el0::complete_tree_list_error(&request,error),
+                    };
+                    if !completed {halt()}
+                    continue;
+                }
                 if matches!(request.file_op,10|11) {
                     // mkdir/remove operate on a private candidate. The exact
                     // actor root may be created, but is never removed here.

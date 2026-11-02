@@ -156,6 +156,22 @@ pub fn tree_remove(path: &str, generation: u64) -> Result<(), i64> {
     tree_directory_op(path, generation, false)
 }
 
+/// Read one fragment of an immediate child name. Zero means end of list;
+/// otherwise byte 0 is kind (bit 0) and continuation (bit 7), followed by
+/// name bytes. Repeat with the same child index and a larger name offset while
+/// bit 7 is set, then advance the index. Generation is checked on each call.
+pub fn tree_list_fragment(path: &str, index: usize, output: &mut [u8], generation: u64, name_offset: usize) -> Result<usize, i64> {
+    let path_ptr = path.as_ptr() as u64;
+    loop {
+        let mut result = path_ptr;
+        unsafe { asm!("svc #0x14c", inout("x0") result, in("x1") path.len() as u64,
+            in("x2") index as u64, in("x3") output.as_mut_ptr() as u64,
+            in("x4") output.len() as u64, in("x5") generation, in("x6") name_offset as u64,
+            options(nostack)); }
+        match result as i64 { EAGAIN => core::hint::spin_loop(), n if n < 0 => return Err(n), n => return Ok(n as usize) }
+    }
+}
+
 fn tree_directory_op(path: &str, generation: u64, mkdir: bool) -> Result<(), i64> {
     let path_ptr = path.as_ptr() as u64;
     loop {

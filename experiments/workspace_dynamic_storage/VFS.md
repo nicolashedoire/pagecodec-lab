@@ -896,8 +896,8 @@ replying. The user buffers remain valid only while their pages are mapped.
 `SVC #0x145` reports the currently published tree generation in `x1` (`0` if
 none is open), with status in `x0`. This is an advisory snapshot, not authority;
 each subsequent read revalidates the tree. The [guest API](guest_api.rs)
-exposes `tree_generation` and `tree_read_at`. There is no EL0 directory
-enumeration or generation-change subscription yet.
+exposes `tree_generation` and `tree_read_at`. There is no EL0
+generation-change subscription yet.
 
 The [`rust-tree-read`](fixtures/rust-tree-read.rs) integrated scenario is
 designed to open a tree with two distinct 513-byte files, reboot, check that
@@ -968,5 +968,38 @@ generation refusals, create/remove nested directories and remove a pre-existing
 file, then check the resulting tree and generation again after reboot. It
 exercises both SVCs and wrappers. The complete integrated modern-transport
 QEMU run with storage fault injection passed. The recorded legacy trace
-predates these calls. This does not provide EL0 enumeration, rename, real user
+predates these calls. This does not provide rename, real user
 authentication or power-loss durability guarantees.
+
+### Process directory enumeration
+
+`SVC #0x14c` enumerates one immediate child fragment at an expected tree
+generation. It takes the directory path pointer/length in `x0`/`x1` (at most
+16 bytes), child ordinal in `x2`, output pointer/capacity in `x3`/`x4` (2–32
+bytes), generation in `x5` and byte offset within the child's name in `x6`.
+Zero means end of directory when the name offset is zero. Otherwise the
+positive return is one header byte followed by 1–31 name bytes, with no NUL:
+header bit 0 is 0 for a directory or 1 for a file, and bit 7 means that another
+fragment of this name follows. Other header bits are zero. On continuation,
+keep the ordinal and generation, advance the name offset by the number of
+returned name bytes, then advance the ordinal and reset the offset after the
+last fragment. This permits names longer than the user buffer.
+
+The current actor's exact root (`/a`, `/b`, or `/c`) and its descendants are
+eligible; other actor scopes are refused. A stale generation returns `-116`
+instead of combining directory revisions. Other failures include `-2` for a
+missing directory, `-13` for another actor's scope, `-14` for invalid memory,
+`-19` for a closed volume, `-20` for a file used as a directory and `-22` for
+invalid arguments or a name offset beyond the selected child. EOF with a
+nonzero name offset is invalid. `-11` requires polling identical arguments.
+The [guest API](guest_api.rs) exposes `tree_list_fragment`; this is a bounded
+experimental interface, not authenticated identity or a POSIX directory stream.
+
+The integrated [`rust-tree-list`](fixtures/rust-tree-list.rs) scenario is
+designed to exercise two independent processes, scoped roots, sorted immediate
+children, exclusion of a grandchild, short buffers, a 32-byte name split into
+31 and one-byte fragments, EOF, stale generations and mismatched retry
+arguments. It reopens the same disposable disk after reboot and repeats the
+scenario. A focused run and the complete integrated modern-transport QEMU run
+with storage fault injection passed. The recorded legacy trace predates this
+listing interface.

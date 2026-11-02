@@ -716,10 +716,11 @@ fn submit(state:&mut Ipc,req:Request)->bool {
  if req.file_op==6 && (req.id<8 || req.save || req.doc_op!=0 || req.binding_id!=0 || req.key_len==0 || req.key_len>16 || req.file_offset!=0 || req.read_capacity!=0 || req.tree_generation==0 || req.tree_stage_id!=0 || req.tree_total>super::tree_store::MAX_FILE || req.value_len!=0) {return false}
  if req.file_op==7 && (req.id<8 || req.save || req.doc_op!=0 || req.binding_id!=0 || req.key_len!=0 || req.tree_generation!=0 || req.tree_total!=0 || req.tree_checksum!=0 || req.tree_stage_id==0 || req.tree_stage_id>i64::MAX as u64 || req.read_capacity!=0 || !(1..=32).contains(&req.value_len) || req.file_offset.checked_add(req.value_len).is_none_or(|end|end>super::tree_store::MAX_FILE)) {return false}
  if matches!(req.file_op,8|9) && (req.id<8 || req.save || req.doc_op!=0 || req.binding_id!=0 || req.key_len!=0 || req.value_len!=0 || req.file_offset!=0 || req.read_capacity!=0 || req.tree_generation!=0 || req.tree_total!=0 || req.tree_checksum!=0 || req.tree_stage_id==0 || req.tree_stage_id>i64::MAX as u64) {return false}
- if !matches!(req.file_op,3|4|5|7) && (req.file_offset!=0 || req.read_capacity!=0) {return false}
+ if req.file_op==12 && (req.id<8 || req.save || req.doc_op!=0 || req.binding_id!=0 || req.key_len==0 || req.key_len>16 || !(2..=32).contains(&req.read_capacity) || req.value_len!=0 || req.tree_generation==0 || req.tree_checksum!=0 || req.tree_stage_id!=0) {return false}
+ if !matches!(req.file_op,3|4|5|7|12) && (req.file_offset!=0 || req.read_capacity!=0) {return false}
  if matches!(req.file_op,10|11) && (req.id<8 || req.save || req.doc_op!=0 || req.binding_id!=0 || req.key_len==0 || req.key_len>16 || req.value_len!=0 || req.file_offset!=0 || req.read_capacity!=0 || req.tree_generation==0 || req.tree_total!=0 || req.tree_checksum!=0 || req.tree_stage_id!=0) {return false}
- if !matches!(req.file_op,5|6|10|11) && req.tree_generation!=0 {return false}
- if req.file_op!=6 && (req.tree_total!=0 || req.tree_checksum!=0) {return false}
+ if !matches!(req.file_op,5|6|10|11|12) && req.tree_generation!=0 {return false}
+ if !matches!(req.file_op,6|12) && (req.tree_total!=0 || req.tree_checksum!=0) {return false}
  if !matches!(req.file_op,7|8|9) && req.tree_stage_id!=0 {return false}
  if req.actor>=PROCESS_CAPACITY || req.incarnation!=incarnation(req.actor) || state.completions[i].id!=0 || state.len==2 || (req.id<=7 && state.accepted_len>=state.accepted.len()) {return false}
  let slot=(state.head+state.len)%2;state.queue[slot]=Some(req);state.len+=1;
@@ -782,7 +783,7 @@ pub fn complete(request:&Request,success:bool)->bool {
 /// Complete the file operation in the bounded queue. Bytes are copied into
 /// kernel-owned completion storage before the caller's buffers can change.
 pub fn complete_file(request:&Request,success:bool,data:&[u8])->bool {
- if request.doc_op!=0 || !(request.id>=8 || request.id==6 || request.id==7) || data.len()>32 || (request.id==6 && !data.is_empty()) || (request.id>=8 && !matches!(request.file_op,1|2|3|4|5)) || (request.id>=8 && matches!(request.file_op,1|3) && !data.is_empty()) || (matches!(request.file_op,4|5) && data.len()>request.read_capacity) || (request.file_op==5 && !success && !data.is_empty()) {return false}
+ if request.doc_op!=0 || !(request.id>=8 || request.id==6 || request.id==7) || data.len()>32 || (request.id==6 && !data.is_empty()) || (request.id>=8 && !matches!(request.file_op,1|2|3|4|5|12)) || (request.id>=8 && matches!(request.file_op,1|3) && !data.is_empty()) || (matches!(request.file_op,4|5|12) && data.len()>request.read_capacity) || (matches!(request.file_op,5|12) && !success && !data.is_empty()) || (request.file_op==12 && success && !data.is_empty() && (data.len()<2 || (data[0]&0x7e)!=0 || !data[1..].is_ascii() || data[1..].contains(&b'/'))) {return false}
  let s=unsafe{&mut *addr_of_mut!(IPC)};
  // The stale request is captured from an actual earlier loaded task. Try it
  // while the newer incarnation's same-ID completion is genuinely popped.
@@ -873,6 +874,15 @@ pub fn complete_tree_directory(request:&Request,errno:i64)->bool {
  if !apply_completion(s,request.token(),errno==0,&[]) {return false}
  s.completions[7+request.actor].write_errno=errno;true
 }
+#[derive(Clone,Copy)]
+pub enum TreeListError {NotFound,Io,Denied,Unavailable,NotDirectory,Invalid,TooSmall,Stale}
+/// An error completes exactly one still-live list request; -11 is pending.
+pub fn complete_tree_list_error(request:&Request,error:TreeListError)->bool {
+ if request.doc_op!=0 || request.file_op!=12 || request.id<8 || !independent_incarnation_live(request.actor,request.incarnation) || !request_is_live(request) {return false}
+ let s=unsafe{&mut *addr_of_mut!(IPC)};
+ if !apply_completion(s,request.token(),false,&[]) {return false}
+ s.completions[7+request.actor].write_errno=match error {TreeListError::NotFound=>-2,TreeListError::Io=>-5,TreeListError::Denied=>-13,TreeListError::Unavailable=>-19,TreeListError::NotDirectory=>-20,TreeListError::Invalid=>-22,TreeListError::TooSmall=>-34,TreeListError::Stale=>-116};true
+}
 unsafe fn pair_io_count(actor:usize,submitted:bool) {
  if read_volatile(addr_of!(PAIR_ACTIVE)) {
   let base=if submitted {addr_of_mut!(PAIR_IO_SUBMITTED)} else {addr_of_mut!(PAIR_IO_COMPLETED)};
@@ -910,6 +920,47 @@ fn stop_loaded_task(s:&mut Ipc,reason:u8)->u64 {
  cancel_loaded_requests(s);
  unsafe{write_volatile(addr_of_mut!(SPAWN_FAILED),true);write_volatile(addr_of_mut!(IMAGE_OUTCOMES).cast::<u8>().add(image-1),reason)};
  1
+}
+// 0x14c LIST-NEXT: path x0/x1, child index x2, output x3/capacity x4,
+// expected tree generation x5, name offset x6. Returns EOF 0 or
+// [type bit 0 | more bit 7, basename fragment].
+// The output and copied path are revalidated across the asynchronous poll.
+fn tree_list_next(f:&mut Frame,s:&mut Ipc,actor:usize) {
+ if !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} || unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {direct_result(f,-38);return}
+ let (address,n,raw_index,dest,capacity,generation,raw_name_offset)=(f.regs[0],f.regs[1],f.regs[2],f.regs[3],f.regs[4],f.regs[5],f.regs[6]);
+ if n==0 || n>16 || capacity<2 || capacity>32 || generation==0 {direct_result(f,-22);return}
+ let (Ok(index),Ok(name_offset))=(usize::try_from(raw_index),usize::try_from(raw_name_offset)) else{direct_result(f,-22);return};
+ let (name_len,capacity)=(n as usize,capacity as usize);
+ let Some(name_location)=user_location(actor,address,name_len,false,false) else{direct_result(f,-14);return};
+ let Some(dest_location)=user_location(actor,dest,capacity,true,false) else{direct_result(f,-14);return};
+ let mut name=[0u8;16];for (i,byte) in name[..name_len].iter_mut().enumerate(){*byte=unsafe{readbyte(address+i as u64)}}
+ if !name[..name_len].is_ascii() {direct_result(f,-22);return}
+ if let Some(pending)=unsafe{read_volatile(addr_of!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor))} {
+  if pending.doc_op!=0 || pending.file_op!=12 || pending.file_offset!=index || pending.tree_generation!=generation
+   || pending.tree_total!=name_offset || pending.tree_checksum!=0 || pending.tree_stage_id!=0 || pending.token.actor!=actor || pending.token.incarnation!=incarnation(actor)
+   || pending.name!=name || pending.name_len!=name_len || pending.name_location!=name_location || pending.dest_location!=dest_location || pending.capacity!=capacity {direct_result(f,-22);return}
+  let c=&mut s.completions[7+actor];
+  if c.id!=pending.token.id || c.actor!=actor || c.incarnation!=pending.token.incarnation {halt()}
+  if !c.applied {direct_result(f,-11);return}
+  let code=if c.write_errno!=0 {c.write_errno} else if !c.success {-5} else if c.data_len>capacity {-34} else {
+   let Some(address)=user_address(pending.dest_location) else{direct_result(f,-14);return};
+   if incarnation(actor)!=pending.token.incarnation || user_location(actor,address,pending.capacity,true,false)!=Some(pending.dest_location) {direct_result(f,-14);return}
+   for i in 0..c.data_len {unsafe{writebyte(address+i as u64,c.data[i])}}c.data_len as i64
+  };
+  for byte in &mut c.data {unsafe{write_volatile(byte,0)}}
+  *c=EMPTY_COMPLETION;clear_generic_io(actor);unsafe{let p=addr_of_mut!(GENERIC_READ_COMPLETED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,false)};
+  direct_result(f,code);return
+ }
+ let id=unsafe{read_volatile(addr_of!(NEXT_GENERIC_ID))};let Some(next)=id.checked_add(1) else{direct_result(f,-75);return};
+ let request=Request{actor,incarnation:incarnation(actor),id,save:false,file_op:12,file_offset:index,read_capacity:capacity,tree_generation:generation,tree_total:name_offset,tree_checksum:0,tree_stage_id:0,doc_op:0,binding_id:0,key:name,key_len:name_len,value:[0;32],value_len:0};
+ if !submit(s,request) {direct_result(f,-11);return}
+ unsafe {
+  write_volatile(addr_of_mut!(NEXT_GENERIC_ID),next);
+  write_volatile(addr_of_mut!(PAIR_LAST_TOKENS).cast::<Option<CompletionToken>>().add(actor),Some(request.token()));
+  write_volatile(addr_of_mut!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor),Some(GenericIo{token:request.token(),file_op:12,file_offset:index,tree_generation:generation,tree_total:name_offset,tree_checksum:0,tree_stage_id:0,doc_op:0,name,name_len,name_location,dest_location,capacity}));
+  let p=addr_of_mut!(GENERIC_READ_SUBMITTED);write_volatile(p,read_volatile(p).saturating_add(1));pair_io_count(actor,true);
+ }
+ direct_result(f,-11);
 }
 // 0x14a MKDIR / 0x14b REMOVE: ASCII path x0/x1, expected tree
 // generation x2. Bytes are copied on submission. Poll with identical
@@ -1188,6 +1239,7 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
    0x144=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_read(f,state,actor,2);return 0},
    0x146..=0x149=>{let state=unsafe{&mut *addr_of_mut!(IPC)};tree_write(f,state,actor,((esr&0xff) as u8)-0x40);return 0},
    0x14a..=0x14b=>{let state=unsafe{&mut *addr_of_mut!(IPC)};tree_directory(f,state,actor,((esr&0xff) as u8)-0x40);return 0},
+   0x14c=>{let state=unsafe{&mut *addr_of_mut!(IPC)};tree_list_next(f,state,actor);return 0},
    0x145=>{
     // Advisory published generation, not an authorization or a guarantee
     // that a later disk-backed read succeeds. Zero means no open volume.
