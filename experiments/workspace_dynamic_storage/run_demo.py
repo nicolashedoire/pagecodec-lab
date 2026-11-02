@@ -1860,6 +1860,16 @@ def main():
    if e.call('document_snapshot',{})!=document_before or protected_program_sectors(path_disk)!=path_program_sectors:raise RuntimeError('long-path reboot changed legacy workspace/programs')
    traces.append(e.trace);states.append(e.call('tree_status',{}))
   finally:e.close()
+  # Isolated process surfaces use a fresh disposable virtual disk.
+  from surface_scenario import run_surface_scenario
+  surface_disk=Path(tmp)/'surface-process.raw';create(surface_disk,bytes(SIZE))
+  surface_image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-surface.hex').read_text().strip())
+  surface_guest=Guest(a.qemu,guest,surface_disk,tmp,78,out,a.transport)
+  try:
+   run_surface_scenario(surface_guest,out,surface_image,stage_program)
+   traces.append(surface_guest.trace);states.append(surface_guest.call('process_status',{}))
+   (out/'surface-qmp-evidence.json').write_text(json.dumps(surface_guest.qmp_trace,indent=2)+'\n')
+  finally:surface_guest.close()
   # Two VM boots, one disposable clone; no host file or raw device is attached.
   chunk_disk=Path(tmp)/'chunk-offset.raw';create(chunk_disk,disk.read_bytes())
   chunk_image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-chunk-io.hex').read_text().strip())

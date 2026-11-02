@@ -1026,3 +1026,27 @@ Both a focused run and the full integrated modern-transport QEMU run with
 storage fault injection passed. The 255-byte case uses one long path segment;
 deeply nested paths remain untested. The recorded legacy trace predates this
 path extension.
+
+### Process surfaces and input
+
+The independent-process graphics ABI supplies one double-buffered surface per
+slot, at most 256 by 112 pixels: `0x1a0` creates, `0x1a1` destroys, `0x1a2`
+fills a back-buffer rectangle, `0x1a3` presents, and `0x1a4` polls a 16-byte
+pointer event. The Rust [`Surface`](guest_api.rs) wrapper drives these calls.
+Handles are public identifiers, not credentials: the service checks the calling
+process and rejects another process's handle. Destroyed and stopped surfaces
+have stale identifiers. Input records contain little-endian `x`, `y`, `buttons`
+and `source` (human 0, AI 1); coordinates are local to the surface.
+
+The integrated [`rust-surface`](fixtures/rust-surface.rs) scenario is designed
+to run two independent clients, check owner isolation and stale handles, capture
+pixels from QEMU's actual framebuffer, and route the virtual human tablet and
+MCP AI click to their corresponding applications. It also fills the AI input
+queue before allowing its client to poll, checks that a rejected click is not
+sent to the underlying controls, and exercises stop and readmission. The test
+uses a disposable virtual disk and records QMP and MCP events. A QMP-generated
+human event is a virtual-device input, not a physical mouse passthrough. There
+is no remote-human input in this path, and this interface is not the final
+visual design. The focused run and the complete integrated modern-transport
+QEMU run with storage fault injection passed. The recorded legacy trace
+predates this surface interface.

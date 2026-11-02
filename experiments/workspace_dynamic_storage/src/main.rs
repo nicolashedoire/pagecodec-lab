@@ -14,6 +14,7 @@ mod tree_store;
 mod tree_disk;
 mod tree_staging;
 mod tree_guest_staging;
+mod surface;
 mod net;
 extern crate alloc;
 use alloc::format;
@@ -195,6 +196,12 @@ fn pointer(buf: &mut [u8], x: u32, y: u32, color: u32) {
     for yy in 1..18 { for xx in 1..13 { if xx < yy/2 { pixel(buf,x+xx,y+yy,color); } } }
     rect(buf,x+6,y+14,4,12,0x09101d); rect(buf,x+7,y+15,2,9,color);
 }
+fn surface_u32(bytes:&[u8],offset:usize)->Option<u32> {
+    let end=offset.checked_add(4)?;Some(u32::from_le_bytes(bytes.get(offset..end)?.try_into().ok()?))
+}
+fn surface_u64(bytes:&[u8],offset:usize)->Option<u64> {
+    let end=offset.checked_add(8)?;Some(u64::from_le_bytes(bytes.get(offset..end)?.try_into().ok()?))
+}
 #[derive(Default)]
 struct Interaction { human_focus:u8, ai_focus:u8, human_clicks:u32, ai_clicks:u32 }
 fn focus_name(focus:u8)->&'static str {match focus {1=>"action",2=>"select",_=>"none"}}
@@ -206,7 +213,7 @@ fn button_hit(point:(u32,u32), ai:bool)->Option<u8> {
     else if (left+161..left+311).contains(&x) {Some(2)}
     else {None}
 }
-fn draw(buf: &mut [u8], human: (u32,u32), ai: (u32,u32), remote: (u32,u32), human_click: bool, state:&Interaction) {
+fn draw(buf: &mut [u8], human: (u32,u32), ai: (u32,u32), remote: (u32,u32), human_click: bool, state:&Interaction, surfaces:&surface::Surfaces) {
     rect(buf,0,0,WIDTH,HEIGHT,0x0b1020);
     rect(buf,0,0,WIDTH,54,0x101a2c);
     rect(buf,0,53,WIDTH,1,0x24354e);
@@ -240,6 +247,7 @@ fn draw(buf: &mut [u8], human: (u32,u32), ai: (u32,u32), remote: (u32,u32), huma
         text(buf,x+175,442,b"SELECT",0xe5f3ff,1);
     }
     text(buf,24,577,b"VIRTUAL MACHINE DEMO - NO OS CONTROL",0x8aa4c5,1);
+    surfaces.compose(buf,WIDTH,HEIGHT);
     if human_click { rect(buf,human.0 as usize,human.1 as usize,24.min(PANEL_SPLIT as usize - human.0 as usize),24,0x2e7e72); }
     // Clamp only the rendered glyph at the framebuffer edges. Logical remote
     // coordinates remain unchanged; draw human last so it remains on top.
@@ -804,6 +812,7 @@ pub extern "C" fn graph_main() -> ! {
     let mut tree_volume=TreeVolume::new();
     let mut tree_upload=tree_staging::Staging::new();
     let mut tree_guest_uploads=tree_guest_staging::Stages::new();
+    let mut surfaces=surface::Surfaces::new();
     let restore_before=document.snapshot();
     let mut restore_status="unavailable";
     let mut restore_generation:Option<u64>=None;
@@ -845,7 +854,7 @@ pub extern "C" fn graph_main() -> ! {
     // SAFETY: GPU owns this pinned buffer for its lifetime; one CPU and a draw
     // borrow ends before flush. QEMU-only HAL is not for production hardware.
     unsafe { draw(core::slice::from_raw_parts_mut(frame_ptr, FRAME_BYTES),
-                  cursor(&router, &human), cursor(&router, &ai), cursor(&router, &remote), hclick, &interaction); }
+                  cursor(&router, &human), cursor(&router, &ai), cursor(&router, &remote), hclick, &interaction, &surfaces); }
     if gpu.flush().is_err() { halt() }
     // Explicit guest-only startup configuration; only the exact byte "1"
     // pauses the built-in fixtures. No host configuration is changed.
@@ -864,6 +873,7 @@ pub extern "C" fn graph_main() -> ! {
     const SERVICE_POLLS: u32 = 20_000;
     let mut service_polls=SERVICE_POLLS;
     loop {
+        let mut surface_redraw=surfaces.reap(el0::independent_incarnation_live);
         // Revoke stale process-owned uploads even when disk uncertainty keeps
         // EL0 execution suspended. This is not a guarantee of physical erasure.
         tree_guest_uploads.reap(el0::independent_incarnation_live);
@@ -878,6 +888,7 @@ pub extern "C" fn graph_main() -> ! {
           if !STORAGE_WRITE_BLOCKED.load(Ordering::Relaxed) {
             el0::run_slice([files.read_for_load("init.bin",512).ok(),files.read_for_load("fault.bin",512).ok(),files.read_for_load("badsvc.bin",512).ok(),files.read_for_load("next.bin",512).ok()]);
             tree_guest_uploads.reap(el0::independent_incarnation_live);
+            surface_redraw|=surfaces.reap(el0::independent_incarnation_live);
             // No EL0 task runs while this sole service owns the document.
             // Two entries at most can have been queued before this slice ends.
             for _ in 0..2 {
@@ -949,6 +960,62 @@ pub extern "C" fn graph_main() -> ! {
                         }
                     }
                     if !el0::complete_document(&request,&reply[..reply_len],errno) {halt()}
+                    continue;
+                }
+                if matches!(request.file_op,13..=17) {
+                    // EL1 owns the surfaces; payloads are already copied into
+                    // Request. No guest pointers are retained by the service.
+                    if !el0::independent_incarnation_live(request.actor,request.incarnation) {halt()}
+                    let mut reply=[0u8;16];let mut reply_len=0usize;let mut redraw=false;
+                    let result=(||->Result<(),surface::Error> {
+                        let data=request.value.get(..request.value_len).ok_or(surface::Error::Invalid)?;
+                        match request.file_op {
+                            13=>{
+                                if data.len()!=8 {return Err(surface::Error::Invalid)}
+                                let w=surface_u32(data,0).ok_or(surface::Error::Invalid)?;
+                                let h=surface_u32(data,4).ok_or(surface::Error::Invalid)?;
+                                let id=surfaces.create(request.actor,request.incarnation,w,h)?;
+                                reply[..8].copy_from_slice(&id.to_le_bytes());reply_len=8;Ok(())
+                            }
+                            14=>{
+                                if data.len()!=8 {return Err(surface::Error::Invalid)}
+                                let id=surface_u64(data,0).ok_or(surface::Error::Invalid)?;
+                                redraw=surfaces.destroy(request.actor,request.incarnation,id)?;Ok(())
+                            }
+                            15=>{
+                                if data.len()!=28 {return Err(surface::Error::Invalid)}
+                                let id=surface_u64(data,0).ok_or(surface::Error::Invalid)?;
+                                let x=surface_u32(data,8).ok_or(surface::Error::Invalid)?;
+                                let y=surface_u32(data,12).ok_or(surface::Error::Invalid)?;
+                                let w=surface_u32(data,16).ok_or(surface::Error::Invalid)?;
+                                let h=surface_u32(data,20).ok_or(surface::Error::Invalid)?;
+                                let color=surface_u32(data,24).ok_or(surface::Error::Invalid)?;
+                                surfaces.fill(request.actor,request.incarnation,id,x,y,w,h,color)
+                            }
+                            16=>{
+                                if data.len()!=8 {return Err(surface::Error::Invalid)}
+                                let id=surface_u64(data,0).ok_or(surface::Error::Invalid)?;
+                                surfaces.present(request.actor,request.incarnation,id)?;redraw=true;Ok(())
+                            }
+                            17=>{
+                                if data.len()!=8 {return Err(surface::Error::Invalid)}
+                                let id=surface_u64(data,0).ok_or(surface::Error::Invalid)?;
+                                if let Some(event)=surfaces.poll(request.actor,request.incarnation,id)? {reply=event;reply_len=16;}
+                                Ok(())
+                            }
+                            _=>Err(surface::Error::Invalid),
+                        }
+                    })();
+                    // Present (and visible removal) is acknowledged only
+                    // after the virtual GPU flush succeeds. The guest's
+                    // existing fatal-GPU-error policy is unchanged.
+                    if redraw && result.is_ok() {
+                        unsafe {draw(core::slice::from_raw_parts_mut(frame_ptr,FRAME_BYTES),
+                            cursor(&router,&human),cursor(&router,&ai),cursor(&router,&remote),hclick,&interaction,&surfaces)}
+                        if gpu.flush().is_err(){halt()}
+                    }
+                    let errno=result.err().map_or(0,surface::Error::errno);
+                    if !el0::complete_surface(&request,errno,&reply[..reply_len]) {halt()}
                     continue;
                 }
                 if request.file_op==12 {
@@ -1239,7 +1306,7 @@ pub extern "C" fn graph_main() -> ! {
             service_polls=0;
         }
         service_polls+=1;
-        let mut changed = false;
+        let mut changed = surface_redraw;
         while let Some(ev) = input.pop_pending_event() {
             service_polls=SERVICE_POLLS;
             match (ev.event_type,ev.code) {
@@ -1258,10 +1325,11 @@ pub extern "C" fn graph_main() -> ! {
                 (1,272) => {
                     let pressed=ev.value!=0;
                     if pressed && !hclick {
-                        if let Some(target)=button_hit(cursor(&router,&human),false) {
+                        let (x,y)=cursor(&router,&human);
+                        if surfaces.click(0,x,y)==surface::Click::Miss {if let Some(target)=button_hit((x,y),false) {
                             interaction.human_focus=target;
                             interaction.human_clicks=interaction.human_clicks.saturating_add(1);
-                        }
+                        }}
                     }
                     hclick=pressed; changed=true;
                 }
@@ -1304,8 +1372,9 @@ pub extern "C" fn graph_main() -> ! {
                                         let mut response=json!({"jsonrpc":"2.0","id":id,"result":{"tools":[
                                         {"name":"move_ai","description":"Move AI pointer within its right-hand QEMU workspace.","inputSchema":{"type":"object","properties":{"x":{"type":"integer","minimum":400,"maximum":773},"y":{"type":"integer","minimum":0,"maximum":573}},"required":["x","y"],"additionalProperties":false}},
                                         {"name":"pointer_state","description":"Read the two pointer coordinates in this guest only.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
-                                        {"name":"click_ai","description":"Activate the synthetic button under the AI pointer; no host click or authentication.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"click_ai","description":"Send a synthetic AI click to a visible process surface or demo button; no host click or authentication.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"interaction_state","description":"Read logical button focus and click counts in this guest.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
+                                        {"name":"surface_status","description":"Inspect process surface metadata without pixels or event contents; actor labels are not authenticated.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"heap_status","description":"Read bounded guest heap allocator metrics.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"heap_exercise","description":"Exercise bounded heap coalescing and raw allocation failure without exhausting the service.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
                                         {"name":"mmu_status","description":"Read the guest's verified identity-map status.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
@@ -1789,14 +1858,27 @@ pub extern "C" fn graph_main() -> ! {
                                                 if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) { tool_error(id,"state requires empty arguments"); }
                                                 else {tool_json(id,json!({"human":{"focus":focus_name(interaction.human_focus),"clicks":interaction.human_clicks,"pressed":hclick},"assistant":{"focus":focus_name(interaction.ai_focus),"clicks":interaction.ai_clicks}}));}
                                             }
+                                            Some("surface_status") => {
+                                                let args=params.and_then(|p|p.get("arguments"));
+                                                if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) {tool_error(id,"status requires empty arguments");}
+                                                else {tool_json(id,surfaces.status());}
+                                            }
                                             Some("click_ai") => {
                                                 let args=params.and_then(|p|p.get("arguments"));
                                                 if !args.and_then(Value::as_object).is_some_and(|o|o.is_empty()) { tool_error(id,"click requires empty arguments"); }
-                                                else if let Some(target)=button_hit(cursor(&router,&ai),true) {
-                                                    interaction.ai_focus=target;
-                                                    interaction.ai_clicks=interaction.ai_clicks.saturating_add(1);
-                                                    pending_ai_click=Some(id);changed=true;
-                                                } else { tool_error(id,"AI pointer not on a button"); }
+                                                else {
+                                                    let (x,y)=cursor(&router,&ai);
+                                                    match surfaces.click(1,x,y) {
+                                                        surface::Click::Queued=>tool_json(id,json!({"surface":true,"delivered":true})),
+                                                        surface::Click::Full=>tool_json(id,json!({"surface":true,"delivered":false,"reason":"queue full"})),
+                                                        surface::Click::Blocked=>tool_json(id,json!({"surface":true,"delivered":false,"reason":"not routed"})),
+                                                        surface::Click::Miss=>if let Some(target)=button_hit((x,y),true) {
+                                                            interaction.ai_focus=target;
+                                                            interaction.ai_clicks=interaction.ai_clicks.saturating_add(1);
+                                                            pending_ai_click=Some(id);changed=true;
+                                                        } else {tool_error(id,"AI pointer not on a button");},
+                                                    }
+                                                }
                                             }
                                             Some("exercise_human_moves") => {
                                                 let args=params.and_then(|p|p.get("arguments"));
@@ -1909,7 +1991,7 @@ pub extern "C" fn graph_main() -> ! {
         }
         if changed {
             unsafe { draw(core::slice::from_raw_parts_mut(frame_ptr, FRAME_BYTES),
-                  cursor(&router, &human), cursor(&router, &ai), cursor(&router, &remote), hclick, &interaction); }
+                  cursor(&router, &human), cursor(&router, &ai), cursor(&router, &remote), hclick, &interaction, &surfaces); }
             if gpu.flush().is_err() {
                 if let Some((id,_,_))=pending_move.take() { tool_error(id,"framebuffer flush failed"); }
                 if let Some((id,_,_))=pending_remote.take() { tool_error(id,"framebuffer flush failed"); }

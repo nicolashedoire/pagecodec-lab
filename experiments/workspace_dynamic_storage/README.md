@@ -167,8 +167,10 @@ python3 launch_vm.py --qemu /path/to/qemu-system-aarch64 \
 The default display is `none`; use `--create-image /path/to/new.img` to create
 a persistent virtual disk, or `--resume-image /path/to/existing.img` to reuse
 one previously created for this guest. With neither option the disk is
-temporary. The launcher prints the private MCP socket path. Its panels are a
-prototype, not application windows or independent graphical desktops.
+temporary. The launcher prints the private MCP socket path. The fixed panels
+can contain surfaces drawn by independent guest processes, with separate
+human and AI click routing; they are not yet general window management or
+independent graphical desktops. See [VFS.md](VFS.md#process-surfaces-and-input).
 
 `launch_vm.py` provisions a virtual VirtIO entropy device along with its GPU,
 tablet and disposable or explicitly requested persistent disk. The guest uses

@@ -249,3 +249,77 @@ impl TreeUpload {
         }
     }
 }
+
+/// One process-owned virtual surface. Destroy explicitly or exit to release it.
+#[must_use]
+pub struct Surface { id: u64, active: bool }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SurfaceEvent { pub x: u32, pub y: u32, pub buttons: u32, pub source: u32 }
+
+impl Surface {
+    /// Public handle used for routing; it is not an authentication secret.
+    pub fn id(&self) -> u64 { self.id }
+
+    pub fn create(width: u32, height: u32) -> Result<Self, i64> {
+        loop {
+            let mut result = width as u64;
+            unsafe { asm!("svc #0x1a0", inout("x0") result, in("x1") height as u64, options(nostack)); }
+            match result as i64 {
+                EAGAIN => core::hint::spin_loop(), n if n < 0 => return Err(n),
+                0 => return Err(-5), n => return Ok(Self { id: n as u64, active: true }),
+            }
+        }
+    }
+
+    /// Draw into the back buffer; `present` publishes it to the display.
+    pub fn fill(&self, x: u32, y: u32, width: u32, height: u32, rgb: u32) -> Result<(), i64> {
+        if !self.active { return Err(-116); }
+        loop {
+            let mut result = self.id;
+            unsafe { asm!("svc #0x1a2", inout("x0") result, in("x1") x as u64,
+                in("x2") y as u64, in("x3") width as u64, in("x4") height as u64,
+                in("x5") rgb as u64, options(nostack)); }
+            match result as i64 { EAGAIN => core::hint::spin_loop(), n if n < 0 => return Err(n), 0 => return Ok(()), _ => return Err(-5) }
+        }
+    }
+
+    pub fn present(&self) -> Result<(), i64> { self.simple(false) }
+
+    pub fn destroy(&mut self) -> Result<(), i64> {
+        self.simple(true)?; self.active = false; Ok(())
+    }
+
+    fn simple(&self, destroy: bool) -> Result<(), i64> {
+        if !self.active { return Err(-116); }
+        loop {
+            let mut result = self.id;
+            unsafe {
+                if destroy { asm!("svc #0x1a1", inout("x0") result, options(nostack)); }
+                else { asm!("svc #0x1a3", inout("x0") result, options(nostack)); }
+            }
+            match result as i64 { EAGAIN => core::hint::spin_loop(), n if n < 0 => return Err(n), 0 => return Ok(()), _ => return Err(-5) }
+        }
+    }
+
+    /// Return the next click, or None if the event queue is empty.
+    pub fn poll_event(&self) -> Result<Option<SurfaceEvent>, i64> {
+        if !self.active { return Err(-116); }
+        let mut bytes = [0u8; 16];
+        loop {
+            let mut result = self.id;
+            unsafe { asm!("svc #0x1a4", inout("x0") result, in("x1") bytes.as_mut_ptr() as u64, options(nostack)); }
+            match result as i64 {
+                EAGAIN => core::hint::spin_loop(), n if n < 0 => return Err(n),
+                0 => return Ok(None),
+                16 => return Ok(Some(SurfaceEvent {
+                    x: u32::from_le_bytes(bytes[0..4].try_into().map_err(|_| -5)?),
+                    y: u32::from_le_bytes(bytes[4..8].try_into().map_err(|_| -5)?),
+                    buttons: u32::from_le_bytes(bytes[8..12].try_into().map_err(|_| -5)?),
+                    source: u32::from_le_bytes(bytes[12..16].try_into().map_err(|_| -5)?),
+                })),
+                _ => return Err(-5),
+            }
+        }
+    }
+}
