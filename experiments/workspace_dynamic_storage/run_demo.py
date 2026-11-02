@@ -1187,6 +1187,55 @@ def main():
    for name in alloc_gates:
     if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('allocator gate cleanup failed')
    if g.call('file_list',{})!=files_before:raise RuntimeError('allocator fixture left files behind')
+
+   # Requires the existing all_tasks helper and a guest with FP context support.
+   fp_gates=('a-fgate','b-fgate','c-fgate')
+   for name in fp_gates:
+    if any(entry.get('name')==name for entry in files_before):raise RuntimeError('FP fixture name already exists')
+    if not g.call('file_put',{'name':name,'data':'0'}).get('readback_verified'):raise RuntimeError('FP gate setup failed')
+   image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'fp-actors.hex').read_text().strip())
+   fp_upload=stage_program(g,image)
+   def fp_phase(name,value):
+    for _ in range(80):
+     got=g.call('file_get',{'name':name}).get('hex')
+     if got==value.encode().hex():return
+     time.sleep(.2)
+    raise RuntimeError('FP phase not reached: '+str((name,value,got)))
+   actors=[]
+   for slot,name in enumerate(fp_gates):
+    task=g.call('process_spawn_staged',{'id':fp_upload});actors.append(task)
+    if task.get('slot')!=slot:raise RuntimeError('FP actor admission failed: '+str(task))
+    fp_phase(name,'r')
+   live=all_tasks(lambda x:x.get('all_slot_states')==['ready']*3 and min(x.get('all_irq_counts',[0]*3))>0,'three FP tasks after timer IRQ')
+   baseline=live['all_irq_counts'];io_before=live['all_io_completed']
+   live=all_tasks(lambda x:all(x.get('all_irq_counts',[0]*3)[i]>baseline[i] and x.get('all_io_completed',[0]*3)[i]>io_before[i] for i in range(3)),'all FP tasks survived further timer IRQ and SVC')
+   previous=live['all_io_completed']
+   if g.call('process_stop',{'slot':2,'incarnation':actors[2]['incarnation_text'],'boot_id':actors[2]['boot_id']}).get('stopped') is not True:raise RuntimeError('FP actor stop failed')
+   all_tasks(lambda x:x.get('all_slot_states')==['ready','ready','exited'] and all(x.get('all_io_completed',[0]*3)[i]>previous[i] for i in (0,1)),'FP neighbors progress while C stopped')
+   if not g.call('file_put',{'name':'c-fgate','data':'0'}).get('readback_verified'):raise RuntimeError('FP gate reset failed')
+   replacement=g.call('process_spawn_staged',{'id':fp_upload})
+   if replacement.get('slot')!=2 or replacement.get('incarnation',0)<=actors[2]['incarnation']:raise RuntimeError('FP readmission failed: '+str(replacement))
+   fp_phase('c-fgate','r') # New EL0 instance verified all FP state starts at zero.
+   args={'a_slot':0,'a_incarnation':actors[0]['incarnation_text'],'b_slot':1,'b_incarnation':actors[1]['incarnation_text'],'boot_id':actors[0]['boot_id']}
+   bound=g.call('ipc_direct_bind',args);channel=bound['channel_id']
+   if not g.call('file_put',{'name':'b-fgate','data':'w'}).get('readback_verified'):raise RuntimeError('FP wait request failed')
+   for _ in range(80):
+    status=g.call('ipc_direct_status',{})
+    if status.get('all_waiting',[False]*3)[1] is True:break
+    time.sleep(.2)
+   else:raise RuntimeError('FP actor did not sleep: '+str(status))
+   if not g.call('file_put',{'name':'a-fgate','data':'s'}).get('readback_verified'):raise RuntimeError('FP send request failed')
+   fp_phase('a-fgate','d');fp_phase('b-fgate','d')
+   status=g.call('ipc_direct_status',{})
+   if status.get('all_waiting',[True]*3)[1] or status.get('all_wake_message',[0]*3)[1]<1:raise RuntimeError('FP waiter did not wake: '+str(status))
+   for name in fp_gates:
+    if not g.call('file_put',{'name':name,'data':'q'}).get('readback_verified'):raise RuntimeError('FP release failed')
+   done=all_tasks(lambda x:x.get('all_slot_states')==['exited']*3,'FP task teardown')
+   if done.get('all_outcomes')!=[1]*3 or done.get('all_exit_codes')!=[0]*3 or done.get('frame_pool_assigned')!=0:raise RuntimeError('FP task failed or leaked: '+str(done))
+   g.call('upload_reset',{'id':fp_upload})
+   for name in fp_gates:
+    if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('FP gate cleanup failed')
+   if g.call('file_list',{})!=files_before:raise RuntimeError('FP fixture left files behind')
    if a.exercise_storage_fault:
     # A single direct channel can choose any two of three live actors.
     for name in ('a-igate','b-igate','c-igate'):

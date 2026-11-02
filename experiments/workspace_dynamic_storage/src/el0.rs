@@ -12,6 +12,13 @@ const PAGE:usize=4096;
 const GICD:usize=0x0800_0000;const GICC:usize=0x0801_0000;
 #[repr(C,align(4096))] struct UserStack([u8;PAGE]);
 #[repr(C,align(16))] #[derive(Clone,Copy)] struct Frame {regs:[u64;31],sp:u64,elr:u64,spsr:u64}
+// Kept separate from the integer frame, whose 272-byte ABI is used by the
+// exception assembly. This covers AArch64 FP/AdvSIMD, not SVE or SME.
+#[repr(C,align(16))] #[derive(Clone,Copy)] struct FpState {q:[[u64;2];32],fpcr:u64,fpsr:u64}
+const EMPTY_FP:FpState=FpState{q:[[0;2];32],fpcr:0,fpsr:0};
+#[no_mangle] static mut USER_FP:[FpState;PROCESS_CAPACITY]=[EMPTY_FP;PROCESS_CAPACITY];
+#[no_mangle] static mut KERNEL_FP:FpState=EMPTY_FP;
+#[no_mangle] static mut FP_READY:u64=0;
 #[repr(C)] #[derive(Clone,Copy)] struct Event {actor:u64,count:u64,pc:u64,spsr:u64,sp:u64,next:u64,kernel_sp:u64}
 const EMPTY:Frame=Frame{regs:[0;31],sp:0,elr:0,spsr:0};
 // Fixed boot-reserved frame pool, not a general physical-memory allocator.
@@ -1223,7 +1230,27 @@ fn task_frame(actor:usize)->usize {
  let frame=unsafe{read_volatile(addr_of!(TASK_FRAMES).cast::<usize>().add(actor))};
  check(frame!=0,"frame uninitialized");frame
 }
+fn clear_user_fp(actor:usize) {
+ check(actor<PROCESS_CAPACITY,"FP actor");
+ let state=unsafe{addr_of_mut!(USER_FP).cast::<FpState>().add(actor)};
+ let words=state.cast::<u64>();
+ for i in 0..(core::mem::size_of::<FpState>()/8) {unsafe{write_volatile(words.add(i),0)}}
+}
+fn enable_fp() {
+ let pfr:u64;let mut cpacr:u64;
+ unsafe{asm!("mrs {}, ID_AA64PFR0_EL1",out(reg) pfr)};
+ check((pfr>>16)&15!=15 && (pfr>>20)&15!=15,"FP/AdvSIMD unavailable");
+ unsafe{asm!("mrs {}, CPACR_EL1",out(reg) cpacr)};
+ // FPEN grants EL0/EL1 FP/AdvSIMD; leave extended vector/streaming modes
+ // trapped. This does not establish EL2/EL3 configuration on physical Macs.
+ cpacr=(cpacr & !((3u64<<16)|(3u64<<24))) | (3u64<<20);
+ unsafe{asm!("msr CPACR_EL1, {}","isb",in(reg) cpacr)};
+ let readback:u64;unsafe{asm!("mrs {}, CPACR_EL1",out(reg) readback)};
+ check(readback&(3u64<<20)==3u64<<20,"FP access unavailable");
+ unsafe{write_volatile(addr_of_mut!(FP_READY),1)};
+}
 fn frame(actor:u64,sp:usize,pc:usize)->Frame {
+ clear_user_fp(actor as usize);
  let mut f=EMPTY;for i in 0..31 {f.regs[i]=1000+actor*100+i as u64;}
  f.regs[0]=super::mmu::ALIAS as u64;f.regs[1]=match actor {0=>0xa1a1,1=>0xb2b2,_=>0xc3c3};f.regs[2]=0;f.regs[3]=0;f.regs[4]=0;
  f.regs[19]=0;f.sp=sp as u64;f.elr=pc as u64;
@@ -1231,6 +1258,8 @@ fn frame(actor:u64,sp:usize,pc:usize)->Frame {
 }
 
 pub fn start()->! {
+ enable_fp();
+ check(core::mem::size_of::<FpState>()==528 && core::mem::align_of::<FpState>()==16,"FP frame layout");
  let start=physical(addr_of!(__image_start) as usize);let end=physical(addr_of!(__image_end) as usize);
  let text_end=physical(addr_of!(__text_end) as usize);let ut0=physical(addr_of!(__usertext_start) as usize);let split=physical(addr_of!(__usertext_split) as usize);let ut1=physical(addr_of!(__usertext_end) as usize);
  let us0=physical(addr_of!(__userstack_start) as usize);let us1=physical(addr_of!(__userstack_end) as usize);
@@ -1577,6 +1606,7 @@ extern "C" fn pair_irq_check(f:*const Frame)->u64 {
  0
 }
 fn reclaim_pair(actor:usize) {
+ clear_user_fp(actor);
  revoke_document_for(actor);
  // Closing the channel discards both bounded queues before either frame can
  // be reused by a later incarnation.
@@ -1630,6 +1660,7 @@ fn reclaim_pair(actor:usize) {
 // before zeroing and returning the frame to this bounded boot pool.
 fn reclaim_exited(actor:usize) {
  if unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} {if unsafe{read_volatile(addr_of!(TASK_FRAMES).cast::<usize>().add(actor))}!=0 {reclaim_pair(actor)};return}
+ clear_user_fp(actor);
  let p=unsafe{addr_of_mut!(TASK_FRAMES).cast::<usize>().add(actor)};
  let frame=unsafe{read_volatile(p)};if frame==0{return}
  let image_number=if actor==0 && unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} {unsafe{read_volatile(addr_of!(IMAGE_COUNT))}} else {0};
@@ -1853,6 +1884,124 @@ vector_table:
     .balign 128
 
     .section .text.irq, "ax"
+    // Restrict explicit FP/AdvSIMD use to the context assembly even though
+    // Rust code is compiled with target-feature=-neon.
+    .arch armv8-a+simd
+    // Private per-slot FP state is indexed using the kernel-owned CURRENT.
+    // All integer temporaries have already been saved by exception entry.
+save_current_user_fp:
+    adrp x9, CURRENT
+    add x9, x9, :lo12:CURRENT
+    ldr x10, [x9]
+    cmp x10, #{capacity}
+    b.hs irq_fatal
+    adrp x9, USER_FP
+    add x9, x9, :lo12:USER_FP
+    mov x11, #528
+    madd x9, x10, x11, x9
+    stp q0, q1, [x9, #0]
+    stp q2, q3, [x9, #32]
+    stp q4, q5, [x9, #64]
+    stp q6, q7, [x9, #96]
+    stp q8, q9, [x9, #128]
+    stp q10, q11, [x9, #160]
+    stp q12, q13, [x9, #192]
+    stp q14, q15, [x9, #224]
+    stp q16, q17, [x9, #256]
+    stp q18, q19, [x9, #288]
+    stp q20, q21, [x9, #320]
+    stp q22, q23, [x9, #352]
+    stp q24, q25, [x9, #384]
+    stp q26, q27, [x9, #416]
+    stp q28, q29, [x9, #448]
+    stp q30, q31, [x9, #480]
+    mrs x10, FPCR
+    str x10, [x9, #512]
+    mrs x10, FPSR
+    str x10, [x9, #520]
+    ret
+restore_current_user_fp:
+    adrp x9, CURRENT
+    add x9, x9, :lo12:CURRENT
+    ldr x10, [x9]
+    cmp x10, #{capacity}
+    b.hs irq_fatal
+    adrp x9, USER_FP
+    add x9, x9, :lo12:USER_FP
+    mov x11, #528
+    madd x9, x10, x11, x9
+    ldp q0, q1, [x9, #0]
+    ldp q2, q3, [x9, #32]
+    ldp q4, q5, [x9, #64]
+    ldp q6, q7, [x9, #96]
+    ldp q8, q9, [x9, #128]
+    ldp q10, q11, [x9, #160]
+    ldp q12, q13, [x9, #192]
+    ldp q14, q15, [x9, #224]
+    ldp q16, q17, [x9, #256]
+    ldp q18, q19, [x9, #288]
+    ldp q20, q21, [x9, #320]
+    ldp q22, q23, [x9, #352]
+    ldp q24, q25, [x9, #384]
+    ldp q26, q27, [x9, #416]
+    ldp q28, q29, [x9, #448]
+    ldp q30, q31, [x9, #480]
+    ldr x10, [x9, #512]
+    msr FPCR, x10
+    ldr x10, [x9, #520]
+    msr FPSR, x10
+    isb
+    ret
+save_kernel_fp:
+    adrp x9, KERNEL_FP
+    add x9, x9, :lo12:KERNEL_FP
+    stp q0, q1, [x9, #0]
+    stp q2, q3, [x9, #32]
+    stp q4, q5, [x9, #64]
+    stp q6, q7, [x9, #96]
+    stp q8, q9, [x9, #128]
+    stp q10, q11, [x9, #160]
+    stp q12, q13, [x9, #192]
+    stp q14, q15, [x9, #224]
+    stp q16, q17, [x9, #256]
+    stp q18, q19, [x9, #288]
+    stp q20, q21, [x9, #320]
+    stp q22, q23, [x9, #352]
+    stp q24, q25, [x9, #384]
+    stp q26, q27, [x9, #416]
+    stp q28, q29, [x9, #448]
+    stp q30, q31, [x9, #480]
+    mrs x10, FPCR
+    str x10, [x9, #512]
+    mrs x10, FPSR
+    str x10, [x9, #520]
+    ret
+restore_kernel_fp:
+    adrp x9, KERNEL_FP
+    add x9, x9, :lo12:KERNEL_FP
+    ldp q0, q1, [x9, #0]
+    ldp q2, q3, [x9, #32]
+    ldp q4, q5, [x9, #64]
+    ldp q6, q7, [x9, #96]
+    ldp q8, q9, [x9, #128]
+    ldp q10, q11, [x9, #160]
+    ldp q12, q13, [x9, #192]
+    ldp q14, q15, [x9, #224]
+    ldp q16, q17, [x9, #256]
+    ldp q18, q19, [x9, #288]
+    ldp q20, q21, [x9, #320]
+    ldp q22, q23, [x9, #352]
+    ldp q24, q25, [x9, #384]
+    ldp q26, q27, [x9, #416]
+    ldp q28, q29, [x9, #448]
+    ldp q30, q31, [x9, #480]
+    ldr x10, [x9, #512]
+    msr FPCR, x10
+    ldr x10, [x9, #520]
+    msr FPSR, x10
+    isb
+    ret
+
 lower_el_irq:
     // Exception arrived from EL0 on SP_EL1. Save every integer register,
     // user SP and exception return state before using any as scratch.
@@ -1879,6 +2028,9 @@ lower_el_irq:
     str x0, [sp, #256]
     mrs x0, SPSR_EL1
     str x0, [sp, #264]
+    bl save_current_user_fp
+    // Never let an EL0 FPCR, FPSR or vector value become EL1's working state.
+    bl restore_kernel_fp
     and x1, x0, #0xf
     cbnz x1, irq_entry_fail
     mov x1, #0x08010000
@@ -2377,8 +2529,10 @@ slice_return_kernel:
     eret
 
 all_done:
-    // Timer is disabled; keep every interrupt class masked for validation.
+    // This initial probe is non-returning; zero KERNEL_FP represents a clean
+    // EL1 state before entering the independent Rust continuation.
     msr daifset, #0xf
+    bl restore_kernel_fp
     b el0_finish
 
 select_ready:
@@ -2430,6 +2584,18 @@ irq_report_frame:
     b irq_report
 irq_fatal:
     msr daifset, #0xf
+    // Other fatal vectors can arrive directly from EL0, bypassing the
+    // normal IRQ/SVC prologues. Do not run Rust on user FP state. Before FP
+    // setup itself has completed, avoid executing unsupported FP opcodes.
+    adrp x9, FP_READY
+    add x9, x9, :lo12:FP_READY
+    ldr x10, [x9]
+    cbz x10, 39f
+    // If the restore itself traps due to a higher-EL policy, the recursive
+    // fatal path skips it instead of continually attempting FP instructions.
+    str xzr, [x9]
+    bl restore_kernel_fp
+39:
     b unexpected_vector
 
     .global start_slice
@@ -2445,6 +2611,7 @@ start_slice:
     stp x25, x26, [x9, #64]
     stp x27, x28, [x9, #80]
     stp x29, x30, [x9, #96]
+    bl save_kernel_fp
     // Select the next EL0 task's root/ASID before exception return.
     adrp x9, CURRENT
     add x9, x9, :lo12:CURRENT
@@ -2479,6 +2646,7 @@ start_slice:
     b.ne irq_fatal
     b restore_user_frame
 resume_kernel_slice:
+    bl restore_kernel_fp
     adrp x9, KERNEL_CONTEXT
     add x9, x9, :lo12:KERNEL_CONTEXT
     ldr x10, [x9, #0]
@@ -2563,6 +2731,7 @@ slice_probe_end:
     .global start_first
 start_first:
 restore_user_frame:
+    bl restore_current_user_fp
     mov x30, x0
     ldr x1, [x30, #248]
     msr SP_EL0, x1
@@ -2621,6 +2790,8 @@ lower_el_svc:
     str x0, [sp, #256]
     mrs x0, SPSR_EL1
     str x0, [sp, #264]
+    bl save_current_user_fp
+    bl restore_kernel_fp
     mrs x1, ESR_EL1
     mov x0, sp
     bl ipc_dispatch
@@ -2728,6 +2899,7 @@ svc_exit:
     str x12, [x11]
     b slice_return_kernel     // releases this 272-byte frame on return
 svc_restore_frame:
+    bl restore_current_user_fp
     mov x30, x0
     ldr x1, [x30, #248]
     msr SP_EL0, x1

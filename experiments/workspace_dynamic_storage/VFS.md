@@ -779,3 +779,28 @@ The revised fixture calls `GuestAllocator` through its `GlobalAlloc` trait
 implementation and observes the returned pointer. Optimized IR confirms a
 real call and null comparison; a focused QEMU run reached the 16-byte file
 write, and the complete integrated modern-transport rerun passed.
+
+### AArch64 FP/AdvSIMD context
+
+The integrated kernel saves and restores `q0`–`q31`, `FPCR`, and `FPSR`
+across guest exception boundaries, with separate EL1 and per-process EL0
+states. New independent process incarnations start with a cleared FP state;
+the stored process state is cleared on teardown. The guest checks the CPU's
+FP/AdvSIMD feature fields and enables FP access before using these routines.
+This is for the single-CPU QEMU ARM guest; it does not implement SVE or SME,
+prove native Apple behavior, or establish an EL1 floating-point workload's
+full isolation under arbitrary faults.
+
+The [`fp-actors.S`](fixtures/fp-actors.S) ELF fixture is designed to inspect
+all 128 bits of each vector register and both control/status registers on
+entry, install distinct patterns per actor, and check them after system calls,
+timer preemption, process stop/readmission, and an IPC wait/wake. It builds
+with [`rebuild-fp-actors.py`](fixtures/rebuild-fp-actors.py); the source is
+assembled and linked but never executed on the host. The complete integrated
+modern-transport run with storage fault injection passed this scenario. It
+does not include a dedicated EL1 FP-state sentinel, and recorded legacy runs
+predate this change.
+
+An earlier run was stopped before the FP scenario when a review found that
+the fixture overwrote the register holding its gate name. The fixture was
+corrected, rebuilt and reviewed before the successful run.
