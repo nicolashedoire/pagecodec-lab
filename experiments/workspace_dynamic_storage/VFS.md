@@ -736,7 +736,8 @@ the name and output on different pages. It also requests a free of both
 referenced pages during that I/O and frees/reallocates an unrelated page.
 Zero-length PUTs cover stack-to-heap and adjacent heap page boundaries,
 including mapping a neighbor while an operation is pending. The integrated
-modern-transport run with storage fault injection passed this scenario;
+modern-transport run with storage fault injection and the ordinary-release
+legacy run passed this scenario;
 filling the pool does not itself exercise a subsequent allocation returning
 `-12`. Cross-calling the legacy and indexed APIs for page zero has not been
 separately exercised. Programs using `0x182/183` require a kernel that
