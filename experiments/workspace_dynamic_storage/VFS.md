@@ -718,6 +718,7 @@ ELFs free, reallocate and check all page bytes again. They also exercise an
 [guest API](guest_api.rs) for owned pages and file I/O. The scenario does not
 exercise vector growth. This allocator cannot split or grow allocations and
 is not an application runtime.
-The integrated modern-transport run with storage fault injection passed this
-scenario. It does not demonstrate global frame exhaustion, multi-object
-allocation, SMP behavior or an application runtime.
+The integrated modern-transport run with storage fault injection and the
+ordinary-release legacy run passed this scenario. They do not demonstrate
+global frame exhaustion, multi-object allocation, SMP behavior or an
+application runtime.
