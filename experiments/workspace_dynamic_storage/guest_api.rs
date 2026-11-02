@@ -146,6 +146,33 @@ pub fn tree_read_at(path: &str, output: &mut [u8], offset: usize, generation: u6
     }
 }
 
+/// Create a directory in the current actor's tree namespace.
+pub fn tree_mkdir(path: &str, generation: u64) -> Result<(), i64> {
+    tree_directory_op(path, generation, true)
+}
+
+/// Remove a file or an empty directory in the current actor's namespace.
+pub fn tree_remove(path: &str, generation: u64) -> Result<(), i64> {
+    tree_directory_op(path, generation, false)
+}
+
+fn tree_directory_op(path: &str, generation: u64, mkdir: bool) -> Result<(), i64> {
+    let path_ptr = path.as_ptr() as u64;
+    loop {
+        let mut result = path_ptr;
+        unsafe {
+            if mkdir { asm!("svc #0x14a", inout("x0") result, in("x1") path.len() as u64, in("x2") generation, options(nostack)); }
+            else { asm!("svc #0x14b", inout("x0") result, in("x1") path.len() as u64, in("x2") generation, options(nostack)); }
+        }
+        match result as i64 {
+            EAGAIN => core::hint::spin_loop(),
+            n if n < 0 => return Err(n),
+            0 => return Ok(()),
+            _ => return Err(-5),
+        }
+    }
+}
+
 /// Sequential, incarnation-bound transfer. Abort explicitly or exit to reclaim it.
 #[must_use]
 pub struct TreeUpload { id: u64, next: usize, active: bool }

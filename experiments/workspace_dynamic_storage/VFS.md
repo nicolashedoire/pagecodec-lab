@@ -946,3 +946,27 @@ uses both raw SVCs and the helper. The integrated modern-transport QEMU run
 with storage fault injection passed. The recorded legacy trace predates these
 process-write calls. An earlier focused run validated the two-writer collision
 and cleanup before the full run.
+
+### Process directory creation and removal
+
+Independent ELF processes can request `SVC #0x14a` to create a directory or
+`SVC #0x14b` to remove a file or empty directory. The path pointer/length are
+in `x0`/`x1` (canonical ASCII path of at most 16 bytes), with the expected
+nonzero tree generation in `x2`. Each call returns zero on success, or `-11`
+while pending; retry the same arguments. The `/a/`, `/b/`, `/c/` actor-slot
+scope applies, and a successful mutation advances the tree generation.
+Failures include `-2` for a missing entry or parent, `-13` for a path outside
+the caller's scope, `-17` for an existing directory, `-19` for a closed tree,
+`-20` for a parent that is a file, `-22` for invalid paths/arguments, `-39`
+for a nonempty directory and `-116` for a stale generation. An uncertain disk
+write follows the existing blocked-until-restart policy.
+
+The [guest API](guest_api.rs) exposes `tree_mkdir` and `tree_remove`. The
+[`rust-tree-dir`](fixtures/rust-tree-dir.rs) integrated scenario is designed to
+run two scoped processes, test cross-scope, nonempty-directory and stale
+generation refusals, create/remove nested directories and remove a pre-existing
+file, then check the resulting tree and generation again after reboot. It
+exercises both SVCs and wrappers. The complete integrated modern-transport
+QEMU run with storage fault injection passed. The recorded legacy trace
+predates these calls. This does not provide EL0 enumeration, rename, real user
+authentication or power-loss durability guarantees.

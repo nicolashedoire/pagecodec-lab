@@ -1688,6 +1688,62 @@ def main():
    finally:e.close()
   run_tree_writers(False,68)
   run_tree_writers(True,70)
+  # Two EL0 actors mutate only their own directory scopes and discover versions.
+  dir_disk=Path(tmp)/'tree-el0-dir.raw';create(dir_disk,tree_disk_path.read_bytes())
+  dir_program_sectors=protected_program_sectors(dir_disk)
+  dir_image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-tree-dir.hex').read_text().strip())
+  e=Guest(a.qemu,guest,dir_disk,tmp,72,out,a.transport)
+  try:
+   e.progress('before EL0 directory operations',timeout_image=True,expected_exit_code=0);e.wait_boot_identity()
+   revision=e.call('tree_open',{'dedicated':True})['generation']
+   for path in ('/a','/b'):
+    result=e.call('tree_mkdir',{'path':path,'generation':revision})
+    if result.get('readback_verified') is not True:raise RuntimeError('directory actor root creation failed')
+    revision=result['generation']
+   revision=put_tree(e,'/a/erase',b'a',revision);revision=put_tree(e,'/b/erase',b'b',revision)
+   gates=('a-mgate','b-mgate');phases=('a-mphase','b-mphase')
+   names=[entry['name'] for entry in e.call('file_list',{})]
+   if any(name in names for name in gates+phases):raise RuntimeError('directory test gate already exists')
+   def directory_gate(name,value):
+    if not e.call('file_put',{'name':name,'data':value}).get('readback_verified'):raise RuntimeError('directory gate write failed')
+   def directory_phase(name,value):
+    for _ in range(160):
+     result=e.call('file_get',{'name':name}).get('hex')
+     if result==value.encode().hex():return
+     slot=0 if name[0]=='a' else 1;state=e.call('process_status',{})
+     if state.get('all_slot_states',[None]*3)[slot]=='exited':raise RuntimeError('directory actor exited before phase: '+str((name,value,result,state)))
+     time.sleep(.2)
+    raise RuntimeError('directory phase timed out: '+str((name,value,result)))
+   for name in gates+phases:directory_gate(name,'0')
+   program=stage_program(e,dir_image)
+   actors=[e.call('process_spawn_staged',{'id':program}) for _ in range(2)]
+   if [x.get('slot') for x in actors]!=[0,1]:raise RuntimeError('directory actor admissions failed: '+str(actors))
+   for name in phases:directory_phase(name,'r')
+   ready=e.wait_independent(lambda x:x.get('slot_states')==['ready','ready'] and min(x.get('irq_counts',[0,0]))>0,'both directory actors ready')
+   if ready.get('frame_pool_assigned')!=6:raise RuntimeError('directory actor frame count invalid: '+str(ready))
+   directory_gate(gates[0],'a');directory_phase(phases[0],'d')
+   after_a=e.call('tree_status',{})
+   if int(after_a['generation'])!=int(revision)+6:raise RuntimeError('directory actor A generation count differs: '+str(after_a))
+   directory_gate(gates[1],'b');directory_phase(phases[1],'d')
+   after_b=e.call('tree_status',{});final_generation=after_b['generation']
+   if int(final_generation)!=int(revision)+12:raise RuntimeError('directory actor B generation count differs: '+str(after_b))
+   listing=e.call('tree_list',{'generation':final_generation})['entries'];paths={x['path'] for x in listing}
+   if not {'/a/keep','/b/keep'}.issubset(paths) or paths.intersection({'/a/test','/a/test/sub','/b/test','/b/test/sub','/a/erase','/b/erase'}):raise RuntimeError('EL0 directory changes incorrect: '+str(listing))
+   for name in gates:directory_gate(name,'q')
+   done=e.wait_independent(lambda x:x.get('slot_states')==['exited','exited'],'directory actors exited')
+   if done.get('outcomes')!=[1,1] or done.get('exit_codes')!=[0,0] or done.get('frame_pool_assigned')!=0:raise RuntimeError('directory actor cleanup failed: '+str(done))
+   if protected_program_sectors(dir_disk)!=dir_program_sectors:raise RuntimeError('directory operations modified program regions')
+   e.call('upload_reset',{'id':program});traces.append(e.trace);states.append(e.call('tree_status',{}))
+  finally:e.close()
+  e=Guest(a.qemu,guest,dir_disk,tmp,73,out,a.transport)
+  try:
+   e.progress('after EL0 directory reboot',timeout_image=True,expected_exit_code=0)
+   if e.call('tree_open',{'dedicated':True}).get('generation')!=final_generation:raise RuntimeError('directory generation did not survive reboot')
+   listing=e.call('tree_list',{'generation':final_generation})['entries'];paths={x['path'] for x in listing}
+   if not {'/a/keep','/b/keep'}.issubset(paths) or paths.intersection({'/a/test','/a/test/sub','/b/test','/b/test/sub','/a/erase','/b/erase'}):raise RuntimeError('EL0 directory changes lost after reboot: '+str(listing))
+   if protected_program_sectors(dir_disk)!=dir_program_sectors:raise RuntimeError('directory reboot modified program regions')
+   traces.append(e.trace);states.append(e.call('tree_status',{}))
+  finally:e.close()
   # Two VM boots, one disposable clone; no host file or raw device is attached.
   chunk_disk=Path(tmp)/'chunk-offset.raw';create(chunk_disk,disk.read_bytes())
   chunk_image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-chunk-io.hex').read_text().strip())

@@ -505,6 +505,33 @@ fn tree_guest_permitted(actor:usize,path:&str)->bool {
     let prefix=match actor {0=>"/a/",1=>"/b/",2=>"/c/",_=>return false};
     path.starts_with(prefix)
 }
+fn tree_guest_root(actor:usize)->Option<&'static str> {
+    match actor {0=>Some("/a"),1=>Some("/b"),2=>Some("/c"),_=>None}
+}
+fn tree_guest_directory_error(error:tree_store::Error)->i64 {
+    use tree_store::Error::*;
+    match error {
+        NotFound=>-2,
+        NotDirectory=>-20,
+        IsDirectory=>-21,
+        AlreadyExists=>-17,
+        NotEmpty=>-39,
+        Root=>-13,
+        TooManyEntries|StorageFull=>-28,
+        FileTooLarge|Overflow=>-27,
+        OutOfMemory=>-12,
+        _=>-22,
+    }
+}
+fn tree_guest_directory_volume_error(error:&str)->i64 {
+    match error {
+        "tree not opened"=>-19,
+        "stale tree generation"=>-116,
+        "tree generation exhausted"=>-75,
+        e if e.ends_with("allocation failed")=>-12,
+        _=>-5,
+    }
+}
 fn tree_guest_stage_error(error:tree_guest_staging::Error)->i64 {
     use tree_guest_staging::Error::*;
     match error {Invalid=>-22,Stale=>-116,Busy=>-16,TooLarge=>-27,OutOfMemory=>-12,Exhausted=>-75}
@@ -922,6 +949,30 @@ pub extern "C" fn graph_main() -> ! {
                         }
                     }
                     if !el0::complete_document(&request,&reply[..reply_len],errno) {halt()}
+                    continue;
+                }
+                if matches!(request.file_op,10|11) {
+                    // mkdir/remove operate on a private candidate. The exact
+                    // actor root may be created, but is never removed here.
+                    if !el0::is_pair_request(&request) {halt()}
+                    let result=(||->Result<(),i64> {
+                        let path=request.key.get(..request.key_len).and_then(|b|core::str::from_utf8(b).ok()).ok_or(-22)?;
+                        if !valid_tree_guest_path(path) || request.tree_generation==0 {return Err(-22)}
+                        let own_root=tree_guest_root(request.actor).ok_or(-13)?;
+                        if !(path==own_root || tree_guest_permitted(request.actor,path)) {return Err(-13)}
+                        if request.file_op==11 && path==own_root {return Err(-13)}
+                        let disk=block.as_mut().ok_or(-19)?;
+                        tree_volume.current(disk,request.tree_generation,true).map_err(tree_guest_directory_volume_error)?;
+                        let mut candidate=tree_volume.candidate().map_err(tree_guest_directory_volume_error)?;
+                        match request.file_op {
+                            10=>candidate.mkdir(path).map_err(tree_guest_directory_error)?,
+                            11=>candidate.remove(path).map_err(tree_guest_directory_error)?,
+                            _=>return Err(-22),
+                        }
+                        tree_volume.commit(disk,request.tree_generation,candidate).map(|_|()).map_err(tree_guest_directory_volume_error)
+                    })();
+                    let completed=el0::complete_tree_directory(&request,result.err().unwrap_or(0));
+                    if !completed {halt()}
                     continue;
                 }
                 if matches!(request.file_op,6..=9) {
