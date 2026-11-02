@@ -1047,6 +1047,53 @@ def main():
    for name in ('a-gate','b-gate','c-gate'):
     if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('three-task gate cleanup failed')
    if g.call('file_list',{})!=files_before:raise RuntimeError('three-task fixture left files behind')
+   # Three real independent ELF processes allocate the same virtual heap VA.
+   # Gate names and values live in that heap and the guest checks -16 for a
+   # pending heap-backed GET, as well as zeroing after free and reallocation.
+   heap_gates=('a-hgate','b-hgate','c-hgate')
+   for name in heap_gates:
+    if any(entry.get('name')==name for entry in files_before):raise RuntimeError('heap fixture name already exists')
+    if not g.call('file_put',{'name':name,'data':'0'}).get('readback_verified'):raise RuntimeError('heap gate setup failed')
+   image=bytes.fromhex((Path(__file__).resolve().parent/'fixtures'/'rust-private-heap.hex').read_text().strip())
+   heap_upload=stage_program(g,image)
+   def heap_phase(name,expected):
+    for _ in range(80):
+     got=g.call('file_get',{'name':name}).get('hex')
+     if got==expected.encode().hex():return
+     time.sleep(.2)
+    raise RuntimeError('heap fixture phase missing: '+str((name,expected,got)))
+   heap_actors=[]
+   for i,name in enumerate(heap_gates):
+    task=g.call('process_spawn_staged',{'id':heap_upload});heap_actors.append(task)
+    if task.get('slot')!=i:raise RuntimeError('heap actor slot mismatch: '+str(task))
+    heap_phase(name,'r')
+    present=all_tasks(lambda x:sum(x.get('all_heap_allocated',[False]*3))==i+1,'private heap admission')
+    if present.get('all_heap_allocated')!=[j<=i for j in range(3)] or present.get('frame_pool_assigned')!=4*(i+1):raise RuntimeError('private heap admission changed neighbor: '+str(present))
+   live=all_tasks(lambda x:x.get('all_heap_allocated')==[True]*3 and x.get('frame_pool_assigned')==12,'three private heaps')
+   frames=live.get('all_heap_frame_index',[])
+   if len(frames)!=3 or any(not isinstance(x,int) for x in frames) or len(set(frames))!=3:raise RuntimeError('heap physical frames are not distinct: '+str(live))
+   previous=live['all_io_completed']
+   if g.call('process_stop',{'slot':0,'incarnation':heap_actors[0]['incarnation_text'],'boot_id':heap_actors[0]['boot_id']}).get('stopped') is not True:raise RuntimeError('heap actor stop failed')
+   stopped=all_tasks(lambda x:x.get('all_slot_states')==['exited','ready','ready'] and all(x.get('all_io_completed',[0]*3)[i]>previous[i] for i in (1,2)),'heap neighbors progress after stop')
+   if stopped.get('all_heap_allocated')!=[False,True,True] or stopped.get('all_heap_scrubbed',[False]*3)[0] is not True or stopped.get('frame_pool_assigned')!=8:raise RuntimeError('heap stop did not clean actor resources: '+str(stopped))
+   if not g.call('file_put',{'name':'a-hgate','data':'0'}).get('readback_verified'):raise RuntimeError('heap gate reset failed')
+   replacement=g.call('process_spawn_staged',{'id':heap_upload})
+   if replacement.get('slot')!=0 or replacement.get('incarnation',0)<=heap_actors[0]['incarnation']:raise RuntimeError('heap actor readmission failed: '+str(replacement))
+   heap_phase('a-hgate','r')
+   live=all_tasks(lambda x:x.get('all_heap_allocated')==[True]*3 and x.get('frame_pool_assigned')==12,'heap allocation after readmission')
+   if live.get('all_heap_frame_index')!=frames:raise RuntimeError('heap frame reuse or neighbor identity changed: '+str((frames,live)))
+   for name in heap_gates:
+    if not g.call('file_put',{'name':name,'data':'f'}).get('readback_verified'):raise RuntimeError('heap recycle request failed')
+   for name in heap_gates:heap_phase(name,'d')
+   live=all_tasks(lambda x:x.get('all_heap_allocated')==[True]*3 and x.get('frame_pool_assigned')==12,'all heaps reallocated')
+   for name in heap_gates:
+    if not g.call('file_put',{'name':name,'data':'q'}).get('readback_verified'):raise RuntimeError('heap fixture release failed')
+   done=all_tasks(lambda x:x.get('all_slot_states')==['exited']*3,'heap fixture teardown')
+   if done.get('all_outcomes')!=[1]*3 or done.get('all_exit_codes')!=[0]*3 or done.get('all_heap_allocated')!=[False]*3 or done.get('all_heap_scrubbed')!=[True]*3 or done.get('frame_pool_assigned')!=0:raise RuntimeError('heap fixture cleanup failed: '+str(done))
+   g.call('upload_reset',{'id':heap_upload})
+   for name in heap_gates:
+    if not g.call('file_delete',{'name':name}).get('readback_verified'):raise RuntimeError('heap gate cleanup failed')
+   if g.call('file_list',{})!=files_before:raise RuntimeError('heap fixture left files behind')
    if a.exercise_storage_fault:
     # A single direct channel can choose any two of three live actors.
     for name in ('a-igate','b-igate','c-igate'):

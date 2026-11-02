@@ -66,7 +66,7 @@ class Guest:
             assigned=preempt.get('frame_pool_assigned')
             # The loaded program may already own its two frames when the
             # status request arrives; teardown is checked later by progress().
-            if preempt.get('cross_code_read_denied')!=[True,True] or preempt.get('frame_pool_capacity')!=9 or not isinstance(states,list) or len(states)!=2 or any(s not in ('ready','exited') for s in states) or not isinstance(assigned,int) or not states.count('ready')<=assigned<=4:raise RuntimeError('isolated task code or frame assignment invalid')
+            if preempt.get('cross_code_read_denied')!=[True,True] or preempt.get('frame_pool_capacity')!=12 or not isinstance(states,list) or len(states)!=2 or any(s not in ('ready','exited') for s in states) or not isinstance(assigned,int) or not states.count('ready')<=assigned<=4:raise RuntimeError('isolated task code or frame assignment invalid')
             events=preempt.get('events',[]);previous=[0,0]
             if len(events)!=8:raise RuntimeError('EL0 event count')
             for event_index,event in enumerate(events):

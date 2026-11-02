@@ -5,7 +5,7 @@ use core::{arch::{asm,global_asm},ptr::{addr_of,addr_of_mut,read_volatile,write_
 // This is still the exact number of real contexts and address spaces.
 // Widen only together with tables, resources, ownership and admission.
 const PROCESS_CAPACITY:usize=3;
-pub const FRAME_CAPACITY:usize=9;
+pub const FRAME_CAPACITY:usize=12;
 const PAGE:usize=4096;
 const GICD:usize=0x0800_0000;const GICC:usize=0x0801_0000;
 #[repr(C,align(4096))] struct UserStack([u8;PAGE]);
@@ -17,6 +17,11 @@ const EMPTY:Frame=Frame{regs:[0;31],sp:0,elr:0,spsr:0};
 #[link_section=".userstack"] static mut USER_FRAMES:[UserStack;FRAME_CAPACITY]=[const {UserStack([0;PAGE])};FRAME_CAPACITY];
 static mut FRAME_BITMAP:u16=0;
 static mut TASK_FRAMES:[usize;3]=[0;3];
+// One independently owned heap frame per live ELF incarnation. A zero entry
+// means no mapping. The incarnation is checked before every SVC and cleanup.
+static mut HEAP_FRAMES:[usize;3]=[0;3];
+static mut HEAP_INCARNATIONS:[u64;3]=[0;3];
+static mut HEAP_SCRUBBED:[bool;3]=[false;3];
 static mut CROSS_READ_DENIED:[bool;2]=[false;2];
 static mut KERNEL_DATA:u64=0x0123_4567_89ab_cdef;
 static mut A_FRAME:Frame=EMPTY;static mut B_FRAME:Frame=EMPTY;static mut C_FRAME:Frame=EMPTY;
@@ -137,7 +142,7 @@ static mut IPC:Ipc=Ipc{queue:[None;2],head:0,len:0,completions:[EMPTY_COMPLETION
 // A loaded process can have one generic file operation in flight. Only copied
 // bytes and offsets within its private page are retained, never Rust borrows.
 #[derive(Clone,Copy,PartialEq,Eq)]
-enum UserRegion {Data,Stack}
+enum UserRegion {Data,Stack,Heap}
 #[derive(Clone,Copy,PartialEq,Eq)]
 struct UserLocation {region:UserRegion,offset:usize}
 #[derive(Clone,Copy)]
@@ -259,10 +264,11 @@ fn in_page(p:u64,n:usize)->bool {n>0 && p>=super::mmu::ALIAS as u64 && p.checked
 fn user_location(actor:usize,address:u64,len:usize,write:bool,allow_empty:bool)->Option<UserLocation> {
  if actor>=PROCESS_CAPACITY || super::mmu::active_root()!=super::mmu::root(actor) || (len==0 && !allow_empty) {return None}
  let end=address.checked_add(u64::try_from(len).ok()?)?;
- for region in [UserRegion::Data,UserRegion::Stack] {
+ for region in [UserRegion::Data,UserRegion::Stack,UserRegion::Heap] {
   let (base,frame)=match region {
    UserRegion::Data=>(super::mmu::ALIAS,unsafe{read_volatile(addr_of!(TASK_FRAMES).cast::<usize>().add(actor))}),
    UserRegion::Stack=>(super::mmu::USER_STACK,unsafe{read_volatile(addr_of!(PAIR_STACK_FRAMES).cast::<usize>().add(actor))}),
+   UserRegion::Heap=>(super::mmu::USER_HEAP,if unsafe{read_volatile(addr_of!(HEAP_INCARNATIONS).cast::<u64>().add(actor))}==incarnation(actor) {unsafe{read_volatile(addr_of!(HEAP_FRAMES).cast::<usize>().add(actor))}}else{0}),
   };
   let start=base as u64;let limit=start.checked_add(PAGE as u64)?;
   if address<start || end>limit || (len>0 && address==limit) {continue}
@@ -275,7 +281,7 @@ fn user_location(actor:usize,address:u64,len:usize,write:bool,allow_empty:bool)-
  None
 }
 fn user_address(location:UserLocation)->Option<u64> {
- let base=match location.region {UserRegion::Data=>super::mmu::ALIAS,UserRegion::Stack=>super::mmu::USER_STACK};
+ let base=match location.region {UserRegion::Data=>super::mmu::ALIAS,UserRegion::Stack=>super::mmu::USER_STACK,UserRegion::Heap=>super::mmu::USER_HEAP};
  Some(u64::try_from(base.checked_add(location.offset)?).ok()?)
 }
 // Two bounded two-process channels; all message bytes stay in the kernel.
@@ -375,6 +381,58 @@ pub fn poll_direct_timeouts() {
 }
 fn first_two<T:Copy>(values:[T;3])->[T;2] {[values[0],values[1]]}
 fn direct_result(f:&mut Frame,code:i64) {f.regs[0]=code as u64}
+// 0x180 allocates one page for the current ELF incarnation. 0x181 frees it.
+// SVC runs with IRQ masked on the actor's root; all mapping helpers return on
+// root 0, so restore the exact caller root before returning to EL0.
+fn heap_operation(f:&mut Frame,actor:usize,allocate:bool) {
+ if unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {direct_result(f,-38);return}
+ let generation=incarnation(actor);
+ let heap_ptr=unsafe{addr_of_mut!(HEAP_FRAMES).cast::<usize>().add(actor)};
+ let inc_ptr=unsafe{addr_of_mut!(HEAP_INCARNATIONS).cast::<u64>().add(actor)};
+ let current=unsafe{read_volatile(heap_ptr)};
+ let owner=unsafe{read_volatile(inc_ptr)};
+ if (current==0)!=(owner==0) || (current!=0 && owner!=generation) {halt()}
+ if allocate && current!=0 {direct_result(f,-17);return}
+ if !allocate {
+  if f.regs[0]!=super::mmu::USER_HEAP as u64 {direct_result(f,-22);return}
+  if current==0 {direct_result(f,-2);return}
+  // Generic I/O keeps location metadata until the caller consumes the reply.
+  // Deny free during that period to prevent a free/reallocate ABA of buffers.
+  if unsafe{read_volatile(addr_of!(GENERIC_IO).cast::<Option<GenericIo>>().add(actor))}
+   .is_some_and(|op|op.name_location.region==UserRegion::Heap || op.dest_location.region==UserRegion::Heap) {direct_result(f,-16);return}
+ }
+ let caller=super::mmu::active_root();
+ if caller!=super::mmu::root(actor) {halt()}
+ if allocate {
+  let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
+  let Some(index)=(0..FRAME_CAPACITY).find(|i|used&(1u16<<i)==0) else {direct_result(f,-12);return};
+  let frame=unsafe{addr_of_mut!(USER_FRAMES).cast::<UserStack>().add(index)} as *mut u8;
+  for n in 0..PAGE {unsafe{write_volatile(frame.add(n),0)}}
+  for n in 0..PAGE {check(unsafe{read_volatile(frame.add(n))}==0,"heap allocation scrub")}
+  unsafe{write_volatile(addr_of_mut!(FRAME_BITMAP),used|(1u16<<index))};
+  super::mmu::switch_root(super::mmu::root(0));
+  super::mmu::map_task_heap(actor,frame as usize);
+  let mut heaps=unsafe{read_volatile(addr_of!(HEAP_FRAMES))};heaps[actor]=frame as usize;
+  let verified=super::mmu::verify_independent(unsafe{read_volatile(addr_of!(TASK_FRAMES))},unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES))},unsafe{read_volatile(addr_of!(PAIR_STACK_FRAMES))},heaps);
+  if !verified {
+   super::mmu::unmap_task_heap(actor,frame as usize);
+   free_unpublished_frame(frame as usize);
+   super::mmu::switch_root(caller);direct_result(f,-5);return
+  }
+  unsafe{write_volatile(heap_ptr,frame as usize);write_volatile(inc_ptr,generation);write_volatile(addr_of_mut!(HEAP_SCRUBBED).cast::<bool>().add(actor),false)};
+  super::mmu::switch_root(caller);direct_result(f,super::mmu::USER_HEAP as i64);
+ } else {
+  super::mmu::switch_root(super::mmu::root(0));
+  super::mmu::unmap_task_heap(actor,current);
+  for n in 0..PAGE {unsafe{write_volatile((current as *mut u8).add(n),0)}}
+  for n in 0..PAGE {check(unsafe{read_volatile((current as *const u8).add(n))}==0,"heap free scrub")}
+  let offset=current.checked_sub(addr_of_mut!(USER_FRAMES) as usize).unwrap_or_else(||halt());
+  check(offset%PAGE==0 && offset/PAGE<FRAME_CAPACITY,"heap frame outside pool");
+  let bit=1u16<<(offset/PAGE);let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};check(used&bit!=0,"heap frame already free");
+  unsafe{write_volatile(heap_ptr,0);write_volatile(inc_ptr,0);write_volatile(addr_of_mut!(FRAME_BITMAP),used&!bit);write_volatile(addr_of_mut!(HEAP_SCRUBBED).cast::<bool>().add(actor),true)};
+  super::mmu::switch_root(caller);direct_result(f,0);
+ }
+}
 /// Establish one of two channels between current independent tasks.
 /// The boot ID is a public freshness value, not client authentication.
 pub fn bind_direct(a:usize,ai:u64,b:usize,bi:u64,boot:[u8;16])->Result<u64, &'static str> {
@@ -937,6 +995,8 @@ extern "C" fn ipc_dispatch(frame:*mut Frame,esr:u64)->u64 {
    0x162=>{direct_recv(f,actor);return 0},
    0x163=>{return direct_wait(f,actor,false)},
    0x164=>{return direct_wait(f,actor,true)},
+   0x180=>{heap_operation(f,actor,true);return 0},
+   0x181=>{heap_operation(f,actor,false);return 0},
    0x190=>{let state=unsafe{&mut *addr_of_mut!(IPC)};document_io(f,state,actor,false);return 0},
    0x191=>{let state=unsafe{&mut *addr_of_mut!(IPC)};document_io(f,state,actor,true);return 0},
    0x140=>{let state=unsafe{&mut *addr_of_mut!(IPC)};generic_read(f,state,actor);return 0},
@@ -1250,6 +1310,7 @@ fn external_admission_ready()->bool {
   && !unsafe{read_volatile(addr_of!(PAIR_ACTIVE))} && !unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))}
   && unsafe{read_volatile(addr_of!(TASK_STATE))}==[3,3,3] && unsafe{read_volatile(addr_of!(FRAME_BITMAP))}==0
   && unsafe{read_volatile(addr_of!(TASK_FRAMES))}==[0,0,0] && unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES))}==[0,0,0] && unsafe{read_volatile(addr_of!(PAIR_STACK_FRAMES))}==[0,0,0]
+  && unsafe{read_volatile(addr_of!(HEAP_FRAMES))}==[0,0,0] && unsafe{read_volatile(addr_of!(HEAP_INCARNATIONS))}==[0,0,0]
   && unsafe{read_volatile(addr_of!(GENERIC_IO))}.iter().all(Option::is_none)
   && ipc.full_consumed && ipc.len==0 && ipc.completions[7..10].iter().all(|c|c.id==0)
   && super::mmu::active_root()==super::mmu::root(0)
@@ -1336,12 +1397,12 @@ pub fn start_independent(bytes:&[u8])->Result<(usize,u64), &'static str> {
  if active && unsafe{read_volatile(addr_of!(PAIR_MODE))}!=3 {return Err("incompatible active mode")}
  if unsafe{read_volatile(addr_of!(IMAGE_COUNT))}<4 && !unsafe{read_volatile(addr_of!(FIXTURE_PAUSE_REQUESTED))} {return Err("fixture admission not paused")}
  if !unsafe{read_volatile(addr_of!(INITIAL_TASKS_RECLAIMED))} || unsafe{read_volatile(addr_of!(SPAWN_ACTIVE))} || super::mmu::active_root()!=super::mmu::root(0) {return Err("process slots unavailable")}
- let states=unsafe{read_volatile(addr_of!(TASK_STATE))};let frames=unsafe{read_volatile(addr_of!(TASK_FRAMES))};let codes=unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES))};let stacks=unsafe{read_volatile(addr_of!(PAIR_STACK_FRAMES))};
+ let states=unsafe{read_volatile(addr_of!(TASK_STATE))};let frames=unsafe{read_volatile(addr_of!(TASK_FRAMES))};let codes=unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES))};let stacks=unsafe{read_volatile(addr_of!(PAIR_STACK_FRAMES))};let heaps=unsafe{read_volatile(addr_of!(HEAP_FRAMES))};let heap_inc=unsafe{read_volatile(addr_of!(HEAP_INCARNATIONS))};
  let ipc=unsafe{&*addr_of!(IPC)};let pending=unsafe{read_volatile(addr_of!(GENERIC_IO))};
  if !ipc.full_consumed {return Err("process slots unavailable")}
- let slot=(0..PROCESS_CAPACITY).find(|&i|states[i]==3 && frames[i]==0 && codes[i]==0 && stacks[i]==0 && pending[i].is_none()
+ let slot=(0..PROCESS_CAPACITY).find(|&i|states[i]==3 && frames[i]==0 && codes[i]==0 && stacks[i]==0 && heaps[i]==0 && heap_inc[i]==0 && pending[i].is_none()
   && ipc.completions[7+i].id==0 && !ipc.queue.iter().flatten().any(|r|r.actor==i)).ok_or("no free process slot")?;
- if !active && (states!=[3,3,3] || frames!=[0,0,0] || codes!=[0,0,0] || stacks!=[0,0,0] || unsafe{read_volatile(addr_of!(FRAME_BITMAP))}!=0 || ipc.len!=0 || ipc.completions[7..10].iter().any(|c|c.id!=0) || pending.iter().any(Option::is_some)) {return Err("process slots unavailable")}
+ if !active && (states!=[3,3,3] || frames!=[0,0,0] || codes!=[0,0,0] || stacks!=[0,0,0] || heaps!=[0,0,0] || heap_inc!=[0,0,0] || unsafe{read_volatile(addr_of!(FRAME_BITMAP))}!=0 || ipc.len!=0 || ipc.completions[7..10].iter().any(|c|c.id!=0) || pending.iter().any(Option::is_some)) {return Err("process slots unavailable")}
  let used=unsafe{read_volatile(addr_of!(FRAME_BITMAP))};
  let base=addr_of_mut!(USER_FRAMES) as usize;
  let bit=|p:usize| -> Option<u16> {let off=p.checked_sub(base)?;if off%PAGE!=0 || off/PAGE>=FRAME_CAPACITY {return None};Some(1u16<<(off/PAGE))};
@@ -1349,11 +1410,12 @@ pub fn start_independent(bytes:&[u8])->Result<(usize,u64), &'static str> {
  for actor in 0..PROCESS_CAPACITY {
   if actor==slot {continue}
   if states[actor]==3 {
-   if frames[actor]!=0 || codes[actor]!=0 || stacks[actor]!=0 {return Err("process slots unavailable")}
+   if frames[actor]!=0 || codes[actor]!=0 || stacks[actor]!=0 || heaps[actor]!=0 || heap_inc[actor]!=0 {return Err("process slots unavailable")}
    continue
   }
   if !active || !matches!(states[actor],1|4) || frames[actor]==0 || codes[actor]==0 {return Err("process slots unavailable")}
-  for pointer in [frames[actor],codes[actor],stacks[actor]] {
+  if (heaps[actor]==0)!=(heap_inc[actor]==0) || (heaps[actor]!=0 && heap_inc[actor]!=incarnation(actor)) {return Err("process slots unavailable")}
+  for pointer in [frames[actor],codes[actor],stacks[actor],heaps[actor]] {
    if pointer==0 {continue}let Some(frame_bit)=bit(pointer) else{return Err("process slots unavailable")};
    if expected&frame_bit!=0 {return Err("process slots unavailable")};expected|=frame_bit;
   }
@@ -1388,7 +1450,7 @@ pub fn start_independent(bytes:&[u8])->Result<(usize,u64), &'static str> {
  if stack!=0 {super::mmu::map_task_stack(slot,stack)}
  let mut all_data=frames;let mut all_code=codes;let mut all_stack=stacks;
  all_data[slot]=data;all_code[slot]=code as usize;all_stack[slot]=stack;
- let verified=super::mmu::verify_independent(all_data,all_code,all_stack);
+ let verified=super::mmu::verify_independent(all_data,all_code,all_stack,heaps);
  if !verified {
   if stack!=0 {super::mmu::unmap_task_stack(slot,stack)}
   super::mmu::unmap_task_code(slot,code as usize);super::mmu::unmap_task_alias(slot,data);
@@ -1414,6 +1476,7 @@ pub fn start_independent(bytes:&[u8])->Result<(usize,u64), &'static str> {
   write_volatile(addr_of_mut!(PAIR_CODE_FRAMES).cast::<usize>().add(slot),code as usize);
   write_volatile(addr_of_mut!(PAIR_STACK_FRAMES).cast::<usize>().add(slot),stack);
   write_volatile(addr_of_mut!(PAIR_STACK_SCRUBBED).cast::<bool>().add(slot),false);
+  write_volatile(addr_of_mut!(HEAP_SCRUBBED).cast::<bool>().add(slot),false);
   write_volatile(addr_of_mut!(PAIR_RW_INIT_VERIFIED).cast::<bool>().add(slot),image.data.is_some());
   write_volatile(addr_of_mut!(PAIR_TWO_SEGMENT).cast::<bool>().add(slot),image.data.is_some());
   write_volatile(addr_of_mut!(PAIR_CODE_LEN).cast::<u64>().add(slot),image.code.len() as u64);
@@ -1464,14 +1527,18 @@ pub fn stop_independent(slot:usize,expected:u64,boot_id:[u8;16])->Result<(), &'s
  unsafe {match slot {0=>write_volatile(addr_of_mut!(A_FRAME),EMPTY),1=>write_volatile(addr_of_mut!(B_FRAME),EMPTY),_=>write_volatile(addr_of_mut!(C_FRAME),EMPTY)}};
  Ok(())
 }
-pub fn pair_status()->Value {json!({
+pub fn pair_status()->Value {
+ let heaps=unsafe{read_volatile(addr_of!(HEAP_FRAMES))};
+ let base=addr_of_mut!(USER_FRAMES) as usize;
+ let indexes=heaps.map(|p|if p==0 {None}else{let offset=p.checked_sub(base).unwrap_or_else(||halt());check(offset%PAGE==0 && offset/PAGE<FRAME_CAPACITY,"status heap frame outside pool");Some(offset/PAGE)});
+ json!({
  "boot_identity_ready":super::boot_identity::identifier().is_some(),"mode":match unsafe{read_volatile(addr_of!(PAIR_MODE))} {1=>"single",2=>"pair",3=>"independent",_=>"none"},"started":unsafe{read_volatile(addr_of!(PAIR_STARTED))},"done":unsafe{read_volatile(addr_of!(PAIR_DONE))},"run_id":unsafe{read_volatile(addr_of!(PAIR_RUN_ID))},"stale_completion_rejected":first_two(unsafe{read_volatile(addr_of!(PAIR_STALE_REJECTED))}),"old_incarnation_same_id_rejected":first_two(unsafe{read_volatile(addr_of!(PAIR_OLD_INCARNATION_REJECTED))}),
  "incarnations":first_two(unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS))}),"mappings_verified":unsafe{read_volatile(addr_of!(PAIR_MAPPINGS_VERIFIED))},
  "slot_mappings_verified":first_two(unsafe{read_volatile(addr_of!(SLOT_MAPPINGS_VERIFIED))}),
  "slot_states":first_two(unsafe{read_volatile(addr_of!(TASK_STATE))}).map(|v|match v {1=>"ready",2=>"running",3=>"exited",4=>"waiting",_=>"invalid"}),
  "io_submitted":first_two(unsafe{read_volatile(addr_of!(PAIR_IO_SUBMITTED))}),"io_completed":first_two(unsafe{read_volatile(addr_of!(PAIR_IO_COMPLETED))}),"io_cancelled_before_apply":first_two(unsafe{read_volatile(addr_of!(PAIR_IO_CANCELLED))}),"irq_counts":first_two(unsafe{read_volatile(addr_of!(PAIR_IRQS))}),"exit_codes":first_two(unsafe{read_volatile(addr_of!(PAIR_EXIT_CODES))}),"outcomes":first_two(unsafe{read_volatile(addr_of!(PAIR_OUTCOMES))}),"barrier_seen":unsafe{read_volatile(addr_of!(PAIR_BARRIER_SEEN))},"live_markers":if unsafe{read_volatile(addr_of!(PAIR_MODE))}==3 {None}else{Some(unsafe{read_volatile(addr_of!(PAIR_LIVE_MARKERS))})},
  "markers":if unsafe{read_volatile(addr_of!(PAIR_MODE))}==3 {None}else{Some(first_two(unsafe{read_volatile(addr_of!(PAIR_MARKERS))}))},"data_scrubbed":first_two(unsafe{read_volatile(addr_of!(PAIR_DATA_SCRUBBED))}),
- "code_scrubbed":first_two(unsafe{read_volatile(addr_of!(PAIR_CODE_SCRUBBED))}),"stack_scrubbed":first_two(unsafe{read_volatile(addr_of!(PAIR_STACK_SCRUBBED))}),"rw_init_verified":first_two(unsafe{read_volatile(addr_of!(PAIR_RW_INIT_VERIFIED))}),"two_segment":first_two(unsafe{read_volatile(addr_of!(PAIR_TWO_SEGMENT))}),"all_incarnations":unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS))},"all_slot_states":unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|v|match v {1=>"ready",2=>"running",3=>"exited",4=>"waiting",_=>"invalid"}),"all_irq_counts":unsafe{read_volatile(addr_of!(PAIR_IRQS))},"all_exit_codes":unsafe{read_volatile(addr_of!(PAIR_EXIT_CODES))},"all_outcomes":unsafe{read_volatile(addr_of!(PAIR_OUTCOMES))},"all_io_submitted":unsafe{read_volatile(addr_of!(PAIR_IO_SUBMITTED))},"all_io_completed":unsafe{read_volatile(addr_of!(PAIR_IO_COMPLETED))},"all_data_scrubbed":unsafe{read_volatile(addr_of!(PAIR_DATA_SCRUBBED))},"all_code_scrubbed":unsafe{read_volatile(addr_of!(PAIR_CODE_SCRUBBED))},"all_stack_scrubbed":unsafe{read_volatile(addr_of!(PAIR_STACK_SCRUBBED))},"all_mappings_verified":unsafe{read_volatile(addr_of!(SLOT_MAPPINGS_VERIFIED))},"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()
+ "code_scrubbed":first_two(unsafe{read_volatile(addr_of!(PAIR_CODE_SCRUBBED))}),"stack_scrubbed":first_two(unsafe{read_volatile(addr_of!(PAIR_STACK_SCRUBBED))}),"rw_init_verified":first_two(unsafe{read_volatile(addr_of!(PAIR_RW_INIT_VERIFIED))}),"two_segment":first_two(unsafe{read_volatile(addr_of!(PAIR_TWO_SEGMENT))}),"all_incarnations":unsafe{read_volatile(addr_of!(PAIR_INCARNATIONS))},"all_slot_states":unsafe{read_volatile(addr_of!(TASK_STATE))}.map(|v|match v {1=>"ready",2=>"running",3=>"exited",4=>"waiting",_=>"invalid"}),"all_irq_counts":unsafe{read_volatile(addr_of!(PAIR_IRQS))},"all_exit_codes":unsafe{read_volatile(addr_of!(PAIR_EXIT_CODES))},"all_outcomes":unsafe{read_volatile(addr_of!(PAIR_OUTCOMES))},"all_io_submitted":unsafe{read_volatile(addr_of!(PAIR_IO_SUBMITTED))},"all_io_completed":unsafe{read_volatile(addr_of!(PAIR_IO_COMPLETED))},"all_data_scrubbed":unsafe{read_volatile(addr_of!(PAIR_DATA_SCRUBBED))},"all_code_scrubbed":unsafe{read_volatile(addr_of!(PAIR_CODE_SCRUBBED))},"all_stack_scrubbed":unsafe{read_volatile(addr_of!(PAIR_STACK_SCRUBBED))},"all_mappings_verified":unsafe{read_volatile(addr_of!(SLOT_MAPPINGS_VERIFIED))},"all_heap_allocated":heaps.map(|p|p!=0),"all_heap_scrubbed":unsafe{read_volatile(addr_of!(HEAP_SCRUBBED))},"all_heap_frame_index":indexes,"frame_pool_assigned":unsafe{read_volatile(addr_of!(FRAME_BITMAP))}.count_ones()
 })}
 #[no_mangle]
 extern "C" fn pair_irq_check(f:*const Frame)->u64 {
@@ -1509,11 +1576,13 @@ fn reclaim_pair(actor:usize) {
  let c=&mut state.completions[7+actor];
  check(c.id==0 || (c.actor==actor && c.incarnation==generation),"pair completion ownership");
  *c=EMPTY_COMPLETION;clear_generic_io(actor);
- let data=task_frame(actor);let code=unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES).cast::<usize>().add(actor))};let stack=unsafe{read_volatile(addr_of!(PAIR_STACK_FRAMES).cast::<usize>().add(actor))};
+ let data=task_frame(actor);let code=unsafe{read_volatile(addr_of!(PAIR_CODE_FRAMES).cast::<usize>().add(actor))};let stack=unsafe{read_volatile(addr_of!(PAIR_STACK_FRAMES).cast::<usize>().add(actor))};let heap=unsafe{read_volatile(addr_of!(HEAP_FRAMES).cast::<usize>().add(actor))};let heap_inc=unsafe{read_volatile(addr_of!(HEAP_INCARNATIONS).cast::<u64>().add(actor))};
  check(code!=0,"pair missing code");let marker=if unsafe{read_volatile(addr_of!(PAIR_MODE))}==3 {0}else{unsafe{read_volatile(data as *const u64)}};
+ check((heap==0 && heap_inc==0) || (heap!=0 && heap_inc==generation),"heap owner mismatch");
+ if heap!=0 {super::mmu::unmap_task_heap(actor,heap)}
  if stack!=0 {super::mmu::unmap_task_stack(actor,stack)}
  super::mmu::unmap_task_code(actor,code);super::mmu::unmap_task_alias(actor,data);
- for ptr in [data,code,stack] {if ptr==0 {continue}
+ for ptr in [data,code,stack,heap] {if ptr==0 {continue}
   for n in 0..PAGE {unsafe{write_volatile((ptr as *mut u8).add(n),0)}}
   for n in 0..PAGE {check(unsafe{read_volatile((ptr as *const u8).add(n))}==0,"pair frame scrub")}
   let offset=ptr.checked_sub(addr_of_mut!(USER_FRAMES) as usize).unwrap_or_else(||halt());
@@ -1525,6 +1594,9 @@ fn reclaim_pair(actor:usize) {
   write_volatile(addr_of_mut!(TASK_FRAMES).cast::<usize>().add(actor),0);
   write_volatile(addr_of_mut!(PAIR_CODE_FRAMES).cast::<usize>().add(actor),0);
   write_volatile(addr_of_mut!(PAIR_STACK_FRAMES).cast::<usize>().add(actor),0);
+  write_volatile(addr_of_mut!(HEAP_FRAMES).cast::<usize>().add(actor),0);
+  write_volatile(addr_of_mut!(HEAP_INCARNATIONS).cast::<u64>().add(actor),0);
+  if heap!=0 {write_volatile(addr_of_mut!(HEAP_SCRUBBED).cast::<bool>().add(actor),true)}
   write_volatile(addr_of_mut!(PAIR_STACK_SCRUBBED).cast::<bool>().add(actor),stack!=0);
   write_volatile(addr_of_mut!(PAIR_MARKERS).cast::<u64>().add(actor),marker);
   write_volatile(addr_of_mut!(PAIR_DATA_SCRUBBED).cast::<bool>().add(actor),true);

@@ -127,6 +127,21 @@ python3 run_demo.py --qemu /path/to/qemu-system-aarch64 \
 
 The harness records synthetic MCP I/O, guest hash and QEMU version and checks the image hash did not change. Inter glyphs are distributed under the [SIL Open Font License](assets/OFL.txt).
 
+### Rust guest applications
+
+[`guest_api.rs`](guest_api.rs) provides a small `no_std` interface for a
+private heap page and bounded file reads and writes in independent guest
+processes. Its file calls retain their borrowed buffers while polling and may
+wait indefinitely if the service does not progress. Names and buffers must be
+in a mapped data, stack or heap page: a literal placed in the code page is not
+a valid file-name buffer. `HeapPage::release` retains ownership on error;
+dropping a busy page leaves it for process-exit cleanup. This is a guest ABI,
+not a POSIX interface or a general allocator. The
+[`rust-private-heap`](fixtures/rust-private-heap.rs) program demonstrates
+this interface and constructs a `Vec` from a separately allocated raw buffer
+using a fixture-only one-page allocator. It does not test vector growth.
+See [VFS.md](VFS.md) for the kernel ABI, resource limits and VM evidence.
+
 ### Interactive launcher and boot identity
 
 On macOS, after building the guest, open its QEMU window with:

@@ -14,7 +14,7 @@ and requests can also fail if the shared 3,584-byte snapshot payload is full.
 
 `SVC #0x140` accepts a UTF-8 file name address and length in `x0`/`x1`, and a
 destination address and capacity in `x2`/`x3`. Each range must lie wholly in
-the calling task's RW data page or, when mapped, its separate stack page; the
+the calling task's RW data page, its separate stack page, or its allocated heap page; the
 two ranges may use different pages. Names are 1–16 bytes and destinations
 1–32 bytes. The call returns a byte count or a negative status in `x0`: `-11`
 means retry the same arguments, `-2` means absent/unavailable, `-34` means the
@@ -39,8 +39,8 @@ the committed instruction bytes against the assembly without executing them.
 ## Bounded writes from a loaded program
 
 `SVC #0x141` uses `x0`/`x1` for a 1–16 byte name and `x2`/`x3` for a
-0–32 byte source in its mapped data or stack page. For a zero-length source,
-the pointer may equal the end of either mapped page. GET capacity zero is
+0–32 byte source in its mapped data, stack, or heap page. For a zero-length source,
+the pointer may equal the end of a mapped page. GET capacity zero is
 invalid. It returns the byte
 count, or `-11` while pending (retry the same addresses, lengths and name bytes), `-14`
 for an invalid range, `-22` for invalid arguments or a forbidden name, `-28`
@@ -460,7 +460,7 @@ it belongs to another channel receives -116. This assumes one CPU, not SMP.
 
 EL0 services `0x160`, `0x161`, and `0x162` query the peer, send, and receive.
 Each destination queue holds two messages of 1–32 bytes; user buffers may be in
-the actor's private data page or its separate mapped stack. The sender specifies
+the actor's private data, mapped stack, or allocated heap page. The sender specifies
 destination slot, incarnation and current channel ID; receives also require the
 current channel ID. Stale channel IDs return -116. Empty/full queues return -11, invalid
 arguments -22, an invalid buffer -14, insufficient receive capacity -34 without
@@ -593,7 +593,7 @@ The single-CPU scheduler selects the next ready slot by a bounded circular
 search after timer interrupts, a blocking wait, or task exit. If no slot is
 ready, control returns to the service loop; device polling and MCP can continue.
 The guest admits up to three independent fixed contexts, with a third page-table
-root (ASID 3) and a pool of nine user frames. This is not SMP, arbitrary task
+root (ASID 3) and a pool of twelve user frames. This is not SMP, arbitrary task
 capacity, or a general starvation-freedom guarantee. Up to two direct IPC channels can each bind any two slots; the single two-port
 network grant can also bind any two slots. These are fixed limits, not arbitrary
 simultaneous channels or grants.
@@ -692,3 +692,32 @@ the same field, unbind/rebind within one incarnation, cancellation while a
 document request is queued, or a document-specific post-commit failure. Merge
 is deterministic field comparison with reported origins and conflicts; an AI
 merge or conflict resolver is not implemented.
+
+### Private process memory
+
+Each independent ELF process can request one extra 4 KiB private page through
+`SVC #0x180`. A successful allocation returns `0x50004000`, with RW and NX
+permissions. A second allocation in the same process returns `-17` (quota),
+and a lack of free frames returns `-12`; a duplicate request does not establish
+that global exhaustion was exercised. `SVC #0x181` frees that exact address,
+returning `-22` for a different address, `-2` when none is allocated, and `-16`
+if a pending generic file or document request retains a heap-page range.
+Mappings and ownership are tied to the current process incarnation. Free and
+process teardown remove the mapping, invalidate local translations, clear the
+physical page and return the frame to the pool. These operations assume a
+single guest CPU; there is no SMP shootdown or general mapping API.
+
+The integrated [`rust-private-heap`](fixtures/rust-private-heap.rs) scenario is
+designed to admit three linked Rust ELFs one at a time while earlier pages are
+live. Each verifies zero bytes on allocation, a private marker at the same
+virtual address, heap-backed file I/O and the busy rule; stopping and
+readmitting one actor exercises frame reuse while its neighbors continue. The
+ELFs free, reallocate and check all page bytes again. They also exercise an
+`alloc::Vec` constructed with `from_raw_parts` after allocating through a
+**fixture-only** `GlobalAlloc` that handles one whole page, and the
+[guest API](guest_api.rs) for owned pages and file I/O. The scenario does not
+exercise vector growth. This allocator cannot split or grow allocations and
+is not an application runtime.
+The integrated modern-transport run with storage fault injection passed this
+scenario. It does not demonstrate global frame exhaustion, multi-object
+allocation, SMP behavior or an application runtime.
